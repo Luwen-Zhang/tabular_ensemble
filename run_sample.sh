@@ -1,0 +1,1 @@
+python main.py --base sample --epoch 10
