@@ -21,8 +21,8 @@ setup(
     python_requires=">=3.8.0",
     install_requires=req_lite,
     extras_require={
-        "torch": ["torch==1.12.0"],
+        "torch": ["torch>=1.12.0"],
         "all": req_all,
-        "test": ["torch==1.12.0", "pytest", "pytest-cov"],
+        "test": ["torch>=1.12.0", "pytest", "pytest-cov"],
     },
 )

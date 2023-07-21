@@ -14,7 +14,7 @@ seaborn>=0.11.2
 tqdm>=4.64.1
 jupyter-server>=2.4.0
 torchmetrics>=0.11.0
-pytorch-widedeep>=1.2.1
+pytorch-widedeep>=1.2.1,<=1.2.2
 pytorch_tabnet>=4.0
 pytorch_tabular>=1.0.2
 miceforest>=5.6.3
