@@ -9,6 +9,7 @@ from tabensemb.model import *
 import torch
 from copy import deepcopy as cp
 import shutil
+import pytest
 
 
 class TestGeneral(unittest.TestCase):
@@ -368,7 +369,7 @@ class TestGeneral(unittest.TestCase):
 
         print(f"\n-- Initialize models --\n")
 
-        with self.assertRaises(Exception):
+        with pytest.raises(Exception):
             WideDeep(trainer, model_subset=["TabMlp"])
 
         models = [

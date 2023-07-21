@@ -8,8 +8,8 @@ def requirements(fname):
     ]
 
 
-req_lite = requirements("requirement_lite.txt")
-req_all = [x for x in requirements("requirement.txt") if x not in req_lite]
+req_lite = requirements("requirements_lite.txt")
+req_all = [x for x in requirements("requirements.txt") if x not in req_lite]
 
 setup(
     name="tabensemb",
@@ -24,5 +24,6 @@ setup(
     extras_require={
         "torch": ["torch>=1.12.0"],
         "all": req_all,
+        "test": ["torch>=1.12.0", "pytest"],
     },
 )

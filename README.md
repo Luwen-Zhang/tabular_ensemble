@@ -1,5 +1,7 @@
 # tabular_ensemble
- A framework to ensemble model bases and evaluate various models for tabular predictions.
+<a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a> 
+
+A framework to ensemble model bases and evaluate various models for tabular predictions.
 
 ## Usage
 
@@ -34,7 +36,7 @@ To test basic functionalities like loading data and training model bases, run th
 
 ```shell
 cd test
-python test_general.py
+pytest
 ```
 
 ## Modelbases
