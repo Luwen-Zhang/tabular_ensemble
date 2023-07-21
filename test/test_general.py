@@ -12,151 +12,6 @@ import shutil
 import pytest
 
 
-def test_config():
-    config = UserConfig()
-    config.merge(UserConfig.from_file("sample"))
-    config = UserConfig("sample")
-
-
-def test_datamodule():
-    print("\n-- Loading config --\n")
-    config = UserConfig("sample")
-    config.merge(
-        {
-            "data_processors": [
-                ["CategoricalOrdinalEncoder", {}],
-                ["NaNFeatureRemover", {}],
-                ["VarianceFeatureSelector", {"thres": 1}],
-                ["IQRRemover", {}],
-                ["SampleDataAugmentor", {}],
-                ["StandardScaler", {}],
-            ],
-        }
-    )
-
-    print("\n-- Loading datamodule --\n")
-    datamodule = DataModule(config=config)
-
-    print("\n-- Loading data --\n")
-    np.random.seed(1)
-    datamodule.load_data()
-
-    print(f"\n-- Check splitting --\n")
-    AbstractSplitter._check_split(
-        datamodule.train_indices,
-        datamodule.val_indices,
-        datamodule.test_indices,
-    )
-
-    print(f"\n-- Check augmentation --\n")
-    aug_desc = datamodule.df.loc[
-        datamodule.augmented_indices - len(datamodule.dropped_indices),
-        datamodule.all_feature_names + datamodule.label_name,
-    ].describe()
-    original_desc = datamodule.df.loc[
-        datamodule.val_indices[-10:],
-        datamodule.all_feature_names + datamodule.label_name,
-    ].describe()
-    assert np.allclose(
-        aug_desc.values.astype(float), original_desc.values.astype(float)
-    )
-
-    print(f"\n-- Prepare new data when indices are randpermed --\n")
-    df = datamodule.df.copy()
-    indices = np.array(df.index)
-    np.random.shuffle(indices)
-    df.index = indices
-    df, derived_data = datamodule.prepare_new_data(df)
-    assert np.allclose(
-        df[datamodule.all_feature_names + datamodule.label_name].values,
-        datamodule.df[datamodule.all_feature_names + datamodule.label_name].values,
-    ), "Stacked features from prepare_new_data for the set dataframe does not get consistent results"
-    assert len(derived_data) == len(datamodule.derived_data), (
-        "The number of unstacked features from " "prepare_new_data is not consistent"
-    )
-    for key, value in datamodule.derived_data.items():
-        if key != "augmented":
-            assert np.allclose(value, derived_data[key]), (
-                f"Unstacked feature `{key}` from prepare_new_data for the set "
-                "dataframe does not get consistent results"
-            )
-
-    print(f"\n-- Set feature names --\n")
-    datamodule.set_feature_names(datamodule.cont_feature_names[:10])
-    assert (
-        len(datamodule.cont_feature_names) == 10
-        and len(datamodule.cat_feature_names) == 0
-        and len(datamodule.label_name) == 1
-    ), "set_feature_names is not functional."
-
-    print(f"\n-- Prepare new data after set feature names --\n")
-    df, derived_data = datamodule.prepare_new_data(datamodule.df)
-    assert (
-        len(datamodule.cont_feature_names) == 10
-        and len(datamodule.cat_feature_names) == 0
-        and len(datamodule.label_name) == 1
-    ), "set_feature_names is not functional when prepare_new_data."
-    assert np.allclose(
-        df[datamodule.all_feature_names + datamodule.label_name].values,
-        datamodule.df[datamodule.all_feature_names + datamodule.label_name].values,
-    ), (
-        "Stacked features from prepare_new_data after set_feature_names for the set dataframe does not get "
-        "consistent results"
-    )
-    assert len(derived_data) == len(datamodule.derived_data), (
-        "The number of unstacked features after set_feature_names from "
-        "prepare_new_data is not consistent"
-    )
-    for key, value in datamodule.derived_data.items():
-        if key != "augmented":
-            assert np.allclose(value, derived_data[key]), (
-                f"Unstacked feature `{key}` after set_feature_names from prepare_new_data for the set "
-                "dataframe does not get consistent results"
-            )
-
-    print(f"\n-- Describe --\n")
-    datamodule.describe()
-    datamodule.cal_corr()
-
-    print(f"\n-- Get not imputed dataframe --\n")
-    datamodule.get_not_imputed_df()
-
-
-def test_data_splitter():
-    import numpy as np
-    import pandas as pd
-    from tabensemb.data.datasplitter import RandomSplitter
-
-    df = pd.DataFrame({"test_feature": np.random.randint(0, 20, (100,))})
-    print("\n-- k-fold RandomSplitter --\n")
-    spl = RandomSplitter()
-    res_random = [spl.split(df, [], [], [], cv=5) for i in range(5)]
-    assert np.allclose(
-        np.sort(np.hstack([i[2] for i in res_random])), np.arange(100)
-    ), "RandomSplitter is not getting correct k-fold results."
-
-    print("\n-- k-fold RandomSplitter in a new iteration --\n")
-    res_random = [spl.split(df, [], [], [], cv=5) for i in range(5)]
-    assert np.allclose(
-        np.sort(np.hstack([i[2] for i in res_random])), np.arange(100)
-    ), "RandomSplitter is not getting correct k-fold results in a new iteration."
-
-    print("\n-- k-fold RandomSplitter change k --\n")
-    spl.split(df, [], [], [], cv=5)
-    res_random = [spl.split(df, [], [], [], cv=3) for i in range(3)]
-    assert np.allclose(
-        np.sort(np.hstack([i[2] for i in res_random])), np.arange(100)
-    ), "RandomSplitter is not getting correct k-fold results after changing the number of k-fold."
-
-    print("\n-- Non-cv RandomSplitter --\n")
-    spl = RandomSplitter()
-    res_random = [spl.split(df, [], [], []) for i in range(5)]
-    res = np.sort(np.hstack([i[2] for i in res_random]))
-    assert len(res) != 100 or (
-        len(res) == 100 and not np.allclose(res, np.arange(100))
-    ), "RandomSplitter is getting k-fold results without cv arguments."
-
-
 def test_trainer():
     print(f"\n-- Loading trainer --\n")
     configfile = "sample"
@@ -166,6 +21,26 @@ def test_trainer():
         configfile,
         manual_config={
             "data_splitter": "RandomSplitter",
+            "data_derivers": [
+                (
+                    "RelativeDeriver",
+                    {
+                        "stacked": True,
+                        "absolute_col": "cont_0",
+                        "relative2_col": "cont_1",
+                        "intermediate": False,
+                        "derived_name": "derived_cont",
+                    },
+                ),
+                (
+                    "SampleWeightDeriver",
+                    {
+                        "stacked": True,
+                        "intermediate": False,
+                        "derived_name": "sample_weight",
+                    },
+                ),
+            ],
         },
     )
     trainer.load_data()
@@ -350,6 +225,21 @@ def test_inspect():
     )
 
 
+def test_trainer_label_missing():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(
+        configfile,
+        manual_config={
+            "data_splitter": "RandomSplitter",
+            "label_name": ["cont_1"],
+        },
+    )
+    with pytest.raises(Exception):
+        trainer.load_data()
+
+
 def test_trainer_multitarget():
     print(f"\n-- Loading trainer --\n")
     configfile = "sample"
@@ -359,7 +249,7 @@ def test_trainer_multitarget():
         configfile,
         manual_config={
             "data_splitter": "RandomSplitter",
-            "label_name": ["target", "cont_1"],
+            "label_name": ["target", "cont_0"],
         },
     )
     trainer.load_data()
