@@ -20,8 +20,9 @@ setup(
     url="https://github.com/LuoXueling/tabular_ensemble",
     python_requires=">=3.8.0",
     install_requires=req_lite,
+    tests_require=["torch>=1.12.0"],
     extras_require={
-        "torch": ["torch>=1.12.0", "torchvision"],
+        "torch": ["torch>=1.12.0"],
         "all": req_all,
     },
 )

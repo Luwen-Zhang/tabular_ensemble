@@ -781,7 +781,9 @@ class AbstractModel:
                         _bayes_objective,
                         space,
                         n_calls=bayes_calls,
-                        n_initial_points=10 if not tabensemb.setting["debug_mode"] else 0,
+                        n_initial_points=10
+                        if not tabensemb.setting["debug_mode"]
+                        else 0,
                         callback=callback.call,
                         random_state=0,
                         x0=[tmp_params[s.name] for s in space],
@@ -1694,7 +1696,9 @@ class AbstractNN(pl.LightningModule):
         self.eval()
         pred = []
         truth = []
-        with torch.no_grad() if tabensemb.setting["test_with_no_grad"] else torch_with_grad():
+        with torch.no_grad() if tabensemb.setting[
+            "test_with_no_grad"
+        ] else torch_with_grad():
             # print(test_dataset)
             avg_loss = 0
             for idx, batch in enumerate(test_loader):
@@ -2121,7 +2125,7 @@ class PytorchLightningLossCallback(Callback):
             early_stopping_eval = None
         epoch = trainer.current_epoch
         if (
-                (epoch + 1) % tabensemb.setting["verbose_per_epoch"] == 0 or epoch == 0
+            (epoch + 1) % tabensemb.setting["verbose_per_epoch"] == 0 or epoch == 0
         ) and self.verbose:
             if early_stopping_eval is not None:
                 print(
