@@ -1,3 +1,4 @@
+import numpy as np
 from tabensemb.utils import *
 from tabensemb.data import AbstractImputer, AbstractSklearnImputer
 import inspect
@@ -8,26 +9,6 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from typing import Type
 from .datamodule import DataModule
-
-
-class NaNImputer(AbstractImputer):
-    """
-    Remove all data with NaN.
-    """
-
-    def __init__(self):
-        super(NaNImputer, self).__init__()
-
-    def _fit_transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
-    ):
-        impute_features = self._get_impute_features(
-            datamodule.cont_feature_names, input_data
-        )
-        return input_data.dropna(axis=0, subset=impute_features)
-
-    def _transform(self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs):
-        return input_data.dropna(axis=0, subset=self.record_imputed_features)
 
 
 class MiceLightgbmImputer(AbstractImputer):
@@ -46,8 +27,9 @@ class MiceLightgbmImputer(AbstractImputer):
         impute_features = self._get_impute_features(
             datamodule.cont_feature_names, input_data
         )
+        no_nan = not np.any(np.isnan(input_data.loc[:, impute_features].values))
         imputer = mf.ImputationKernel(
-            input_data.loc[:, impute_features], random_state=0
+            input_data.loc[:, impute_features], random_state=0, train_nonmissing=no_nan
         )
         imputer.mice(iterations=2, n_estimators=1)
         input_data.loc[:, impute_features] = imputer.complete_data().values.astype(

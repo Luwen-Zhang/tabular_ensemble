@@ -52,7 +52,7 @@ class AbstractDeriver:
             self._check_exist(df, arg_name, **kwargs)
         for arg_name in self._required_params(**kwargs) + ["stacked", "intermediate"]:
             self._check_arg(arg_name, **kwargs)
-        values = self._derive(df, datamodule, **kwargs)
+        values = self._derive(df, datamodule, derived_name=derived_name, **kwargs)
         self._check_values(values)
         names = (
             self._generate_col_names(derived_name, values.shape[-1], **kwargs)

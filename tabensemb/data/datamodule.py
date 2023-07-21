@@ -195,24 +195,6 @@ class DataModule:
         )
         label_name = self.args["label_name"]
 
-        detected_cat_feature_names = self.df.dtypes.index[self.df.dtypes == np.object_]
-        illegal_cont_features = list(
-            np.intersect1d(detected_cat_feature_names, cont_feature_names)
-        )
-        for feature in illegal_cont_features:
-            try:
-                self.df.loc[:, feature] = self.df.loc[:, feature].values.astype(
-                    np.float64
-                )
-                illegal_cont_features.remove(feature)
-            except:
-                pass
-        if len(illegal_cont_features) > 0:
-            raise Exception(
-                f"{illegal_cont_features} are np.object_, but are included in continuous features. Please remove them "
-                f"or add them to `categorical_feature_names` in the configuration file."
-            )
-
         self.set_data(self.df, cont_feature_names, cat_feature_names, label_name)
         print(
             "Dataset size:",
@@ -253,8 +235,8 @@ class DataModule:
         label_name
             A list of targets. Currently, only one target is supported.
         derived_stacked_features
-            A list of derived features in the tabular dataset. If specified, only these features are retained after
-            derivation.
+            A list of derived features in the tabular dataset. If not None, only these features are retained after
+            derivation, and all AbstractFeatureSelectors will be skipped.
         derived_data
             The derived data calculated using data derivers with the argument "stacked" to False, i.e. unstacked data.
         warm_start
@@ -274,6 +256,22 @@ class DataModule:
             warnings.warn(
                 f"Multi-target task is currently experimental. Some model base does not support multi-target"
                 f"well, pytorch-widedeep for example."
+            )
+
+        detected_cat_feature_names = df.dtypes.index[df.dtypes == np.object_]
+        illegal_cont_features = list(
+            np.intersect1d(detected_cat_feature_names, cont_feature_names)
+        )
+        for feature in illegal_cont_features:
+            try:
+                df.loc[:, feature] = df.loc[:, feature].values.astype(np.float64)
+                illegal_cont_features.remove(feature)
+            except:
+                pass
+        if len(illegal_cont_features) > 0:
+            raise Exception(
+                f"{illegal_cont_features} are np.object_, but are included in continuous features. Please remove them "
+                f"or add them to `categorical_feature_names` in the configuration file."
             )
 
         self.set_status(training=True)
@@ -357,6 +355,7 @@ class DataModule:
         self._data_process(
             warm_start=warm_start,
             verbose=verbose,
+            skip_selector=derived_stacked_features is not None,
         )
 
         self._cont_imputed_mask = (
@@ -448,6 +447,11 @@ class DataModule:
         ]
         if len(absent_features) > 0:
             raise Exception(f"Feature {absent_features} not in the input dataframe.")
+
+        # Predicting on a dataset whose categorical features are already encoded. It may interrupt
+        # data derivers that rely on categorical features, or get inconsistent results between
+        # _predict and predict.
+        df = self.categories_inverse_transform(df)
 
         if derived_data is None or len(absent_derived_features) > 0:
             df, _, derived_data = self.derive(df)
@@ -703,6 +707,19 @@ class DataModule:
                     tmp_derived_data[key] = derived_data[key]
             return tmp_derived_data
 
+    def _get_categorical_ordinal_encoder(self):
+        from tabensemb.data.dataprocessor import CategoricalOrdinalEncoder
+
+        for processor, _ in self.dataprocessors:
+            if isinstance(processor, CategoricalOrdinalEncoder):
+                encoder = processor.transformer
+                cat_features = processor.record_cat_features
+                if len(cat_features) == 0:
+                    return None
+                return encoder, cat_features
+        else:
+            return None
+
     def categories_inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
         Inverse transformation of `data.dataprocessor.OrdinalEncoder` of categorical features (If there is one in
@@ -718,17 +735,14 @@ class DataModule:
         data
             The inverse-transformed data.
         """
-        from tabensemb.data.dataprocessor import CategoricalOrdinalEncoder
-
-        for processor, _ in self.dataprocessors:
-            if isinstance(processor, CategoricalOrdinalEncoder):
-                encoder = processor.transformer
-                cat_features = processor.record_cat_features
-                if len(cat_features) == 0:
-                    return X.copy()
-                break
-        else:
+        encoder_features = self._get_categorical_ordinal_encoder()
+        if encoder_features is None:
             return X.copy()
+        else:
+            encoder, cat_features = encoder_features
+        missing_cols = np.setdiff1d(cat_features, list(X.columns))
+        if len(missing_cols) > 0:
+            X[missing_cols] = -1
         X_copy = X.copy()
         try:
             X_copy.loc[:, cat_features] = encoder.inverse_transform(
@@ -742,6 +756,45 @@ class DataModule:
                 raise Exception(
                     f"Categorical features are not compatible with the fitted OrdinalEncoder."
                 )
+        for col in missing_cols:
+            del X_copy[col]
+        return X_copy
+
+    def categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transformation of `data.dataprocessor.OrdinalEncoder` of categorical features (If there is one in
+        `self.dataprocessors`).
+
+        Parameters
+        ----------
+        X
+            The data to be transformed.
+
+        Returns
+        -------
+        data
+            The transformed data.
+        """
+        encoder_features = self._get_categorical_ordinal_encoder()
+        if encoder_features is None:
+            return X.copy()
+        else:
+            encoder, cat_features = encoder_features
+        missing_cols = np.setdiff1d(cat_features, list(X.columns))
+        if len(missing_cols) > 0:
+            X[missing_cols] = -1
+        X_copy = X.copy()
+        try:
+            X_copy.loc[:, cat_features] = encoder.transform(X[cat_features].copy())
+        except:
+            try:
+                encoder.inverse_transform(X[cat_features].copy())
+            except:
+                raise Exception(
+                    f"Categorical features are not compatible with the fitted OrdinalEncoder."
+                )
+        for col in missing_cols:
+            del X_copy[col]
         return X_copy
 
     def save_data(self, path: str):
@@ -822,6 +875,8 @@ class DataModule:
                     for col_name in col_names:
                         if col_name not in cont_feature_names:
                             cont_feature_names.append(col_name)
+                            if self.training:
+                                self.cont_feature_names.append(col_name)
                 df_tmp[col_names] = value
         return df_tmp, cont_feature_names
 
@@ -851,7 +906,9 @@ class DataModule:
                     value, name, _ = deriver.derive(df, datamodule=self, **kwargs)
                     derived_data[name] = value
         if len(self.cat_feature_names) > 0:
-            derived_data["categorical"] = df[self.cat_feature_names].values
+            derived_data["categorical"] = self.categories_transform(
+                df[self.cat_feature_names]
+            ).values
         if len(self.augmented_indices) > 0:
             augmented = np.zeros((len(df), 1))
             if self.training:
@@ -862,6 +919,7 @@ class DataModule:
     def _data_process(
         self,
         warm_start: bool = False,
+        skip_selector: bool = False,
         verbose: bool = True,
     ):
         """
@@ -872,6 +930,8 @@ class DataModule:
         ----------
         warm_start
             Whether to use fitted data imputers and processors to process the data.
+        skip_selector
+            True to skip feature selections.
         verbose
             Verbosity.
         """
@@ -892,9 +952,13 @@ class DataModule:
                 df_training,
                 warm_start=warm_start,
                 skip_scaler=True,
+                skip_selector=skip_selector,
             )
             training_data = self._data_preprocess(
-                unscaled_training_data, warm_start=warm_start, scaler_only=True
+                unscaled_training_data,
+                warm_start=warm_start,
+                scaler_only=True,
+                skip_selector=skip_selector,
             )
             unscaled_testing_data = self.data_transform(
                 self.df.loc[self.test_indices, :], skip_scaler=True
@@ -1058,6 +1122,7 @@ class DataModule:
         input_data: pd.DataFrame,
         warm_start: bool = False,
         skip_scaler: bool = False,
+        skip_selector: bool = False,
         scaler_only: bool = False,
     ) -> pd.DataFrame:
         """
@@ -1071,6 +1136,8 @@ class DataModule:
             False to fit and transform data processors, and True to transform only.
         skip_scaler
             True to skip scaling (the last processor).
+        skip_selector
+            True to skip feature selections.
         scaler_only
             True to only perform scaling (the last processor).
 
@@ -1079,13 +1146,15 @@ class DataModule:
         df
             The processed data.
         """
-        from .base import AbstractScaler
+        from .base import AbstractScaler, AbstractFeatureSelector
 
         if skip_scaler and scaler_only:
             raise Exception(f"Both skip_scaler and scaler_only are True.")
         data = input_data.copy()
         for processor, kwargs in self.dataprocessors:
             if skip_scaler and isinstance(processor, AbstractScaler):
+                continue
+            if skip_selector and isinstance(processor, AbstractFeatureSelector):
                 continue
             if scaler_only and not isinstance(processor, AbstractScaler):
                 continue

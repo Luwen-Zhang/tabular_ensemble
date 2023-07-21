@@ -81,6 +81,8 @@ class SampleWeightDeriver(AbstractDeriver):
             index=df.index, columns=["weight"], data=np.ones((len(df), 1))
         )
         for feature in cont_feature_names:
+            if feature == kwargs["derived_name"]:
+                continue
             # We can only calculate distributions based on known data, i.e. the training set.
             if datamodule.training:
                 Q1 = np.percentile(
@@ -101,7 +103,14 @@ class SampleWeightDeriver(AbstractDeriver):
             if len(idx) == 0:
                 continue
             if datamodule.training:
-                p_outlier = len(idx) / len(df)
+                train_upper = train_idx[
+                    np.where(df.loc[train_idx, feature] >= (Q3 + 1.5 * IQR))[0]
+                ]
+                train_lower = train_idx[
+                    np.where(df.loc[train_idx, feature] <= (Q1 - 1.5 * IQR))[0]
+                ]
+                train_outlier = np.union1d(train_upper, train_lower)
+                p_outlier = len(train_outlier) / len(train_idx)
                 feature_weight = -np.log10(p_outlier)
                 self.feature_weight[feature] = feature_weight
             elif feature in self.feature_weight.keys():
@@ -114,9 +123,16 @@ class SampleWeightDeriver(AbstractDeriver):
 
         for feature in cat_feature_names:
             if datamodule.training:
-                cnts = df[feature].value_counts()
-                unique_values = np.array(cnts.index)
-                p_unique_values = cnts.values / len(df)
+                all_cnts = df[feature].value_counts()
+                unique_values = np.array(all_cnts.index)
+                train_cnts = df.loc[train_idx, feature].value_counts()
+                fitted_train_cnts = np.array(
+                    [
+                        train_cnts[x] if x in train_cnts.index else 0.0
+                        for x in unique_values
+                    ]
+                )
+                p_unique_values = fitted_train_cnts / len(train_idx)
                 feature_weight = np.abs(
                     np.log10(p_unique_values) - np.log10(max(p_unique_values))
                 )

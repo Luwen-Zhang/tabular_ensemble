@@ -25,7 +25,7 @@ class SampleDataAugmentor(AbstractAugmenter):
     def _get_augmented(
         self, data: pd.DataFrame, datamodule: DataModule, **kwargs
     ) -> pd.DataFrame:
-        augmented = data.loc[data.index[-10:], :].copy()
+        augmented = data.loc[data.index[-2:], :].copy()
         return augmented
 
 

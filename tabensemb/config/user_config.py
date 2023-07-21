@@ -12,12 +12,12 @@ class UserConfig(dict):
     def __init__(self, path: str = None):
         super(UserConfig, self).__init__()
         self.update(default_cfg)
-        self.defaults = default_cfg.copy()
+        self._defaults = default_cfg.copy()
         if path is not None:
             self.merge(self.from_file(path))
 
     def defaults(self):
-        return self.defaults.copy()
+        return self._defaults.copy()
 
     def merge(self, d: Dict):
         d_cp = d.copy()
