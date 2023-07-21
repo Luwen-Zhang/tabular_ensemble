@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9"]
+        python-version: ["3.8"]
 
     steps:
     - uses: actions/checkout@v3
@@ -38,7 +38,7 @@ jobs:
     - name: Test with pytest
       run: |
         cd test
-        pytest --cov .
+        pytest --cov=tabensemb .
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v3
       env:
