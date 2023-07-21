@@ -1,5 +1,5 @@
 # tabular_ensemble
-<a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a> 
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 A framework to ensemble model bases and evaluate various models for tabular predictions.
 
@@ -11,18 +11,7 @@ A configuration file in `.py` or `.json` format provides all information to buil
 
 ## Requirements
 
-We recommend using a virtual environment with `python=3.8` and conda (we have verified both [miniconda](https://docs.conda.io/en/latest/miniconda.html) and [anaconda](https://www.anaconda.com/)).
-
-```shell
-conda create -n myvenv python=3.8
-conda activate myvenv
-```
-
-First, install `torch==1.12.0` with CUDA 1.16 (if a Nvidia GPU is available). 
-
-```shell
-pip install torch==1.12.0+cu116 torchvision --extra-index-url https://download.pytorch.org/whl/cu116 --no-cache-dir
-```
+First, install `PyTorch` following its [documentation](https://pytorch.org/get-started/locally/).
 
 Then install the package
 
@@ -30,7 +19,7 @@ Then install the package
 pip install -e .[all]
 ```
 
-If the minimal functionality is needed (without any other model bases), install without the postfix`[all]`.
+If only the minimal functionality is needed (without any other model bases), install without the postfix`[all]`.
 
 To test basic functionalities like loading data and training model bases, run the following `unittest`
 
