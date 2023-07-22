@@ -27,6 +27,7 @@ from torch.autograd.grad_mode import _DecoratorContextManager
 from typing import Any
 import tabensemb
 from .collate import fix_collate_fn
+from typing import Dict
 
 clr = sns.color_palette("deep")
 sns.reset_defaults()
@@ -511,6 +512,19 @@ class HiddenPrints:
             sys.stdout = self._original_stdout
         if self.disable_logging:
             logging.disable(self.logging_state)
+
+
+class global_setting:
+    def __init__(self, setting: Dict):
+        self.setting = setting
+        self.original = None
+
+    def __enter__(self):
+        self.original = tabensemb.setting.copy()
+        tabensemb.setting.update(self.setting)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        tabensemb.setting.update(self.original)
 
 
 class HiddenPltShow:

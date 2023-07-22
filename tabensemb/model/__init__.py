@@ -6,7 +6,6 @@ from .autogluon import AutoGluon
 from .widedeep import WideDeep
 from .pytorch_tabular import PytorchTabular
 from .util_model import RFE
-from .util_model import ModelAssembly
 from .sample import CatEmbed
 
 __all__ = [
@@ -17,6 +16,5 @@ __all__ = [
     "WideDeep",
     "PytorchTabular",
     "RFE",
-    "ModelAssembly",
     "CatEmbed",
 ]

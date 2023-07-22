@@ -1198,21 +1198,24 @@ class DataModule:
         """
         Update PyTorch tensors and datasets for the datamodule. This is called after features change.
         """
-        X = torch.tensor(
-            self.feature_data.values.astype(np.float32), dtype=torch.float32
-        )
-        y = torch.tensor(self.label_data.values.astype(np.float32), dtype=torch.float32)
-
-        D = [
-            torch.tensor(value.astype(np.float32))
-            for value in self.derived_data.values()
-        ]
+        X, D, y = self.generate_tensors(self.scaled_df, self.derived_data)
         dataset = Data.TensorDataset(X, *D, y)
-
         self.train_dataset, self.val_dataset, self.test_dataset = self.generate_subset(
             dataset
         )
         self.tensors = (X, *D, y) if len(D) > 0 else (X, None, y)
+
+    def generate_tensors(self, scaled_df, derived_data):
+        X = torch.tensor(
+            scaled_df[self.cont_feature_names].values.astype(np.float32),
+            dtype=torch.float32,
+        )
+        D = [torch.tensor(value.astype(np.float32)) for value in derived_data.values()]
+        y = torch.tensor(
+            scaled_df[self.label_name].values.astype(np.float32),
+            dtype=torch.float32,
+        )
+        return X, D, y
 
     def generate_subset(
         self, dataset: Data.Dataset

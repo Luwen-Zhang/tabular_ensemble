@@ -21,6 +21,7 @@ from functools import partial
 from pytorch_lightning import Callback
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from collections.abc import Iterable
+from captum.attr import FeaturePermutation
 import traceback
 import math
 
@@ -301,6 +302,119 @@ class AbstractModel:
         if required_models is not None:
             kwargs["required_models"] = required_models
         return self._new_model(model_name=model_name, verbose=verbose, **kwargs)
+
+    def cal_feature_importance(
+        self, model_name, method, **kwargs
+    ) -> Tuple[np.ndarray, List[str]]:
+        """
+        Calculate feature importance with a specified model.
+
+        Parameters
+        ----------
+        model_name
+            The selected model in the modelbase.
+        method
+            The method to calculate importance. "permutation" or "shap".
+        kwargs
+            Ignored for the compatibility of TorchModel.
+
+        Returns
+        ----------
+        attr
+            Values of feature importance.
+        importance_names
+            Corresponding feature names. ``Trainer.all_feature_names`` will be considered.
+        """
+        datamodule = self.trainer.datamodule
+        all_feature_names = self.trainer.all_feature_names
+        label_name = self.trainer.label_name
+        if method == "permutation":
+            attr = np.zeros((len(all_feature_names),))
+            test_data = datamodule.X_test
+            base_pred = self.predict(
+                test_data,
+                derived_data=datamodule.D_test,
+                model_name=model_name,
+            )
+            base_metric = metric_sklearn(
+                test_data[label_name].values, base_pred, metric="rmse"
+            )
+            for idx, feature in enumerate(all_feature_names):
+                df = test_data.copy()
+                shuffled = df.loc[:, feature].values
+                np.random.shuffle(shuffled)
+                df.loc[:, feature] = shuffled
+                perm_pred = self.predict(
+                    df,
+                    derived_data=datamodule.derive_unstacked(df),
+                    model_name=model_name,
+                )
+                attr[idx] = np.abs(
+                    metric_sklearn(df[label_name].values, perm_pred, metric="rmse")
+                    - base_metric
+                )
+            attr /= np.sum(attr)
+        elif method == "shap":
+            attr = self.cal_shap(model_name=model_name)
+        else:
+            raise NotImplementedError
+        importance_names = cp(all_feature_names)
+        return attr, importance_names
+
+    def cal_shap(self, model_name: str, **kwargs) -> np.ndarray:
+        """
+        Calculate SHAP values with a specified model. ``shap.KernelExplainer`` is called, and shap.kmeans is called to
+        summarize training data to 10 samples as the background data and 10 random samples in the testing set are
+        explained, which will bias the results.
+
+        Parameters
+        ----------
+        model_name
+            The selected model in the modelbase.
+        kwargs
+            Ignored for the compatibility of TorchModel.
+
+        Returns
+        -------
+        attr
+            The SHAP values. `Trainer.all_feature_names` will be considered.
+        """
+        import shap
+
+        trainer_df = self.trainer.df
+        train_indices = self.trainer.train_indices
+        test_indices = self.trainer.test_indices
+        all_feature_names = self.trainer.all_feature_names
+        datamodule = self.trainer.datamodule
+        background_data = shap.kmeans(
+            trainer_df.loc[train_indices, all_feature_names], 10
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="The default of 'normalize' will be set to False in version 1.2 and deprecated in version 1.4.",
+        )
+
+        def func(data):
+            df = pd.DataFrame(columns=all_feature_names, data=data)
+            return self.predict(
+                df,
+                model_name=model_name,
+                derived_data=datamodule.derive_unstacked(df, categorical_only=True),
+                ignore_absence=True,
+            ).flatten()
+
+        test_indices = np.random.choice(test_indices, size=10, replace=False)
+        test_data = trainer_df.loc[test_indices, all_feature_names].copy()
+        shap_values = shap.KernelExplainer(func, background_data).shap_values(test_data)
+        attr = (
+            np.concatenate(
+                [np.mean(np.abs(shap_values[0]), axis=0)]
+                + [np.mean(np.abs(x), axis=0) for x in shap_values[1:]],
+            )
+            if type(shap_values) == list and len(shap_values) > 1
+            else np.mean(np.abs(shap_values), axis=0)
+        )
+        return attr
 
     def _check_params(self, model_name, **kwargs):
         """
@@ -1211,6 +1325,168 @@ class TorchModel(AbstractModel):
     The specific class for PyTorch-like models. Some abstract methods in AbstractModel are implemented.
     """
 
+    def cal_feature_importance(self, model_name, method, call_general_method=False):
+        """
+        Calculate feature importance with a specified model. ``captum`` and ``shap`` is called.
+
+        Parameters
+        ----------
+        model_name
+            The selected model in the modelbase.
+        method
+            The method to calculate importance. "permutation" or "shap".
+        call_general_method
+            Call the general feature importance calculation from ``AbstractModel`` instead of the optimized procedure
+            for deep learning models. This is useful when calculating importance for models that require other models.
+
+        Returns
+        ----------
+        attr
+            Values of feature importance.
+        importance_names
+            Corresponding feature names. All features including derived unstacked features will be included.
+        """
+        if call_general_method:
+            return super(TorchModel, self).cal_feature_importance(model_name, method)
+
+        label_data = self.trainer.label_data
+        test_indices = self.trainer.test_indices
+        test_label = label_data.loc[test_indices, :].values
+        trainer_datamodule = self.trainer.datamodule
+
+        # This is decomposed from _data_preprocess (The first part)
+        tensors, df, derived_data, custom_datamodule = self._prepare_tensors(
+            trainer_datamodule.df.loc[test_indices, :],
+            trainer_datamodule.get_derived_data_slice(
+                trainer_datamodule.derived_data, test_indices
+            ),
+            model_name,
+        )
+        X = tensors[0]
+        D = tensors[1:-1]
+        y = tensors[-1]
+        cont_feature_names = custom_datamodule.cont_feature_names
+        cat_feature_names = custom_datamodule.cat_feature_names
+
+        if method == "permutation":
+            if self.required_models(model_name) is not None:
+                warnings.warn(
+                    f"Calculating permutation importance for models that require other models. Results of required "
+                    f"models come from un-permuted data. If this is not acceptable, pass `call_general_method=True`."
+                )
+
+            def forward_func(_X, *_D):
+                # This is decomposed from _data_preprocess (The second part)
+                _tensors = (_X, *_D)
+                dataset = self._generate_dataset_from_tensors(
+                    _tensors, df, derived_data, model_name
+                )
+                # This is decomposed from _predict
+                prediction = self._pred_single_model(
+                    self.model[model_name],
+                    X_test=dataset,
+                    verbose=False,
+                )
+                loss = float(
+                    metric_sklearn(test_label, prediction, self.trainer.args["loss"])
+                )
+                return loss
+
+            feature_perm = FeaturePermutation(forward_func)
+            attr = [x.cpu().numpy().flatten() for x in feature_perm.attribute((X, *D))]
+            attr = np.abs(np.concatenate(attr))
+        elif method == "shap":
+            attr = self.cal_shap(model_name=model_name)
+        else:
+            raise NotImplementedError
+        dims = [x.shape for x in derived_data.values()]
+        importance_names = cp(cont_feature_names)
+        for key_idx, key in enumerate(derived_data.keys()):
+            importance_names += (
+                [
+                    f"{key} (dim {i})" if dims[key_idx][-1] > 1 else key
+                    for i in range(dims[key_idx][-1])
+                ]
+                if key != "categorical"
+                else cat_feature_names
+            )
+        return attr, importance_names
+
+    def cal_shap(self, model_name: str, call_general_method=False) -> np.ndarray:
+        """
+        Calculate SHAP values with a specified model. If the modelbase is a ``TorchModel``, the ``shap.DeepExplainer``
+        is used.
+
+        Parameters
+        ----------
+        program
+            The selected modelbase.
+        model_name
+            The selected model in the modelbase.
+        call_general_method
+
+        Returns
+        -------
+        attr
+            The SHAP values. All features including derived unstacked features will be included.
+        """
+        if self.required_models(model_name) is not None:
+            raise Exception(
+                f"Calculating shap for models that require other models is not supported, because "
+                f"shap.DeepExplainer directly calls forward passing a series of tensors, and required models may "
+                f"use DataFrames, NDArrays, etc. Pass `call_general_method=True` to use shap.KernelExplainer."
+            )
+        import shap
+
+        train_indices = self.trainer.train_indices
+        test_indices = self.trainer.test_indices
+        datamodule = self.trainer.datamodule
+        if "categorical" in datamodule.derived_data.keys():
+            warnings.warn(
+                f"shap.DeepExplainer cannot handle categorical features because their gradients (as float dtype) are "
+                f"zero, and integers can not require_grad. If shap values of categorical values are needed, pass "
+                f"`call_general_method=True` to use shap.KernelExplainer."
+            )
+
+        bk_indices = np.random.choice(
+            train_indices,
+            size=min([100, len(train_indices)]),
+            replace=False,
+        )
+        tensors, _, _, _ = self._prepare_tensors(
+            datamodule.df.loc[bk_indices, :],
+            datamodule.get_derived_data_slice(datamodule.derived_data, bk_indices),
+            model_name,
+        )
+        X_train_bk = tensors[0]
+        D_train_bk = tensors[1:-1]
+        background_data = [X_train_bk, *D_train_bk]
+
+        tensors, _, _, _ = self._prepare_tensors(
+            datamodule.df.loc[test_indices, :],
+            datamodule.get_derived_data_slice(datamodule.derived_data, test_indices),
+            model_name,
+        )
+        X_test = tensors[0]
+        D_test = tensors[1:-1]
+        test_data = [X_test, *D_test]
+
+        with global_setting({"test_with_no_grad": False}):
+            explainer = shap.DeepExplainer(self.model[model_name], background_data)
+
+            with HiddenPrints():
+                shap_values = explainer.shap_values(test_data)
+
+        attr = (
+            np.concatenate(
+                [np.mean(np.abs(shap_values[0]), axis=0)]
+                + [np.mean(np.abs(x), axis=0) for x in shap_values[1:]],
+            )
+            if type(shap_values) == list and len(shap_values) > 1
+            else np.mean(np.abs(shap_values[0]), axis=0)
+        )
+        return attr
+
     def _train_data_preprocess(self, model_name):
         datamodule = self._prepare_custom_datamodule(model_name)
         datamodule.update_dataset()
@@ -1228,7 +1504,7 @@ class TorchModel(AbstractModel):
 
     def _prepare_custom_datamodule(self, model_name) -> DataModule:
         """
-        Change this method if a customized preprocessing stage is needed. See ``transformer.py`` for example.
+        Change this method if a customized preprocessing stage is needed. See ``sample.py`` for example.
         """
         return self.trainer.datamodule
 
@@ -1332,28 +1608,21 @@ class TorchModel(AbstractModel):
 
     def _run_custom_data_module(self, df, derived_data, model_name):
         """
-        Change this method if a customized preprocessing stage is implemented in ``_prepare_custom_datamodule``. The
-        returned datamodule only provide feature names and a scaler (AbstractScaler). See ``transformer.py`` for example.
+        Change this method if a customized preprocessing stage is implemented in ``_prepare_custom_datamodule``.
+        See ``sample.py`` for example.
         """
         return df, derived_data, self.trainer.datamodule
 
-    def _data_preprocess(self, df, derived_data, model_name):
+    def _prepare_tensors(self, df, derived_data, model_name):
         df, derived_data, datamodule = self._run_custom_data_module(
             df, derived_data, model_name
         )
         scaled_df = datamodule.data_transform(df, scaler_only=True)
-        X = torch.tensor(
-            scaled_df[datamodule.cont_feature_names].values.astype(np.float32),
-            dtype=torch.float32,
-        )
-        D = [
-            torch.tensor(value, dtype=torch.float32) for value in derived_data.values()
-        ]
-        y = torch.tensor(
-            np.zeros((len(scaled_df), len(datamodule.label_name))),
-            dtype=torch.float32,
-        )
+        X, D, y = datamodule.generate_tensors(scaled_df, derived_data)
         tensors = (X, *D, y)
+        return tensors, df, derived_data, datamodule
+
+    def _generate_dataset_from_tensors(self, tensors, df, derived_data, model_name):
         required_models = self._get_required_models(model_name)
         if required_models is None:
             dataset = Data.TensorDataset(*tensors)
@@ -1364,6 +1633,15 @@ class TorchModel(AbstractModel):
                 tensors=tensors,
                 required_models=required_models,
             )
+        return dataset
+
+    def _data_preprocess(self, df, derived_data, model_name):
+        tensors, df, derived_data, _ = self._prepare_tensors(
+            df, derived_data, model_name
+        )
+        dataset = self._generate_dataset_from_tensors(
+            tensors, df, derived_data, model_name
+        )
         return dataset
 
     def _train_single_model(
