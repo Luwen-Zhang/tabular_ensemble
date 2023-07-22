@@ -2,6 +2,7 @@ from tabensemb.utils import *
 from skopt.space import Integer, Categorical, Real
 from tabensemb.model import TorchModel
 from ._sample.cat_embed import CategoryEmbeddingNN
+from ._sample.require_model import RequireOthersNN
 
 
 class CatEmbed(TorchModel):
@@ -10,7 +11,18 @@ class CatEmbed(TorchModel):
 
     @staticmethod
     def _get_model_names():
-        return ["Category Embedding"]
+        return [
+            "Category Embedding",
+            "Category Embedding Extend dim",
+            "Require Model Autogluon LR",
+            "Require Model WideDeep TabMlp",
+            "Require Model WideDeep TabMlp Wrap",
+            "Require Model PyTabular CatEmbed",
+            "Require Model PyTabular CatEmbed Wrap",
+            "Require Model Self CatEmbed",
+            "Require Model ExtCatEmbed CatEmbed",
+            "Require Model ExtCatEmbed CatEmbed Wrap",
+        ]
 
     def _new_model(self, model_name, verbose, **kwargs):
         fix_kwargs = dict(
@@ -20,17 +32,37 @@ class CatEmbed(TorchModel):
             cat_num_unique=[len(x) for x in self.trainer.cat_feature_mapping.values()],
             datamodule=self.datamodule,
         )
-        return CategoryEmbeddingNN(
-            **fix_kwargs,
-            embedding_dim=3,
-            **kwargs,
-        )
+        if "Category Embedding" in model_name:
+            return CategoryEmbeddingNN(
+                **fix_kwargs,
+                embedding_dim=3,
+                embed_extend_dim="Extend dim" in model_name,
+                **kwargs,
+            )
+        elif "Require Model" in model_name:
+            return RequireOthersNN(**fix_kwargs, **kwargs)
 
     def _space(self, model_name):
         return [
             Real(low=0.0, high=0.5, prior="uniform", name="mlp_dropout"),
             Real(low=0.0, high=0.5, prior="uniform", name="embed_dropout"),
         ] + self.trainer.SPACE
+
+    def required_models(self, model_name: str):
+        if "Require Model" in model_name:
+            postfix = "_WRAP" if "Wrap" in model_name else ""
+            if "Autogluon LR" in model_name:
+                return ["EXTERN_AutoGluon_Linear Regression" + postfix]
+            elif "WideDeep TabMlp" in model_name:
+                return ["EXTERN_WideDeep_TabMlp" + postfix]
+            elif "PyTabular CatEmbed" in model_name:
+                return ["EXTERN_PytorchTabular_Category Embedding" + postfix]
+            elif "ExtCatEmbed" in model_name:
+                return ["EXTERN_ExtCatEmbed_Category Embedding" + postfix]
+            elif "Self" in model_name:
+                return ["Category Embedding"]
+        else:
+            return None
 
     def _initial_values(self, model_name):
         res = {

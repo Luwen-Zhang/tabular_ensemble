@@ -200,7 +200,7 @@ def test_inspect():
             trainer.derived_data, trainer.train_indices
         ),
     )
-
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
     assert np.allclose(
         direct_inspect["train"]["prediction"],
         train_inspect["USER_INPUT"]["prediction"],
@@ -239,6 +239,8 @@ def test_trainer_label_missing():
     with pytest.raises(Exception):
         trainer.load_data()
 
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+
 
 def test_trainer_multitarget():
     print(f"\n-- Loading trainer --\n")
@@ -261,8 +263,8 @@ def test_trainer_multitarget():
         WideDeep(trainer, model_subset=["TabMlp"])
 
     models = [
-        # PytorchTabular(trainer, model_subset=["Category Embedding"]),
-        # AutoGluon(trainer, model_subset=["Linear Regression"]),
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
         CatEmbed(
             trainer,
             model_subset=[

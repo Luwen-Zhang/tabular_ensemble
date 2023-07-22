@@ -198,7 +198,7 @@ def test_illegal_cont_feature():
         )
 
     df = datamodule.df.copy()
-    df["cat_1"] = df["cat_1"].values.astype(np.object)
+    df["cat_1"] = df["cat_1"].values.astype(object)
     datamodule.set_data(
         df,
         cont_feature_names=["cont_0", "cat_1"],

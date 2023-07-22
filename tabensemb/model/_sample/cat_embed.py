@@ -6,42 +6,31 @@ import numpy as np
 from tabensemb.model.base import get_sequential
 
 
-class Embedding(nn.Module):
+class Embedding2d(nn.Module):
     def __init__(
         self,
         embedding_dim,
-        n_inputs,
         embed_dropout,
         cat_num_unique,
+        n_inputs,
         run_cat,
-        embed_cont=True,
-        cont_encoder_layers=None,
     ):
-        super(Embedding, self).__init__()
+        super(Embedding2d, self).__init__()
         # Module: Continuous embedding
-        self.embed_cont = embed_cont
         d_sqrt_inv = 1 / np.sqrt(embedding_dim)
-        if embed_cont:
-            self.embedding_dim = embedding_dim
-            self.cont_norm = nn.BatchNorm1d(n_inputs)
-            self.cont_embed_weight = nn.Parameter(torch.Tensor(n_inputs, embedding_dim))
-            nn.init.normal_(
-                self.cont_embed_weight,
-                std=d_sqrt_inv,
-            )
-            self.cont_embed_bias = nn.Parameter(torch.Tensor(n_inputs, embedding_dim))
-            nn.init.normal_(
-                self.cont_embed_bias,
-                std=d_sqrt_inv,
-            )
-            self.cont_dropout = nn.Dropout(embed_dropout)
-        else:
-            self.cont_encoder = get_sequential(
-                cont_encoder_layers,
-                n_inputs,
-                n_inputs,
-                nn.ReLU,
-            )
+        self.embedding_dim = embedding_dim
+        self.cont_norm = nn.BatchNorm1d(n_inputs)
+        self.cont_embed_weight = nn.Parameter(torch.Tensor(n_inputs, embedding_dim))
+        nn.init.normal_(
+            self.cont_embed_weight,
+            std=d_sqrt_inv,
+        )
+        self.cont_embed_bias = nn.Parameter(torch.Tensor(n_inputs, embedding_dim))
+        nn.init.normal_(
+            self.cont_embed_bias,
+            std=d_sqrt_inv,
+        )
+        self.cont_dropout = nn.Dropout(embed_dropout)
 
         # Module: Categorical embedding
         if run_cat:
@@ -66,13 +55,10 @@ class Embedding(nn.Module):
             self.run_cat = False
 
     def forward(self, x, derived_tensors):
-        if self.embed_cont:
-            x_cont = self.cont_embed_weight.unsqueeze(0) * self.cont_norm(x).unsqueeze(
-                2
-            ) + self.cont_embed_bias.unsqueeze(0)
-            x_cont = self.cont_dropout(x_cont)
-        else:
-            x_cont = self.cont_encoder(x)
+        x_cont = self.cont_embed_weight.unsqueeze(0) * self.cont_norm(x).unsqueeze(
+            2
+        ) + self.cont_embed_bias.unsqueeze(0)
+        x_cont = self.cont_dropout(x_cont)
         if self.run_cat:
             cat = derived_tensors["categorical"].long()
             x_cat_embeds = [
@@ -80,10 +66,7 @@ class Embedding(nn.Module):
             ]
             x_cat = torch.cat(x_cat_embeds, 1)
             x_cat = self.cat_dropout(x_cat)
-            if self.embed_cont:
-                x_res = torch.cat([x_cont, x_cat], dim=1)
-            else:
-                x_res = (x_cont, x_cat)
+            x_res = torch.cat([x_cont, x_cat], dim=1)
         else:
             x_res = x_cont
         return x_res
@@ -141,16 +124,24 @@ class CategoryEmbeddingNN(AbstractNN):
         n_outputs,
         datamodule,
         cat_num_unique: List[int] = None,
+        embed_extend_dim: bool = False,
         **kwargs,
     ):
         super(CategoryEmbeddingNN, self).__init__(datamodule, **kwargs)
 
         run_cat = "categorical" in self.derived_feature_names
-
+        self.embed_extend_dim = embed_extend_dim
+        if embed_extend_dim:
+            linear_input = (
+                n_inputs + len(cat_num_unique) * run_cat
+            ) * self.hparams.embedding_dim
+        else:
+            linear_input = (
+                n_inputs + len(cat_num_unique) * self.hparams.embedding_dim * run_cat
+            )
         self.linear = get_sequential(
             [128, 64],
-            n_inputs=n_inputs
-            + len(cat_num_unique) * self.hparams.embedding_dim * run_cat,
+            n_inputs=linear_input,
             n_outputs=32,
             act_func=nn.ReLU,
             dropout=self.hparams.mlp_dropout,
@@ -159,13 +150,22 @@ class CategoryEmbeddingNN(AbstractNN):
             out_norm_dropout=True,
         )
 
-        self.embed = Embedding1d(
-            self.hparams.embedding_dim,
-            self.hparams.embed_dropout,
-            cat_num_unique,
-            n_inputs,
-            run_cat=run_cat,
-        )
+        if embed_extend_dim:
+            self.embed = Embedding2d(
+                self.hparams.embedding_dim,
+                self.hparams.embed_dropout,
+                cat_num_unique,
+                n_inputs,
+                run_cat=run_cat,
+            )
+        else:
+            self.embed = Embedding1d(
+                self.hparams.embedding_dim,
+                self.hparams.embed_dropout,
+                cat_num_unique,
+                n_inputs,
+                run_cat=run_cat,
+            )
 
         self.head = get_linear(
             n_inputs=32,
@@ -179,6 +179,8 @@ class CategoryEmbeddingNN(AbstractNN):
         self, x: torch.Tensor, derived_tensors: Dict[str, torch.Tensor]
     ) -> torch.Tensor:
         x_embed = self.embed(x, derived_tensors)
+        if self.embed_extend_dim:
+            x_embed = x_embed.flatten(start_dim=1)
         output = self.linear(x_embed)
         self.hidden_representation = output
         output = self.head(output)

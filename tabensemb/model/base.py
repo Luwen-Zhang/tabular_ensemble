@@ -1252,32 +1252,73 @@ class TorchModel(AbstractModel):
             )
         return train_dataset, val_dataset, test_dataset
 
+    @staticmethod
+    def get_full_name_from_required_model(required_model, model_name=None):
+        """
+        Get the name of a required_model to access data in derived_tensors.
+
+        Parameters
+        ----------
+        required_model
+            A required model specified in ``required_models()``.
+        model_name
+            The name of the required model. It is necessary if the model comes from the same model base.
+
+        Returns
+        -------
+        full_name
+            The name of a required_model
+        """
+        if isinstance(required_model, AbstractWrapper) or isinstance(
+            required_model, AbstractModel
+        ):
+            name = required_model.get_model_names()[0]
+            full_name = f"EXTERN_{required_model.program}_{name}"
+        elif isinstance(required_model, nn.Module):
+            if model_name is None:
+                raise Exception(
+                    f"If the required model comes from the same model base, `model_name` should be "
+                    f"provided when calling `call_required_model.`"
+                )
+            full_name = model_name
+        else:
+            raise Exception(
+                f"The required model should be a nn.Module, an AbstractWrapper, or an AbstractModel, but got"
+                f"{type(required_model)} instead."
+            )
+        return full_name
+
     def _generate_dataset_for_required_models(
         self, df, derived_data, tensors, required_models
     ):
         full_data_required_models = {}
         for name, mod in required_models.items():
+            full_name = TorchModel.get_full_name_from_required_model(
+                mod, model_name=name
+            )
             if not isinstance(mod, AbstractNN):
-                name_wo_wrap = name.split("_WRAP")[0]
                 data = mod._data_preprocess(
                     df=df,
                     derived_data=derived_data,
-                    model_name=name_wo_wrap.split("_")[-1],
+                    model_name=full_name.split("_")[-1],
                 )
-                full_data_required_models[name_wo_wrap] = data
+                full_data_required_models[full_name] = data
                 res = AbstractNN.call_required_model(
-                    mod, None, {"data_required_models": {name_wo_wrap: data}}
+                    mod, None, {"data_required_models": {full_name: data}}
                 )
-                full_data_required_models[name_wo_wrap + "_pred"] = res
+                if isinstance(res, torch.Tensor):
+                    res = res.detach().to("cpu")
+                full_data_required_models[full_name + "_pred"] = res
                 if isinstance(mod, AbstractWrapper):
-                    hidden = mod.hidden_representation.to("cpu")
-                    full_data_required_models[name_wo_wrap + "_hidden"] = hidden
+                    hidden = mod.hidden_representation.detach().to("cpu")
+                    full_data_required_models[full_name + "_hidden"] = hidden
             else:
                 mod.eval()
-                res = mod(*tensors)
-                hidden = mod.hidden_representation.to("cpu")
-                full_data_required_models[name + "_pred"] = res
-                full_data_required_models[name + "_hidden"] = hidden
+                with torch.no_grad():
+                    res = mod(*tensors).detach().to("cpu")
+                hidden = mod.hidden_representation.detach().to("cpu")
+                full_data_required_models[full_name + "_pred"] = res
+                full_data_required_models[full_name + "_hidden"] = hidden
         tensor_dataset = Data.TensorDataset(*tensors)
         if len(full_data_required_models) == 0:
             dataset = tensor_dataset
@@ -1523,6 +1564,9 @@ class TorchModelWrapper(AbstractWrapper):
         super(TorchModelWrapper, self).__init__(model=model)
 
     def wrap_forward(self):
+        pass
+
+    def reset_forward(self):
         pass
 
     @property
@@ -1858,9 +1902,13 @@ class AbstractNN(pl.LightningModule):
         return use_hidden_rep, hidden_rep_dim
 
     @staticmethod
-    def call_required_model(required_model, x, derived_tensors) -> torch.Tensor:
+    def call_required_model(
+        required_model, x, derived_tensors, model_name=None
+    ) -> torch.Tensor:
         """
-        Call a required model and return its result.
+        Call a required model and return its result. Predictions and hidden representation are already generated
+        before training. If you want to run the required model and further train it, pass a copied derived_tensors
+        leaving its ``data_required_models`` item as an empty dict.
 
         Parameters
         ----------
@@ -1870,6 +1918,8 @@ class AbstractNN(pl.LightningModule):
             See AbstractNN._forward.
         derived_tensors
             See AbstractNN._forward.
+        model_name
+            The name of the required model. It is necessary if the model comes from the same model base.
 
         Returns
         -------
@@ -1877,44 +1927,40 @@ class AbstractNN(pl.LightningModule):
             The result of the required model.
         """
         device = x.device if x is not None else "cpu"
-        if isinstance(required_model, nn.Module) or isinstance(
-            required_model, AbstractWrapper
-        ):
-            name = required_model.get_model_names()[0]
-            if name + "_pred" in derived_tensors["data_required_models"].keys():
-                dl_pred = derived_tensors["data_required_models"][name + "_pred"][0].to(
-                    device
-                )
-            else:
+        full_name = TorchModel.get_full_name_from_required_model(
+            required_model, model_name
+        )
+        if full_name + "_pred" in derived_tensors["data_required_models"].keys():
+            dl_pred = derived_tensors["data_required_models"][full_name + "_pred"][
+                0
+            ].to(device)
+        else:
+            dl_pred = None
+
+        if dl_pred is None:
+            # This will only happen when generating datasets before training.
+            if isinstance(required_model, nn.Module) or isinstance(
+                required_model, AbstractWrapper
+            ):
                 required_model.eval()
                 dl_pred = required_model(x, derived_tensors)
-        elif isinstance(required_model, AbstractModel):
-            name = required_model.get_model_names()[0]
-            full_name = f"EXTERN_{required_model.program}_{name}"
-            if full_name + "_pred" in derived_tensors["data_required_models"].keys():
-                dl_pred = derived_tensors["data_required_models"][full_name + "_pred"][
-                    0
-                ].to(device)
-            else:
+            elif isinstance(required_model, AbstractModel):
                 # _pred_single_model might disturb random sampling of dataloaders because
                 # in torch.utils.data._BaseDataLoaderIter.__init__, the following line uses random:
                 # self._base_seed = torch.empty((), dtype=torch.int64).random_(generator=loader.generator).item()
+                name = required_model.get_model_names()[0]
                 ml_pred = required_model._pred_single_model(
                     required_model.model[name],
                     X_test=derived_tensors["data_required_models"][full_name],
                     verbose=False,
                 )
                 dl_pred = torch.tensor(ml_pred, device=device)
-        else:
-            raise Exception(
-                f"The required model should be a nn.Module, an AbstractWrapper, or an AbstractModel, but got"
-                f"{type(required_model)} instead."
-            )
+
         return dl_pred
 
     @staticmethod
     def get_hidden_state(
-        required_model, x, derived_tensors
+        required_model, x, derived_tensors, model_name=None
     ) -> Union[torch.Tensor, None]:
         """
         The output of the last hidden layer of a deep learning model, i.e. the hidden representation, whose dimension is
@@ -1928,6 +1974,8 @@ class AbstractNN(pl.LightningModule):
             See AbstractNN._forward.
         derived_tensors
             See AbstractNN._forward.
+        model_name
+            The name of the required model. It is necessary if the model comes from the same model base.
 
         Returns
         -------
@@ -1935,19 +1983,13 @@ class AbstractNN(pl.LightningModule):
             The output of the last hidden layer of a deep learning model.
         """
         device = x.device if x is not None else "cpu"
-        if isinstance(required_model, nn.Module):
-            name = required_model.get_model_names()[0]
-        elif isinstance(required_model, AbstractModel) or isinstance(
-            required_model, AbstractWrapper
-        ):
-            name = required_model.get_model_names()[0]
-            name = f"EXTERN_{required_model.program}_{name}"
-        else:
-            return None
-        if name + "_hidden" in derived_tensors["data_required_models"].keys():
-            hidden = derived_tensors["data_required_models"][name + "_hidden"][0].to(
-                device
-            )
+        full_name = TorchModel.get_full_name_from_required_model(
+            required_model, model_name=model_name
+        )
+        if full_name + "_hidden" in derived_tensors["data_required_models"].keys():
+            hidden = derived_tensors["data_required_models"][full_name + "_hidden"][
+                0
+            ].to(device)
         else:
             hidden = required_model.hidden_representation.to(device)
         return hidden

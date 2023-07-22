@@ -72,10 +72,6 @@ def _rfe_single_fit(rfe, estimator, feature_names, X, y, train, test, scorer):
 
 
 class ExtendRFE(RFE):
-    def __init__(self, *args, **kwargs):
-        super(ExtendRFE, self).__init__(*args, **kwargs)
-        self.feature_names = None
-
     def set_feature_names(self, feature_names):
         self.feature_names = np.array(feature_names)
 
