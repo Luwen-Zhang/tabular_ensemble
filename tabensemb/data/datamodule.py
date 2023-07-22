@@ -258,7 +258,7 @@ class DataModule:
                 f"well, pytorch-widedeep for example."
             )
 
-        detected_cat_feature_names = df.dtypes.index[df.dtypes == np.object_]
+        detected_cat_feature_names = df.dtypes.index[df.dtypes == object]
         illegal_cont_features = list(
             np.intersect1d(detected_cat_feature_names, cont_feature_names)
         )
@@ -270,7 +270,7 @@ class DataModule:
                 pass
         if len(illegal_cont_features) > 0:
             raise Exception(
-                f"{illegal_cont_features} are np.object_, but are included in continuous features. Please remove them "
+                f"{illegal_cont_features} are object, but are included in continuous features. Please remove them "
                 f"or add them to `categorical_feature_names` in the configuration file."
             )
 

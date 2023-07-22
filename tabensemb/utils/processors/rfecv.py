@@ -72,8 +72,11 @@ def _rfe_single_fit(rfe, estimator, feature_names, X, y, train, test, scorer):
 
 
 class ExtendRFE(RFE):
-    def __init__(self, feature_names=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(ExtendRFE, self).__init__(*args, **kwargs)
+        self.feature_names = None
+
+    def set_feature_names(self, feature_names):
         self.feature_names = np.array(feature_names)
 
     def get_X_wrap(self, X, features):
@@ -254,8 +257,8 @@ class ExtendRFECV(ExtendRFE, RFECV):
             importance_getter=self.importance_getter,
             step=self.step,
             verbose=self.verbose,
-            feature_names=self.feature_names,
         )
+        rfe.set_feature_names(self.feature_names)
 
         # Determine the number of subsets of features by fitting across
         # the train folds and choosing the "features_to_select" parameter
@@ -295,8 +298,8 @@ class ExtendRFECV(ExtendRFE, RFECV):
             step=self.step,
             importance_getter=self.importance_getter,
             verbose=self.verbose,
-            feature_names=self.feature_names,
         )
+        rfe.set_feature_names(self.feature_names)
 
         rfe.fit(X, y)
 
