@@ -228,6 +228,7 @@ class RFEFeatureSelector(AbstractFeatureSelector):
             warnings.warn(
                 f"Multi-target task is not supported by {self.__class__.__name__}. Only the first label is used."
             )
+        data.columns = [str(x) for x in data.columns]
         rfecv.fit(
             data[datamodule.all_feature_names],
             data[datamodule.label_name[0]].values.flatten(),

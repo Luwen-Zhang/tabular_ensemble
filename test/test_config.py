@@ -4,7 +4,7 @@ import tabensemb
 from tabensemb.config import UserConfig
 import json
 import pytest
-import collections
+import collections.abc
 
 
 def test_config_basic():
@@ -29,7 +29,7 @@ def test_config_json():
     config_json = UserConfig("./sample.json")
 
     for key in config.keys():
-        if not isinstance(config[key], collections.Iterable):
+        if not isinstance(config[key], collections.abc.Iterable):
             assert config[key] == config_json[key]
 
     os.remove("./sample.py")
