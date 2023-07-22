@@ -15,7 +15,6 @@ import torch.nn as nn
 import torch.cuda
 import torch.utils.data as Data
 import scipy.stats as st
-from captum.attr import FeaturePermutation
 from sklearn.utils import resample as skresample
 import argparse
 import platform, psutil, subprocess
@@ -1051,7 +1050,7 @@ class Trainer:
             plt.close()
 
     def cal_feature_importance(
-        self, program: str, model_name: str, method: str = "permutation"
+        self, program: str, model_name: str, method: str = "permutation", **kwargs
     ) -> Tuple[np.ndarray, List[str]]:
         """
         Calculate feature importance with a specified model. If the modelbase is ``TorchModel``, ``captum`` and ``shap``
@@ -1065,6 +1064,8 @@ class Trainer:
             The selected model in the modelbase.
         method
             The method to calculate importance. "permutation" or "shap".
+        kwargs
+            kwargs for ``AbstractModel.cal_feature_importance``
 
         Returns
         ----------
@@ -1074,102 +1075,12 @@ class Trainer:
             Corresponding feature names. If the modelbase is a ``TorchModel``, all features including derived unstacked
             features will be included. Otherwise, only ``Trainer.all_feature_names`` will be considered.
         """
-        from tabensemb.model.base import TorchModel
-
         modelbase = self.get_modelbase(program)
+        return modelbase.cal_feature_importance(
+            model_name=model_name, method=method, **kwargs
+        )
 
-        if issubclass(type(modelbase), TorchModel):
-            if method == "permutation":
-
-                def forward_func(X, *D):
-                    ground_truth = self.label_data.loc[
-                        self.test_indices, :
-                    ].values.flatten()
-                    y = self.tensors[-1][self.test_indices, :]
-                    loader = Data.DataLoader(
-                        Data.TensorDataset(X, *D, y),
-                        batch_size=len(y),
-                        shuffle=False,
-                        pin_memory=True,
-                    )
-                    prediction, _, _ = modelbase._test_step(
-                        modelbase.model[model_name], loader
-                    )
-                    loss = float(
-                        self._metric_sklearn(
-                            ground_truth, prediction, self.args["loss"]
-                        )
-                    )
-                    return loss
-
-                feature_perm = FeaturePermutation(forward_func)
-                attr = [
-                    x.cpu().numpy().flatten()
-                    for x in feature_perm.attribute(
-                        tuple(
-                            [
-                                self.datamodule.get_first_tensor_slice(
-                                    self.test_indices
-                                ),
-                                *self.datamodule.get_additional_tensors_slice(
-                                    self.test_indices
-                                ),
-                            ]
-                        )
-                    )
-                ]
-                attr = np.abs(np.concatenate(attr))
-            elif method == "shap":
-                attr = self.cal_shap(program=program, model_name=model_name)
-            else:
-                raise NotImplementedError
-            dims = self.datamodule.get_derived_data_sizes()
-            importance_names = cp(self.cont_feature_names)
-            for key_idx, key in enumerate(self.derived_data.keys()):
-                importance_names += (
-                    [
-                        f"{key} (dim {i})" if dims[key_idx][-1] > 1 else key
-                        for i in range(dims[key_idx][-1])
-                    ]
-                    if key != "categorical"
-                    else self.cat_feature_names
-                )
-        else:
-            if method == "permutation":
-                attr = np.zeros((len(self.all_feature_names),))
-                test_data = self.datamodule.X_test
-                base_pred = modelbase.predict(
-                    test_data,
-                    derived_data=self.datamodule.D_test,
-                    model_name=model_name,
-                )
-                base_metric = self._metric_sklearn(
-                    test_data[self.label_name].values, base_pred, metric="rmse"
-                )
-                for idx, feature in enumerate(self.all_feature_names):
-                    df = test_data.copy()
-                    df.loc[:, feature] = np.random.shuffle(df.loc[:, feature].values)
-                    perm_pred = modelbase.predict(
-                        df,
-                        derived_data=self.datamodule.derive_unstacked(df),
-                        model_name=model_name,
-                    )
-                    attr[idx] = np.abs(
-                        self._metric_sklearn(
-                            df[self.label_name].values, perm_pred, metric="rmse"
-                        )
-                        - base_metric
-                    )
-                attr /= np.sum(attr)
-            elif method == "shap":
-                attr = self.cal_shap(program=program, model_name=model_name)
-            else:
-                raise NotImplementedError
-            importance_names = cp(self.all_feature_names)
-
-        return attr, importance_names
-
-    def cal_shap(self, program: str, model_name: str) -> np.ndarray:
+    def cal_shap(self, program: str, model_name: str, **kwargs) -> np.ndarray:
         """
         Calculate SHAP values with a specified model. If the modelbase is a ``TorchModel``, the ``shap.DeepExplainer``
         is used. Otherwise, ``shap.KernelExplainer`` is called, which is much slower, and shap.kmeans is called to
@@ -1182,6 +1093,8 @@ class Trainer:
             The selected modelbase.
         model_name
             The selected model in the modelbase.
+        kwargs
+            kwargs for ``AbstractModel.cal_shap``
 
         Returns
         -------
@@ -1189,58 +1102,8 @@ class Trainer:
             The SHAP values. If the modelbase is a `TorchModel`, all features including derived unstacked features will
             be included. Otherwise, only `Trainer.all_feature_names` will be considered.
         """
-        from tabensemb.model.base import TorchModel
-        import shap
-
         modelbase = self.get_modelbase(program)
-        is_torch = issubclass(type(modelbase), TorchModel)
-        if is_torch:
-            bk_indices = np.random.choice(self.train_indices, size=100, replace=False)
-            X_train_bk = self.datamodule.get_first_tensor_slice(bk_indices)
-            D_train_bk = self.datamodule.get_additional_tensors_slice(bk_indices)
-            background_data = [X_train_bk, *D_train_bk]
-
-            X_test = self.datamodule.get_first_tensor_slice(self.test_indices)
-            D_test = self.datamodule.get_additional_tensors_slice(self.test_indices)
-            test_data = [X_test, *D_test]
-            explainer = shap.DeepExplainer(modelbase.model[model_name], background_data)
-
-            with HiddenPrints():
-                shap_values = explainer.shap_values(test_data)
-        else:
-            background_data = shap.kmeans(
-                self.df.loc[self.train_indices, self.all_feature_names], 10
-            )
-            warnings.filterwarnings(
-                "ignore",
-                message="The default of 'normalize' will be set to False in version 1.2 and deprecated in version 1.4.",
-            )
-
-            def func(data):
-                df = pd.DataFrame(columns=self.all_feature_names, data=data)
-                return modelbase.predict(
-                    df,
-                    model_name=model_name,
-                    derived_data=self.datamodule.derive_unstacked(
-                        df, categorical_only=True
-                    ),
-                    ignore_absence=True,
-                ).flatten()
-
-            test_indices = np.random.choice(self.test_indices, size=10, replace=False)
-            test_data = self.df.loc[test_indices, self.all_feature_names].copy()
-            shap_values = shap.KernelExplainer(func, background_data).shap_values(
-                test_data
-            )
-        attr = (
-            np.concatenate(
-                [np.mean(np.abs(shap_values[0]), axis=0)]
-                + [np.mean(np.abs(x), axis=0) for x in shap_values[1:]],
-            )
-            if type(shap_values) == list and len(shap_values) > 1
-            else np.mean(np.abs(shap_values[0] if is_torch else shap_values), axis=0)
-        )
-        return attr
+        return modelbase.cal_shap(model_name=model_name, **kwargs)
 
     def plot_feature_importance(
         self,

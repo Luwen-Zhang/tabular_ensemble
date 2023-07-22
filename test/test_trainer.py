@@ -344,3 +344,79 @@ def test_trainer_multitarget():
     ), f"Reloaded local trainer does not get consistent results."
 
     shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+
+
+def test_permutation_importance():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(
+        configfile,
+        manual_config={
+            "data_splitter": "RandomSplitter",
+            "data_derivers": [
+                (
+                    "RelativeDeriver",
+                    {
+                        "stacked": True,
+                        "absolute_col": "cont_0",
+                        "relative2_col": "cont_1",
+                        "intermediate": False,
+                        "derived_name": "derived_cont",
+                    },
+                ),
+            ],
+        },
+    )
+    trainer.load_data()
+
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        CatEmbed(
+            trainer,
+            model_subset=["Category Embedding", "Require Model PyTabular CatEmbed"],
+        ),
+    ]
+    trainer.add_modelbases(models)
+
+    trainer.train()
+
+    absmodel_perm = trainer.cal_feature_importance(
+        program="PytorchTabular", model_name="Category Embedding", method="permutation"
+    )
+    absmodel_shap = trainer.cal_feature_importance(
+        program="PytorchTabular", model_name="Category Embedding", method="shap"
+    )
+
+    torchmodel_perm = trainer.cal_feature_importance(
+        program="CatEmbed", model_name="Category Embedding", method="permutation"
+    )
+    torchmodel_shap = trainer.cal_feature_importance(
+        program="CatEmbed", model_name="Category Embedding", method="shap"
+    )
+
+    with pytest.raises(Exception):
+        trainer.cal_feature_importance(
+            program="CatEmbed",
+            model_name="Require Model PyTabular CatEmbed",
+            method="shap",
+        )
+
+    assert len(absmodel_perm[0]) == len(absmodel_perm[1])
+    assert np.all(np.abs(absmodel_perm[0]) > 1e-8)
+
+    assert len(absmodel_shap[0]) == len(absmodel_shap[1])
+    assert np.all(np.abs(absmodel_shap[0]) > 1e-8)
+
+    assert len(torchmodel_perm[0]) == len(torchmodel_perm[1])
+    assert np.all(np.abs(torchmodel_perm[0][: len(trainer.all_feature_names)]) > 1e-8)
+    # Unused data does not have feature importance.
+    assert np.all(np.abs(torchmodel_perm[0][len(trainer.all_feature_names) :]) < 1e-8)
+
+    assert len(torchmodel_shap[0]) == len(torchmodel_shap[1])
+    # Categorical features does not have gradients, therefore does not have shap values using DeepExplainer.
+    assert np.all(np.abs(torchmodel_shap[0][: len(trainer.cont_feature_names)]) > 1e-8)
+    # Unused data does not have feature importance.
+    assert np.all(np.abs(torchmodel_shap[0][len(trainer.cont_feature_names) :]) < 1e-8)
+
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))

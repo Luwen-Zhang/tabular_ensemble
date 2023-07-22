@@ -40,6 +40,7 @@ def test_embed():
     extend_rmse = _get_metric_from_leaderboard(
         leaderboard=l, model_name="Category Embedding Extend dim"
     )
+
     shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
     assert no_extend_rmse != extend_rmse
 
@@ -76,6 +77,8 @@ def test_wrap():
     trainer.train()
     l = trainer.get_leaderboard()
 
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+
     assert _get_metric_from_leaderboard(
         l, "Require Model Autogluon LR"
     ) == _get_metric_from_leaderboard(l, "Linear Regression")
@@ -103,3 +106,24 @@ def test_wrap():
     assert _get_metric_from_leaderboard(
         l, "Require Model ExtCatEmbed CatEmbed Wrap"
     ) != _get_metric_from_leaderboard(l, "Category Embedding", program="ExtCatEmbed")
+
+
+def test_rfe():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(configfile)
+    trainer.load_data()
+
+    rfe = RFE(
+        trainer,
+        modelbase=CatEmbed(trainer),
+        model_subset=["Category Embedding"],
+        min_features=2,
+        cross_validation=2,
+    )
+    trainer.add_modelbases([rfe])
+
+    rfe.run("Category Embedding")
+
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
