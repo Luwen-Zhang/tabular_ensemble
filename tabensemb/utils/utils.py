@@ -182,7 +182,7 @@ def plot_importance(ax, features, attr, pal, clr_map, **kwargs):
     # plt.grid(axis='x')
     plt.grid(axis="x", linewidth=0.2)
     # plt.barh(x,y, color= [clr_map[name] for name in x])
-    sns.barplot(y, x, palette=palette, **kwargs)
+    sns.barplot(x=y, y=x, palette=palette, **kwargs)
     # ax.set_xlim([0, 1])
     ax.set_xlabel("Permutation feature importance")
 

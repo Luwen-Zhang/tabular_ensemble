@@ -451,6 +451,7 @@ def test_plots():
     configfile = "sample"
     tabensemb.setting["debug_mode"] = True
     matplotlib.rc("text", usetex=False)
+    matplotlib.rcParams.update(matplotlib.rcParamsDefault)
     trainer = Trainer(device="cpu")
     trainer.load_config(
         configfile,
