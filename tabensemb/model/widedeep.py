@@ -340,7 +340,12 @@ class WideDeep(AbstractModel):
             ],
             metrics=None,
         )
+        if warm_start:
+            # The model is stored in cpu after loaded from disk. And widedeep does not make model and data on the
+            # same device. Also note that when _finetune and cuda is available, data.cuda() is called.
+            from pytorch_widedeep.training import _finetune
 
+            _finetune.use_cuda = self.device == "cuda"
         model.fit(
             X_train={"X_tab": X_train, "target": y_train},
             X_val={"X_tab": X_val, "target": y_val},

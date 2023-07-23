@@ -891,6 +891,11 @@ class AbstractModel:
                         "ignore",
                         message="`pytorch_lightning.utilities.cloud_io.get_filesystem` has been deprecated in v1.8.0 and will be removed in v1.10.0.",
                     )
+                    if (
+                        "batch_size" in tmp_params.keys()
+                        and "original_batch_size" in tmp_params.keys()
+                    ):
+                        tmp_params["batch_size"] = tmp_params["original_batch_size"]
                     result = gp_minimize(
                         _bayes_objective,
                         space,
@@ -921,7 +926,13 @@ class AbstractModel:
                 )
 
             tmp_params = self._check_params(model_name, **tmp_params)
-            if not warm_start or (warm_start and not self._trained):
+            if not warm_start or (
+                warm_start and (not self._trained or not self._support_warm_start)
+            ):
+                if warm_start and not self._support_warm_start:
+                    warnings.warn(
+                        f"{self.__class__.__name__} does not support warm_start."
+                    )
                 model = self.new_model(
                     model_name=model_name, verbose=verbose, **tmp_params
                 )
@@ -1017,6 +1028,10 @@ class AbstractModel:
             return False
         else:
             return True
+
+    @property
+    def _support_warm_start(self) -> bool:
+        return True
 
     def _check_space(self):
         any_mismatch = False

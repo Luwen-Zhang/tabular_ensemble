@@ -1,15 +1,13 @@
-import unittest
 from import_utils import *
 import tabensemb
-from tabensemb.config import UserConfig
-from tabensemb.data import DataModule, AbstractSplitter
 import numpy as np
 from tabensemb.trainer import Trainer, load_trainer, save_trainer
 from tabensemb.model import *
+from tabensemb.utils import HiddenPltShow
 import torch
-from copy import deepcopy as cp
 import shutil
 import pytest
+import matplotlib
 
 
 def test_trainer():
@@ -418,5 +416,117 @@ def test_permutation_importance():
     assert np.all(np.abs(torchmodel_shap[0][: len(trainer.cont_feature_names)]) > 1e-8)
     # Unused data does not have feature importance.
     assert np.all(np.abs(torchmodel_shap[0][len(trainer.cont_feature_names) :]) < 1e-8)
+
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+
+
+def test_finetune():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    matplotlib.rc("text", usetex=False)
+    trainer = Trainer(device="cpu")
+    trainer.load_config(configfile)
+    trainer.load_data()
+    models = [
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    for model in models:
+        model.fit(
+            trainer.df,
+            trainer.cont_feature_names,
+            trainer.cat_feature_names,
+            trainer.label_name,
+            derived_data=trainer.derived_data,
+            warm_start=True,
+        )
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+
+
+def test_plots():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    matplotlib.rc("text", usetex=False)
+    matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+    trainer = Trainer(device="cpu")
+    trainer.load_config(
+        configfile,
+        manual_config={
+            "data_derivers": [
+                (
+                    "RelativeDeriver",
+                    {
+                        "stacked": False,
+                        "absolute_col": "cont_0",
+                        "relative2_col": "cont_1",
+                        "intermediate": False,
+                        "derived_name": "derived_cont",
+                    },
+                ),
+                (
+                    "RelativeDeriver",
+                    {
+                        "stacked": True,
+                        "absolute_col": "cont_0",
+                        "relative2_col": "cont_1",
+                        "intermediate": False,
+                        "derived_name": "derived_cont_stack",
+                    },
+                ),
+            ],
+        },
+    )
+    trainer.load_data()
+    models = [
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+
+    with HiddenPltShow():
+        print(f"\n-- Correlation --\n")
+        trainer.plot_corr()
+        trainer.plot_corr(imputed=False)
+
+        print(f"\n-- Pair --\n")
+        trainer.plot_pairplot()
+
+        print(f"\n-- Truth pred --\n")
+        trainer.plot_truth_pred(program="CatEmbed", log_trans=True)
+        trainer.plot_truth_pred(program="CatEmbed", log_trans=False)
+
+        print(f"\n-- Feature box --\n")
+        trainer.plot_feature_box()
+
+        print(f"\n-- Partial Err --\n")
+        trainer.plot_partial_err(program="CatEmbed", model_name="Category Embedding")
+
+        print(f"\n-- Importance --\n")
+        trainer.plot_feature_importance(program="WideDeep", model_name="TabMlp")
+        trainer.plot_feature_importance(
+            program="CatEmbed", model_name="Category Embedding", method="shap"
+        )
+
+        print(f"\n-- PDP --\n")
+        trainer.plot_partial_dependence(
+            program="WideDeep",
+            model_name="TabMlp",
+            n_bootstrap=1,
+            grid_size=2,
+            log_trans=True,
+        )
+        trainer.plot_partial_dependence(
+            program="WideDeep",
+            model_name="TabMlp",
+            n_bootstrap=2,
+            grid_size=2,
+            log_trans=False,
+            refit=False,
+        )
 
     shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))

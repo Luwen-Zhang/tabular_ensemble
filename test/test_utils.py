@@ -1,11 +1,17 @@
-import copy
+import os
+
+import pytest
+import torch
 from import_utils import *
 import tabensemb
 from tabensemb.trainer import Trainer
 from tabensemb.trainer.utils import NoBayesOpt
+from tabensemb.utils import global_setting, torch_with_grad, Logging
 from tabensemb.utils.ranking import *
 from tabensemb.model import *
 import shutil
+import warnings
+from logging import getLogger
 
 
 def test_no_bayes_opt():
@@ -65,3 +71,39 @@ def test_ranking():
     )
 
     shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+
+
+def test_with_global_setting():
+    tabensemb.setting["debug_mode"] = False
+    with global_setting({"debug_mode": True}):
+        assert tabensemb.setting["debug_mode"]
+    assert not tabensemb.setting["debug_mode"]
+
+
+def test_torch_with_grad():
+    with torch.no_grad():
+        assert not torch.is_grad_enabled()
+        with torch_with_grad():
+            assert torch.is_grad_enabled()
+        assert not torch.is_grad_enabled()
+
+
+def test_logging():
+    logger = Logging()
+    path = os.path.join(tabensemb.setting["default_output_path"], "log.txt")
+    if os.path.exists(tabensemb.setting["default_output_path"]):
+        shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+    os.makedirs(tabensemb.setting["default_output_path"], exist_ok=True)
+    logger.enter(path)
+    print(1)
+    log = getLogger()
+    log.log(1, "2")
+    logger.exit()
+    print(3)
+
+    log.log(1, "4")
+    with open(path, "r") as file:
+        lines = file.readlines()
+    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+    assert len(lines) == 1
+    assert lines[0] == "1\n"

@@ -1133,23 +1133,19 @@ class Trainer:
         clr = sns.color_palette("deep")
 
         # if feature type is not assigned in config files, the feature is from dataderiver.
-        pal = [
-            clr[self.args["feature_names_type"][x]]
-            if x in self.args["feature_names_type"].keys()
-            else clr[self.args["feature_types"].index("Derived")]
-            for x in self.cont_feature_names
-        ]
-
-        dims = self.datamodule.get_derived_data_sizes()
-        for key_idx, key in enumerate(self.derived_data.keys()):
-            if key == "categorical":
-                pal += [clr[self.args["feature_types"].index("Categorical")]] * dims[
-                    key_idx
-                ][-1]
+        pal = []
+        for key in names:
+            if key in self.cont_feature_names:
+                c = (
+                    clr[self.args["feature_names_type"][key]]
+                    if key in self.args["feature_names_type"].keys()
+                    else clr[self.args["feature_types"].index("Derived")]
+                )
+            elif key in self.cat_feature_names:
+                c = clr[self.args["feature_types"].index("Categorical")]
             else:
-                pal += [clr[self.args["feature_types"].index("Derived")]] * dims[
-                    key_idx
-                ][-1]
+                c = clr[self.args["feature_types"].index("Derived")]
+            pal.append(c)
 
         clr_map = dict()
         for idx, feature_type in enumerate(self.args["feature_types"]):
@@ -1157,11 +1153,11 @@ class Trainer:
 
         where_effective = np.abs(attr) > 1e-5
         effective_names = np.array(names)[where_effective]
-        print(
-            f"Feature importance less than 1e-5: {list(np.setdiff1d(names, effective_names))}"
-        )
+        not_effective = list(np.setdiff1d(names, effective_names))
+        if len(not_effective) > 0:
+            print(f"Feature importance less than 1e-5: {not_effective}")
         attr = attr[where_effective]
-        pal = [x for idx, x in enumerate(pal) if where_effective[idx]]
+        pal = [pal[x] for x in np.where(where_effective)[0]]
 
         plt.figure(figsize=fig_size)
         ax = plt.subplot(111)

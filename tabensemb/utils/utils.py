@@ -182,7 +182,7 @@ def plot_importance(ax, features, attr, pal, clr_map, **kwargs):
     # plt.grid(axis='x')
     plt.grid(axis="x", linewidth=0.2)
     # plt.barh(x,y, color= [clr_map[name] for name in x])
-    sns.barplot(y, x, palette=palette, **kwargs)
+    sns.barplot(x=y, y=x, palette=palette, **kwargs)
     # ax.set_xlim([0, 1])
     ax.set_xlabel("Permutation feature importance")
 
@@ -266,8 +266,12 @@ def plot_pdp(
             )
         else:
             yerr = (
-                np.vstack([transform(ci_left_list[idx]), transform(ci_right_list[idx])])
-                - transform(mean_pdp_list[idx])
+                np.abs(
+                    np.vstack(
+                        [transform(ci_left_list[idx]), transform(ci_right_list[idx])]
+                    )
+                    - transform(mean_pdp_list[idx])
+                )
                 if not np.isnan(ci_left_list[idx]).any()
                 else None
             )
