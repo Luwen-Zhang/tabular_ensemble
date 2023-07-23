@@ -891,6 +891,11 @@ class AbstractModel:
                         "ignore",
                         message="`pytorch_lightning.utilities.cloud_io.get_filesystem` has been deprecated in v1.8.0 and will be removed in v1.10.0.",
                     )
+                    if (
+                        "batch_size" in tmp_params.keys()
+                        and "original_batch_size" in tmp_params.keys()
+                    ):
+                        tmp_params["batch_size"] = tmp_params["original_batch_size"]
                     result = gp_minimize(
                         _bayes_objective,
                         space,
