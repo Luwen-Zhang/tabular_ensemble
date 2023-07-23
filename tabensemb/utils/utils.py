@@ -266,8 +266,12 @@ def plot_pdp(
             )
         else:
             yerr = (
-                np.vstack([transform(ci_left_list[idx]), transform(ci_right_list[idx])])
-                - transform(mean_pdp_list[idx])
+                np.abs(
+                    np.vstack(
+                        [transform(ci_left_list[idx]), transform(ci_right_list[idx])]
+                    )
+                    - transform(mean_pdp_list[idx])
+                )
                 if not np.isnan(ci_left_list[idx]).any()
                 else None
             )
