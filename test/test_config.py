@@ -1,8 +1,6 @@
-import unittest
 from import_utils import *
 import tabensemb
 from tabensemb.config import UserConfig
-import json
 import pytest
 import collections.abc
 

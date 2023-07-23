@@ -1,4 +1,3 @@
-import unittest
 import pytest
 from import_utils import *
 import tabensemb
