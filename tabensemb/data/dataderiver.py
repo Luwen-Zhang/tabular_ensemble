@@ -15,9 +15,6 @@ class RelativeDeriver(AbstractDeriver):
         The feature that acts as the denominator.
     """
 
-    def __init__(self):
-        super(RelativeDeriver, self).__init__()
-
     def _required_cols(self, **kwargs):
         return ["absolute_col", "relative2_col"]
 

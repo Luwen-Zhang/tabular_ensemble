@@ -24,5 +24,13 @@ setup(
         "torch": ["torch>=1.12.0"],
         "all": req_all,
         "test": ["torch>=1.12.0", "pytest", "pytest-cov"],
+        "doc": [
+            "sphinx",
+            "sphinx_rtd_theme",
+            "myst-parser",
+            "sphinx_copybutton",
+            "sphinx-apidoc",
+            "sphinx_paramlinks",
+        ],
     },
 )
