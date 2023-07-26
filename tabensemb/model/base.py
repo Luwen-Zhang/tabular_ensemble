@@ -1787,13 +1787,15 @@ class TorchModel(AbstractModel):
         if self.model is not None and model_name in self.model.keys():
             model = self.model[model_name]
         else:
+            self._prepare_custom_datamodule(model_name)
             model = self.new_model(
                 model_name, verbose=False, **self._get_params(model_name, verbose=False)
             )
-        if trainable_only:
-            return sum(p.numel() for p in model.parameters() if p.requires_grad)
-        else:
-            return sum(p.numel() for p in model.parameters())
+        return sum(
+            p.numel()
+            for p in model.parameters()
+            if (p.requires_grad if trainable_only else True)
+        )
 
 
 class AbstractWrapper:

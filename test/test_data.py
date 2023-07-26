@@ -24,7 +24,7 @@ sample_weight_deriver_kwargs = {
 
 
 def pytest_configure_data():
-    if getattr(pytest, "configure_excuted", False):
+    if getattr(pytest, "data_configure_excuted", False):
         return
     max_config = UserConfig("sample")
     max_config.merge(
@@ -65,7 +65,7 @@ def pytest_configure_data():
     pytest.datamodule.load_data()
     pytest.min_datamodule.load_data()
 
-    pytest.configure_excuted = True
+    pytest.data_configure_excuted = True
 
 
 @pytest.mark.order(1)

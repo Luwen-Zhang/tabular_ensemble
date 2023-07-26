@@ -3,6 +3,9 @@ import tabensemb
 from tabensemb.trainer import Trainer
 from tabensemb.model import *
 import shutil
+import pytest
+import pandas as pd
+import numpy as np
 
 
 def _get_metric_from_leaderboard(leaderboard, model_name, program=None):
@@ -17,13 +20,22 @@ def _get_metric_from_leaderboard(leaderboard, model_name, program=None):
         ].values
 
 
-def test_embed():
+def pytest_configure_trainer():
+    if getattr(pytest, "model_configure_excuted", False):
+        pytest.test_model_trainer.clear_modelbase()
+        return
     configfile = "sample"
     tabensemb.setting["debug_mode"] = True
     trainer = Trainer(device="cpu")
     trainer.load_config(configfile)
     trainer.load_data()
+    pytest.test_model_trainer = trainer
+    pytest.model_configure_excuted = True
 
+
+def test_embed():
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
     models = [
         CatEmbed(
             trainer,
@@ -41,17 +53,12 @@ def test_embed():
         leaderboard=l, model_name="Category Embedding Extend dim"
     )
 
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
     assert no_extend_rmse != extend_rmse
 
 
 def test_wrap():
-    configfile = "sample"
-    tabensemb.setting["debug_mode"] = True
-    trainer = Trainer(device="cpu")
-    trainer.load_config(configfile)
-    trainer.load_data()
-
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
     models = [
         AutoGluon(trainer, model_subset=["Linear Regression"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
@@ -76,8 +83,6 @@ def test_wrap():
 
     trainer.train()
     l = trainer.get_leaderboard()
-
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
 
     assert _get_metric_from_leaderboard(
         l, "Require Model Autogluon LR"
@@ -109,11 +114,8 @@ def test_wrap():
 
 
 def test_rfe():
-    configfile = "sample"
-    tabensemb.setting["debug_mode"] = True
-    trainer = Trainer(device="cpu")
-    trainer.load_config(configfile)
-    trainer.load_data()
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
 
     base_model = CatEmbed(trainer, model_subset=["Category Embedding"])
     rfe = RFE(
@@ -127,6 +129,168 @@ def test_rfe():
 
     trainer.train()
     l = trainer.get_leaderboard()
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
 
     assert l.loc[0, "Testing RMSE"] != l.loc[1, "Testing RMSE"]
+
+
+def test_exceptions(capfd):
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
+    trainer.args["bayes_opt"] = True
+    models = [
+        CatEmbed(
+            trainer,
+            model_subset=["Category Embedding", "Category Embedding Extend dim"],
+        ),
+    ]
+    trainer.add_modelbases(models)
+
+    with pytest.raises(Exception):
+        models[0]._check_train_status()
+
+    with pytest.raises(Exception):
+        models[0].predict(
+            trainer.df,
+            model_name="Category Embedding",
+            derived_data=trainer.derived_data,
+        )
+
+    models[0].fit(
+        trainer.df,
+        cont_feature_names=trainer.cont_feature_names,
+        cat_feature_names=trainer.cat_feature_names,
+        label_name=trainer.label_name,
+        derived_data=trainer.derived_data,
+        bayes_opt=False,
+    )
+    out, err = capfd.readouterr()
+    assert "conflicts" in out
+    assert trainer.args["bayes_opt"]
+
+    with pytest.raises(Exception):
+        models[0].predict(
+            trainer.df,
+            model_name="TEST",
+            derived_data=trainer.derived_data,
+        )
+
+
+def test_check_batch_size():
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
+    model = CatEmbed(
+        trainer,
+        model_subset=["Category Embedding", "Category Embedding Extend dim"],
+    )
+    l = len(trainer.train_indices)
+
+    with pytest.raises(Exception):
+        model.limit_batch_size = -1
+        res = model._check_params("TEST", **{"batch_size": 2})
+
+    with pytest.warns(UserWarning):
+        model.limit_batch_size = -1
+        res = model._check_params("TEST", **{"batch_size": 6})
+
+    with pytest.warns(UserWarning):
+        model.limit_batch_size = 1
+        res = model._check_params("TEST", **{"batch_size": 2})
+        assert res["batch_size"] == 3
+
+    with pytest.warns(UserWarning):
+        model.limit_batch_size = 90
+        res = model._check_params("TEST", **{"batch_size": 80})
+        assert res["batch_size"] == l
+
+    model = PytorchTabular(
+        trainer,
+        model_subset=["TabNet"],
+    )
+    with pytest.warns(UserWarning):
+        model.limit_batch_size = 5
+        res = model._check_params("TabNet", **{"batch_size": 32})
+        assert res["batch_size"] == 64
+
+
+def test_get_model_names():
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
+    with pytest.raises(Exception):
+        model = CatEmbed(trainer, model_subset=["TEST"])
+    model = CatEmbed(trainer, exclude_models=["Category Embedding"])
+    got = model.get_model_names()
+    got_all = model._get_model_names()
+    assert len(got_all) == len(got) + 1
+    assert "Category Embedding" not in got
+
+    model = CatEmbed(trainer)
+    got = model.get_model_names()
+    got_all = model._get_model_names()
+    assert all([name in got for name in got_all])
+
+
+def test_abstract_model():
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
+
+    class NotImplementedModel(AbstractModel):
+        def _get_program_name(self) -> str:
+            return "NotImplementedModel"
+
+        @staticmethod
+        def _get_model_names():
+            return ["TEST"]
+
+        def _initial_values(self, model_name: str):
+            return {}
+
+        def _space(self, model_name: str):
+            return []
+
+    abs_model = NotImplementedModel(trainer, program="TEST_PROGRAM")
+    with pytest.raises(NotImplementedError):
+        super(NotImplementedModel, abs_model)._get_model_names()
+    with pytest.raises(NotImplementedError):
+        super(NotImplementedModel, abs_model)._get_program_name()
+    with pytest.raises(NotImplementedError):
+        abs_model._new_model("TEST", verbose=True)
+    with pytest.raises(NotImplementedError):
+        abs_model._train_data_preprocess("TEST")
+    with pytest.raises(NotImplementedError):
+        abs_model._data_preprocess(
+            df=pd.DataFrame(), derived_data={}, model_name="TEST"
+        )
+    with pytest.raises(NotImplementedError):
+        abs_model._train_single_model(
+            model=None,
+            epoch=1,
+            X_train=None,
+            y_train=np.array([]),
+            X_val=None,
+            y_val=None,
+            verbose=False,
+            warm_start=False,
+            in_bayes_opt=False,
+        )
+    with pytest.raises(NotImplementedError):
+        abs_model._pred_single_model(model=None, X_test=None, verbose=False)
+    with pytest.raises(NotImplementedError):
+        super(NotImplementedModel, abs_model)._space("TEST")
+    with pytest.raises(NotImplementedError):
+        super(NotImplementedModel, abs_model)._initial_values("TEST")
+
+
+def test_count_params():
+    pytest_configure_trainer()
+    trainer = pytest.test_model_trainer
+    model = CatEmbed(
+        trainer,
+        model_subset=["Category Embedding"],
+    )
+    trainer.add_modelbases([model])
+    cnt_1 = model.count_params("Category Embedding")
+    trainer.train()
+    cnt_2 = model.count_params("Category Embedding")
+    cnt_3 = model.count_params("Category Embedding", trainable_only=True)
+    assert cnt_1 == cnt_2
+    assert cnt_1 != cnt_3
