@@ -1,8 +1,10 @@
+import os
 import pytest
 from import_utils import *
 import tabensemb
 from tabensemb.config import UserConfig
-from tabensemb.data import DataModule, AbstractSplitter
+from tabensemb.data import *
+from tabensemb.data.dataderiver import RelativeDeriver
 from tabensemb.data.dataimputer import get_data_imputer
 import numpy as np
 import pandas as pd
@@ -21,10 +23,11 @@ sample_weight_deriver_kwargs = {
 }
 
 
-def test_datamodule():
-    print("\n-- Loading config --\n")
-    config = UserConfig("sample")
-    config.merge(
+def pytest_configure_data():
+    if getattr(pytest, "configure_excuted", False):
+        return
+    max_config = UserConfig("sample")
+    max_config.merge(
         {
             "data_processors": [
                 ["CategoricalOrdinalEncoder", {}],
@@ -40,21 +43,61 @@ def test_datamodule():
         }
     )
 
-    print("\n-- Loading datamodule --\n")
-    datamodule = DataModule(config=config)
+    pytest.datamodule = DataModule(config=max_config)
 
-    print("\n-- Loading data --\n")
+    min_config = UserConfig("sample")
+    relative_deriver_unstacked_kwargs = relative_deriver_kwargs.copy()
+    relative_deriver_unstacked_kwargs["stacked"] = False
+    relative_deriver_unstacked_kwargs["derived_name"] = "derived_cont_unstacked"
+    min_config.merge(
+        {
+            "data_derivers": [
+                ("RelativeDeriver", relative_deriver_kwargs),
+                ("RelativeDeriver", relative_deriver_unstacked_kwargs),
+                ("SampleWeightDeriver", sample_weight_deriver_kwargs),
+                ("UnscaledDataDeriver", {"derived_name": "unscaled", "stacked": False}),
+            ]
+        }
+    )
+    pytest.min_datamodule = DataModule(config=min_config)
+
     np.random.seed(1)
-    datamodule.load_data()
+    pytest.datamodule.load_data()
+    pytest.min_datamodule.load_data()
 
-    print(f"\n-- Check splitting --\n")
+    pytest.configure_excuted = True
+
+
+@pytest.mark.order(1)
+def test_load_data():
+    pytest_configure_data()
+
+
+def test_var_slip():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
+    assert np.allclose(
+        datamodule.scaled_df.loc[datamodule.train_indices[0], "cont_0"],
+        datamodule.get_var_change(
+            "cont_0", datamodule.df.loc[datamodule.train_indices[0], "cont_0"]
+        ),
+    )
+    datamodule.get_zero_slip("cont_0")
+
+
+def test_split():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
     AbstractSplitter._check_split(
         datamodule.train_indices,
         datamodule.val_indices,
         datamodule.test_indices,
     )
 
-    print(f"\n-- Check augmentation --\n")
+
+def test_augmentation():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
     aug_desc = datamodule.df.loc[
         datamodule.augmented_indices - len(datamodule.dropped_indices),
         datamodule.all_feature_names + datamodule.label_name,
@@ -67,27 +110,109 @@ def test_datamodule():
         aug_desc.values.astype(float), original_desc.values.astype(float)
     )
 
-    print(f"\n-- Prepare new data when indices are randpermed --\n")
-    df = datamodule.df.copy()
-    indices = np.array(df.index)
-    np.random.shuffle(indices)
-    df.index = indices
-    df, derived_data = datamodule.prepare_new_data(df)
-    assert np.allclose(
-        df[datamodule.all_feature_names + datamodule.label_name].values,
-        datamodule.df[datamodule.all_feature_names + datamodule.label_name].values,
-    ), "Stacked features from prepare_new_data for the set dataframe does not get consistent results"
-    assert len(derived_data) == len(datamodule.derived_data), (
-        "The number of unstacked features from " "prepare_new_data is not consistent"
-    )
-    for key, value in datamodule.derived_data.items():
-        if key != "augmented":
-            assert np.allclose(value, derived_data[key]), (
-                f"Unstacked feature `{key}` from prepare_new_data for the set "
-                "dataframe does not get consistent results"
-            )
 
-    print(f"\n-- Set feature names --\n")
+def test_prepare_new_data_randpermed():
+    pytest_configure_data()
+
+    def test_one_datamodule(datamodule):
+        df = datamodule.df.copy()
+        indices = np.array(df.index)
+        np.random.shuffle(indices)
+        df.index = indices
+        df, derived_data = datamodule.prepare_new_data(df)
+        assert np.allclose(
+            df[datamodule.all_feature_names + datamodule.label_name].values,
+            datamodule.df[datamodule.all_feature_names + datamodule.label_name].values,
+        ), "Stacked features from prepare_new_data for the set dataframe does not get consistent results"
+        assert len(derived_data) == len(datamodule.derived_data), (
+            "The number of unstacked features from "
+            "prepare_new_data is not consistent"
+        )
+        for key, value in datamodule.derived_data.items():
+            if key != "augmented":
+                assert np.allclose(value, derived_data[key]), (
+                    f"Unstacked feature `{key}` from prepare_new_data for the set "
+                    "dataframe does not get consistent results"
+                )
+
+    test_one_datamodule(pytest.min_datamodule)
+    test_one_datamodule(pytest.datamodule)
+
+
+def test_prepare_new_data_absent():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+    with pytest.raises(Exception) as err:
+        datamodule.prepare_new_data(
+            datamodule.df[datamodule.cont_feature_names[:2]], datamodule.derived_data
+        )
+    assert "not in the input dataframe" in err.value.args[0]
+
+    test_derived_data = datamodule.derived_data.copy()
+    del test_derived_data[list(test_derived_data.keys())[0]]
+    with pytest.raises(Exception) as err:
+        datamodule.prepare_new_data(datamodule.df, test_derived_data)
+    assert "not in the input derived_data" in err.value.args[0]
+
+
+@pytest.mark.order(before="test_set_feature_names")
+def test_data_deriver():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+    assert "derived_cont" in datamodule.cont_feature_names
+    assert "derived_cont_unstacked" not in datamodule.cont_feature_names
+    assert "derived_cont_unstacked" in datamodule.derived_data.keys()
+    assert "sample_weight" in datamodule.df.columns
+    assert "sample_weight" not in datamodule.cont_feature_names
+
+
+@pytest.mark.order(before="test_set_feature_names")
+def test_describe():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
+    datamodule.describe()
+    datamodule.cal_corr()
+
+
+@pytest.mark.order(before="test_set_feature_names")
+def test_get_not_imputed():
+    pytest_configure_data()
+    pytest.datamodule.get_not_imputed_df()
+
+
+@pytest.mark.order(before="test_set_feature_names")
+def test_get_feature_by_type():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
+    cont = datamodule.get_feature_names_by_type("Continuous")
+    cont_idx = datamodule.get_feature_idx_by_type("Continuous")
+    assert all([real == got for real, got in zip(datamodule.cont_feature_names, cont)])
+    assert all(
+        [
+            real == got
+            for real, got in zip(range(len(datamodule.cont_feature_names)), cont_idx)
+        ]
+    )
+    cat = datamodule.get_feature_names_by_type("Categorical")
+    cat_idx = datamodule.get_feature_idx_by_type("Categorical")
+    assert all([real == got for real, got in zip(datamodule.cat_feature_names, cat)])
+    assert all(
+        [
+            real == got
+            for real, got in zip(range(len(datamodule.cat_feature_names)), cat_idx)
+        ]
+    )
+    with pytest.raises(Exception):
+        datamodule.get_feature_names_by_type("TEST")
+
+
+def test_set_feature_names():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
+
+    with pytest.raises(Exception):
+        datamodule.set_feature_names(datamodule.cat_feature_names)
+
     datamodule.set_feature_names(datamodule.cont_feature_names[:2])
     assert (
         len(datamodule.cont_feature_names) == 2
@@ -95,6 +220,54 @@ def test_datamodule():
         and len(datamodule.label_name) == 1
     ), "set_feature_names is not functional."
 
+
+def test_sort_derived_data():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    derived_data = datamodule.derived_data
+    reversed_derived_data = {
+        key: derived_data[key] for key in list(derived_data.keys())[::-1]
+    }
+    sorted_derived_data = datamodule.sort_derived_data(reversed_derived_data)
+    assert all(
+        [
+            key1 == key2
+            for key1, key2 in zip(derived_data.keys(), sorted_derived_data.keys())
+        ]
+    )
+    absent_derived_data = derived_data.copy()
+    del absent_derived_data[list(derived_data.keys())[0]]
+    with pytest.raises(Exception):
+        datamodule.sort_derived_data(absent_derived_data)
+    datamodule.sort_derived_data(absent_derived_data, ignore_absence=True)
+
+
+def test_categorical_transform():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    test_df = datamodule.df[datamodule.cat_feature_names]
+    returned = datamodule.categories_inverse_transform(test_df)
+    assert (
+        returned.loc[0, "cat_0"]
+        == datamodule.cat_feature_mapping["cat_0"][test_df.loc[0, "cat_0"]]
+    )
+    assert np.all(
+        np.equal(
+            test_df[datamodule.cat_feature_names[1:]].values,
+            returned[datamodule.cat_feature_names[1:]].values,
+        )
+    )
+
+    returned_same = datamodule.categories_inverse_transform(returned[["cat_0"]])
+    assert all([x == y for x, y in zip(returned_same, returned[["cat_0"]])])
+
+
+@pytest.mark.order(after="test_set_feature_names")
+def test_after_set_feature_names():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
     print(f"\n-- Prepare new data after set feature names --\n")
     df, derived_data = datamodule.prepare_new_data(datamodule.df)
     assert (
@@ -120,14 +293,11 @@ def test_datamodule():
                 "dataframe does not get consistent results"
             )
 
-    print(f"\n-- Describe --\n")
-    datamodule.describe()
-    datamodule.cal_corr()
 
-    print(f"\n-- Get not imputed dataframe --\n")
-    datamodule.get_not_imputed_df()
-
-    print(f"\n-- Remove feature --\n")
+@pytest.mark.order(after="test_set_feature_names")
+def test_remove_features():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
     df = datamodule.df.copy()
     original_cont_names = datamodule.cont_feature_names.copy()
     df[datamodule.cont_feature_names[0]] = 1.0
@@ -141,6 +311,16 @@ def test_datamodule():
 
     assert len(original_cont_names) == len(new_cont_names) + 1
     assert original_cont_names[0] not in new_cont_names
+
+
+def test_base_predictor():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
+    predictor = datamodule.get_base_predictor(categorical=True, n_estimators=2)
+    predictor.fit(datamodule.df[datamodule.all_feature_names], datamodule.label_data)
+
+    predictor = datamodule.get_base_predictor(categorical=False, n_estimators=2)
+    predictor.fit(datamodule.df[datamodule.all_feature_names], datamodule.label_data)
 
 
 def test_rfe():
@@ -158,6 +338,7 @@ def test_rfe():
                         "n_estimators": 2,
                         "min_features_to_select": min_features_to_select,
                         "verbose": 1,
+                        "method": "shap",
                     },
                 ],
                 ["StandardScaler", {}],
@@ -204,45 +385,6 @@ def test_illegal_cont_feature():
         cat_feature_names=[],
         label_name=datamodule.label_name,
     )
-
-
-def test_data_deriver():
-    print("\n-- Loading config --\n")
-    config = UserConfig("sample")
-    config.merge(
-        {
-            "data_processors": [
-                ["CategoricalOrdinalEncoder", {}],
-                ["NaNFeatureRemover", {}],
-                ["VarianceFeatureSelector", {"thres": 1}],
-                ["StandardScaler", {}],
-            ],
-        }
-    )
-    relative_deriver_unstacked_kwargs = relative_deriver_kwargs.copy()
-    relative_deriver_unstacked_kwargs["stacked"] = False
-    relative_deriver_unstacked_kwargs["derived_name"] = "derived_cont_unstacked"
-    config.merge(
-        {
-            "data_derivers": [
-                ("RelativeDeriver", relative_deriver_kwargs),
-                ("RelativeDeriver", relative_deriver_unstacked_kwargs),
-                ("SampleWeightDeriver", sample_weight_deriver_kwargs),
-            ]
-        }
-    )
-    print("\n-- Loading datamodule --\n")
-    datamodule = DataModule(config=config)
-
-    print("\n-- Loading data --\n")
-    np.random.seed(1)
-    datamodule.load_data()
-
-    assert "derived_cont" in datamodule.cont_feature_names
-    assert "derived_cont_unstacked" not in datamodule.cont_feature_names
-    assert "derived_cont_unstacked" in datamodule.derived_data.keys()
-    assert "sample_weight" in datamodule.df.columns
-    assert "sample_weight" not in datamodule.cont_feature_names
 
 
 def test_data_splitter():
@@ -321,3 +463,242 @@ def test_data_imputer():
     imputer = get_data_imputer("GainImputer")()
     imputed = imputer.fit_transform(original.copy(), datamodule)
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
+
+
+def test_pca():
+    config = UserConfig("sample")
+    config.merge({"data_derivers": [("RelativeDeriver", relative_deriver_kwargs)]})
+    datamodule = DataModule(config=config)
+    datamodule.load_data()
+
+    pca1 = datamodule.pca(feature_names=datamodule.cont_feature_names)
+    pca2 = datamodule.pca(
+        feature_idx=list(np.arange(len(datamodule.cont_feature_names)))
+    )
+    pca3 = datamodule.pca()
+
+    assert np.allclose(pca1.components_, pca2.components_)
+    assert np.allclose(pca1.components_, pca3.components_)
+
+
+def test_abstract_deriver():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    class NotImplementedDeriver(AbstractDeriver):
+        ...
+
+    deriver = NotImplementedDeriver()
+    legal_deriver = RelativeDeriver()
+
+    with pytest.raises(NotImplementedError):
+        deriver._derive(datamodule.df, datamodule)
+    with pytest.raises(NotImplementedError):
+        deriver._required_cols()
+    with pytest.raises(NotImplementedError):
+        deriver._required_params()
+    with pytest.raises(Exception):
+        legal_deriver._check_arg(name="absolute_col", **{"relative2_col": "TEST"})
+    legal_deriver._check_arg(name="relative2_col", **{"relative2_col": "TEST"})
+    with pytest.raises(Exception):
+        legal_deriver._check_exist(
+            df=datamodule.df, name="relative2_col", **{"relative2_col": "TEST"}
+        )
+    legal_deriver._check_exist(
+        df=datamodule.df, name="relative2_col", **{"relative2_col": "cont_0"}
+    )
+    with pytest.raises(Exception):
+        legal_deriver._check_values(np.zeros((len(datamodule.df),)))
+    legal_deriver._check_values(np.zeros((len(datamodule.df), 1)))
+    legal_deriver._check_values(np.zeros((len(datamodule.df), 2)))
+
+    assert len(deriver._defaults()) == 0
+
+
+def test_abstract_imputer():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    class NotImplementedImputer(AbstractImputer):
+        ...
+
+    imputer = NotImplementedImputer()
+    with pytest.raises(NotImplementedError):
+        imputer._fit_transform(datamodule.df, datamodule)
+    with pytest.raises(NotImplementedError):
+        imputer._transform(datamodule.df, datamodule)
+
+    print("\n-- AbstractSklearnImputer--\n")
+
+    class NotImplementedImputer(AbstractSklearnImputer):
+        ...
+
+    imputer = NotImplementedImputer()
+    with pytest.raises(NotImplementedError):
+        imputer._new_imputer()
+
+
+def test_abstract_processor():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    class NotImplementedProcessor(AbstractProcessor):
+        ...
+
+    processor = NotImplementedProcessor()
+    with pytest.raises(NotImplementedError):
+        processor._fit_transform(datamodule.df, datamodule)
+    with pytest.raises(NotImplementedError):
+        processor._transform(datamodule.df, datamodule)
+
+
+def test_abstract_augmenter():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    class NotImplementedAugmenter(AbstractAugmenter):
+        ...
+
+    augmenter = NotImplementedAugmenter()
+    with pytest.raises(NotImplementedError):
+        augmenter._get_augmented(datamodule.df, datamodule)
+
+
+def test_abstract_selector():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    class NotImplementedSelector(AbstractFeatureSelector):
+        ...
+
+    selector = NotImplementedSelector()
+    with pytest.raises(NotImplementedError):
+        selector._get_feature_names_out(datamodule.df, datamodule)
+
+
+def test_abstract_splitter():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+
+    class NotImplementedSplitter(AbstractSplitter):
+        ...
+
+    splitter = NotImplementedSplitter()
+    with pytest.raises(NotImplementedError):
+        splitter._split(
+            datamodule.df,
+            datamodule.cont_feature_names,
+            datamodule.cat_feature_names,
+            datamodule.label_name,
+        )
+    with pytest.raises(NotImplementedError):
+        splitter._next_cv(
+            datamodule.df,
+            datamodule.cont_feature_names,
+            datamodule.cat_feature_names,
+            datamodule.label_name,
+            cv=2,
+        )
+    with pytest.raises(Exception) as err:
+        splitter._check_split([[1, 2, 3]], [[4]], [[5]])
+    assert "array" in err.value.args[0]
+    with pytest.raises(Exception) as err:
+        splitter._check_split(np.array([[1, 2, 3]]), np.array([[4]]), np.array([[5]]))
+    assert "flatten" in err.value.args[0]
+    with pytest.raises(Exception) as err:
+        splitter._check_split(np.array([1, 2, 3]), np.array([3]), np.array([5]))
+    assert "intersection" in err.value.args[0]
+    with pytest.raises(Exception):
+        splitter._check_exist(datamodule.df, "TEST", "TEST")
+    splitter._check_exist(datamodule.df, "cont_0", "cont_0")
+
+    from tabensemb.data import dataderiver, dataimputer, datasplitter, dataprocessor
+
+    class IllegalSubclass:
+        ...
+
+    dataderiver.deriver_mapping["TEST_ILLEGAL"] = IllegalSubclass
+    dataimputer.imputer_mapping["TEST_ILLEGAL"] = IllegalSubclass
+    datasplitter.splitter_mapping["TEST_ILLEGAL"] = IllegalSubclass
+    dataprocessor.processor_mapping["TEST_ILLEGAL"] = IllegalSubclass
+    for func in [
+        get_data_imputer,
+        get_data_deriver,
+        get_data_processor,
+        get_data_splitter,
+    ]:
+        with pytest.raises(Exception) as not_ext_info:
+            func("TEST")
+        assert "not implemented" in not_ext_info.value.args[0]
+        with pytest.raises(Exception) as not_legal_info:
+            func("TEST_ILLEGAL")
+        assert "subclass" in not_legal_info.value.args[0]
+
+
+def test_datamodule_utils():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+    datamodule.set_data_splitter(
+        ("RandomSplitter", {"train_val_test": [0.6, 0.2, 0.2]})
+    )
+    datamodule.set_data_splitter("RandomSplitter")
+    datamodule.set_data_splitter("RandomSplitter", ratio=[0.6, 0.2, 0.2])
+
+    with pytest.raises(Exception):
+        datamodule.set_data_processors(
+            [
+                ("StandardScaler", {}),
+                ("CategoricalOrdinalEncoder", {}),
+                ("StandardScaler", {}),
+            ]
+        )
+    with pytest.raises(Exception):
+        datamodule.set_data_processors(
+            [("StandardScaler", {}), ("CategoricalOrdinalEncoder", {})]
+        )
+
+    tensors = datamodule.get_additional_tensors_slice(datamodule.test_indices)
+    arrays = list(
+        datamodule.get_derived_data_slice(
+            datamodule.derived_data, datamodule.test_indices
+        ).values()
+    )
+    assert all([np.allclose(x, y.cpu().numpy()) for x, y in zip(arrays, tensors)])
+
+    tensor = datamodule.get_first_tensor_slice(datamodule.test_indices)
+    array = datamodule.scaled_df.loc[
+        datamodule.test_indices, datamodule.cont_feature_names
+    ].values
+    assert np.allclose(tensor.cpu().numpy(), array)
+
+    assert np.all(datamodule.test_indices == datamodule._get_indices("test"))
+    with pytest.raises(Exception):
+        datamodule._get_indices("TEST")
+
+    cont_data, cat_data, label_data = datamodule.divide_from_tabular_dataset(
+        datamodule.scaled_df
+    )
+    assert datamodule.feature_data.equals(cont_data)
+    assert datamodule.label_data.equals(label_data)
+    assert datamodule.categorical_data.equals(cat_data)
+
+
+def test_datamodule_data_path():
+    pytest_configure_data()
+    datamodule = pytest.min_datamodule
+    with pytest.raises(Exception) as err:
+        datamodule.load_data(data_path="TEST")
+    assert "do not exist" in err.value.args[0]
+    datamodule.df.to_excel("sample.xlsx", engine="openpyxl", index=False)
+    datamodule.df.to_csv("sample.csv", index=False)
+    with pytest.raises(Exception) as err:
+        datamodule.load_data(data_path="sample")
+    assert "Both" in err.value.args[0]
+    original = datamodule.df[datamodule.cont_feature_names].copy()
+    datamodule.load_data(data_path="sample.xlsx")
+    excel_loaded = datamodule.df
+    os.remove("sample.csv")
+    os.remove("sample.xlsx")
+    assert np.allclose(
+        original.values, excel_loaded[datamodule.cont_feature_names].values
+    )

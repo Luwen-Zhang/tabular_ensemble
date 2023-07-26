@@ -162,13 +162,14 @@ class DataModule:
         **kwargs
             Arguments for pd.read_excel or pd.read_csv.
         """
-        if data_path is None and self.data_path is None:
-            data_path = os.path.join(
-                tabensemb.setting["default_data_path"], f"{self.args['database']}"
-            )
-        elif self.data_path is not None:
-            print(f"Using previously used data path {self.data_path}")
-            data_path = self.data_path
+        if data_path is None:
+            if self.data_path is None:
+                data_path = os.path.join(
+                    tabensemb.setting["default_data_path"], f"{self.args['database']}"
+                )
+            else:
+                print(f"Using previously used data path {self.data_path}")
+                data_path = self.data_path
         file_type = os.path.splitext(data_path)[-1]
         if file_type == "":
             is_csv = os.path.isfile(data_path + ".csv")
@@ -278,7 +279,7 @@ class DataModule:
         self.cont_feature_names = cont_feature_names
         self.cat_feature_names = cat_feature_names
         self.cat_feature_mapping = {}
-        for feature in self.cat_feature_mapping:
+        for feature in self.cat_feature_names:
             self.cat_feature_mapping[feature] = []
         self.label_name = label_name
         self.df = df.copy()

@@ -115,15 +115,18 @@ def test_rfe():
     trainer.load_config(configfile)
     trainer.load_data()
 
+    base_model = CatEmbed(trainer, model_subset=["Category Embedding"])
     rfe = RFE(
         trainer,
-        modelbase=CatEmbed(trainer),
+        modelbase=base_model,
         model_subset=["Category Embedding"],
         min_features=2,
         cross_validation=2,
     )
-    trainer.add_modelbases([rfe])
+    trainer.add_modelbases([base_model, rfe])
 
-    rfe.run("Category Embedding")
-
+    trainer.train()
+    l = trainer.get_leaderboard()
     shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+
+    assert l.loc[0, "Testing RMSE"] != l.loc[1, "Testing RMSE"]

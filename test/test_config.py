@@ -11,6 +11,7 @@ def test_config_basic():
     config = UserConfig("sample")
     new_config = dict(epoch=100, bayes_epoch=None)
     config.merge(new_config)
+    _ = config.defaults()
 
     assert config["bayes_epoch"] is not None
     assert config["epoch"] == 100
@@ -32,3 +33,13 @@ def test_config_json():
 
     os.remove("./sample.py")
     os.remove("./sample.json")
+
+
+def test_exceptions():
+    print("\n--- not exist ---\n")
+    with pytest.raises(Exception):
+        _ = UserConfig("NOT_EXIST")
+    with pytest.raises(Exception):
+        _ = UserConfig("NOT_EXIST.py")
+    with pytest.raises(Exception):
+        _ = UserConfig("NOT_EXIST.json")

@@ -23,8 +23,7 @@ class RFE(TorchModel):
         self.min_features = min_features
 
         internal_trainer = cp(trainer)
-        internal_trainer.modelbases = []
-        internal_trainer.modelbases_names = []
+        internal_trainer.clear_modelbase()
         self._model_names = modelbase.get_model_names()
         self.model_class = modelbase.__class__
         super(RFE, self).__init__(
