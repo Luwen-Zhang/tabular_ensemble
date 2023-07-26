@@ -174,6 +174,8 @@ class CategoryEmbeddingNN(AbstractNN):
         )
         self.hidden_rep_dim = 32
         self.hidden_representation = None
+        # Just for a unit test
+        self.not_require_grad = nn.Parameter(torch.zeros((3, 3)), requires_grad=False)
 
     def _forward(
         self, x: torch.Tensor, derived_tensors: Dict[str, torch.Tensor]

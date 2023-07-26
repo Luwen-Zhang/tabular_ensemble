@@ -461,10 +461,12 @@ class Trainer:
         """
         default_path = tabensemb.setting["default_output_path"]
         if not os.path.exists(default_path):
-            os.makedirs(default_path)
+            os.makedirs(default_path, exist_ok=True)
         if project_root_subfolder is not None:
             if not os.path.exists(os.path.join(default_path, project_root_subfolder)):
-                os.makedirs(os.path.join(default_path, project_root_subfolder))
+                os.makedirs(
+                    os.path.join(default_path, project_root_subfolder), exist_ok=True
+                )
         subfolder = (
             self.project
             if project_root_subfolder is None
@@ -473,7 +475,7 @@ class Trainer:
         t = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
         folder_name = t + "-0" + "_" + os.path.split(self.configfile)[-1]
         if not os.path.exists(os.path.join(default_path, subfolder)):
-            os.mkdir(os.path.join(default_path, subfolder))
+            os.makedirs(os.path.join(default_path, subfolder), exist_ok=True)
         self.set_path(
             add_postfix(os.path.join(default_path, subfolder, folder_name)),
             verbose=verbose,

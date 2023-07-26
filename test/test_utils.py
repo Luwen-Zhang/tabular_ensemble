@@ -27,8 +27,6 @@ def test_no_bayes_opt():
 
     assert trainer.args["bayes_opt"]
 
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
-
 
 def test_ranking():
     configfile = "sample"
@@ -70,8 +68,6 @@ def test_ranking():
         engine="openpyxl",
     )
 
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
-
 
 def test_with_global_setting():
     tabensemb.setting["debug_mode"] = False
@@ -92,7 +88,7 @@ def test_logging():
     logger = Logging()
     path = os.path.join(tabensemb.setting["default_output_path"], "log.txt")
     if os.path.exists(tabensemb.setting["default_output_path"]):
-        shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+        shutil.rmtree(tabensemb.setting["default_output_path"])
     os.makedirs(tabensemb.setting["default_output_path"], exist_ok=True)
     logger.enter(path)
     print(1)
@@ -104,6 +100,5 @@ def test_logging():
     log.log(1, "4")
     with open(path, "r") as file:
         lines = file.readlines()
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
     assert len(lines) == 1
     assert lines[0] == "1\n"
