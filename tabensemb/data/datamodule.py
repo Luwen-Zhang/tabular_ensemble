@@ -741,9 +741,10 @@ class DataModule:
             return X.copy()
         else:
             encoder, cat_features = encoder_features
-        missing_cols = np.setdiff1d(cat_features, list(X.columns))
+        missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
         if len(missing_cols) > 0:
             X[missing_cols] = -1
+        X.columns = X.columns.astype(str)
         X_copy = X.copy()
         try:
             X_copy.loc[:, cat_features] = encoder.inverse_transform(
@@ -781,9 +782,10 @@ class DataModule:
             return X.copy()
         else:
             encoder, cat_features = encoder_features
-        missing_cols = np.setdiff1d(cat_features, list(X.columns))
+        missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
         if len(missing_cols) > 0:
             X[missing_cols] = -1
+        X.columns = X.columns.astype(str)
         X_copy = X.copy()
         try:
             X_copy.loc[:, cat_features] = encoder.transform(X[cat_features].copy())
