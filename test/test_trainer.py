@@ -8,6 +8,7 @@ import torch
 import pytest
 import matplotlib
 import shutil
+from torch import nn
 
 
 def pytest_configure_trainer():
@@ -91,6 +92,13 @@ def test_train_without_bayes():
 
 @pytest.mark.order(after="test_train_without_bayes")
 def test_get_leaderboard():
+    l0 = pytest.test_trainer_trainer.get_leaderboard(test_data_only=True)
+    assert (
+        "Training" not in l0.columns
+        and "Validation" not in l0.columns
+        and "Testing" not in l0.columns
+        and "RMSE" in l0.columns
+    )
     l = pytest.test_trainer_trainer.get_leaderboard()
     pytest.leaderboard_init = l
 
@@ -166,7 +174,7 @@ def test_cuda():
 def test_train_after_set_feature_names():
     model_trainer = pytest.model_trainer
     model_trainer.datamodule.set_feature_names(
-        model_trainer.datamodule.cont_feature_names[:5]
+        model_trainer.datamodule.cont_feature_names[:3]
     )
     model_trainer.train()
 
@@ -176,6 +184,7 @@ def test_bayes_opt():
     model_trainer = pytest.model_trainer
     model_trainer.args["bayes_opt"] = True
     model_trainer.get_leaderboard(cross_validation=2)
+    model_trainer.args["bayes_opt"] = False
 
 
 @pytest.mark.order(after="test_detach_model")
@@ -196,7 +205,9 @@ def test_inspect():
     model = trainer.get_modelbase("CatEmbed_Category Embedding")
 
     print(f"\n-- Inspect model --\n")
-    direct_inspect = model.inspect_attr("Category Embedding", ["hidden_representation"])
+    direct_inspect = model.inspect_attr(
+        "Category Embedding", ["hidden_representation", "head"]
+    )
     train_inspect = model.inspect_attr(
         "Category Embedding",
         ["hidden_representation"],
@@ -232,6 +243,8 @@ def test_inspect():
         direct_inspect["train"]["hidden_representation"],
         direct_inspect["val"]["hidden_representation"],
     )
+    assert isinstance(direct_inspect["train"]["head"], nn.Module)
+    assert direct_inspect["train"]["head"].bias.device.type == "cpu"
 
 
 def test_trainer_label_missing():
@@ -485,3 +498,31 @@ def test_plots():
             log_trans=False,
             refit=False,
         )
+
+
+def test_exception_during_bayes_opt(capfd):
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(configfile)
+    trainer.load_data()
+    models = [PytorchTabular(trainer, model_subset=["TabNet"])]
+    trainer.add_modelbases(models)
+
+    def _train_just_raise(*args, **kwargs):
+        raise Exception("CUDA error: device-side assert triggered")
+
+    models[0]._train_single_model = _train_just_raise
+    trainer.args["bayes_opt"] = True
+    with pytest.raises(ValueError) as err:
+        trainer.train()
+    assert "Unfortunately" in err.value.args[0]
+
+    def _train_just_raise(*args, **kwargs):
+        raise RuntimeError("Normal error")
+
+    models[0]._train_single_model = _train_just_raise
+    with pytest.raises(RuntimeError):
+        trainer.train()
+    out, err = capfd.readouterr()
+    assert "Returning a large value instead" in out
