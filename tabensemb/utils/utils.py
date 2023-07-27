@@ -579,6 +579,7 @@ def debugger_is_active() -> bool:
 
 
 def gini(x, w=None):
+    # https://stackoverflow.com/questions/48999542/more-efficient-weighted-gini-coefficient-in-python
     # The rest of the code requires numpy arrays.
     x = np.asarray(x)
     if len(np.unique(x)) == 1:
