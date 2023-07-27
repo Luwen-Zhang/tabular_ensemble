@@ -6,6 +6,7 @@ import numpy as np
 from .base import PytorchLightningLossCallback
 from .base import AbstractWrapper
 from typing import Dict, Any
+from torch import nn
 
 
 class PytorchTabular(AbstractModel):
@@ -153,7 +154,7 @@ class PytorchTabular(AbstractModel):
             model.fit(
                 train=train_data,
                 validation=val_data,
-                loss=self.trainer.get_loss_fn(),
+                loss=nn.MSELoss(),
                 max_epochs=epoch,
                 callbacks=[
                     PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch)

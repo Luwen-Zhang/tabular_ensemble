@@ -73,10 +73,11 @@ class Trainer:
         models:
             A list of AbstractModels.
         """
-        self.modelbases += models
-        self.modelbases_names = [x.program for x in self.modelbases]
-        if len(self.modelbases_names) != len(list(set(self.modelbases_names))):
+        new_modelbases_names = self.modelbases_names + [x.program for x in models]
+        if len(new_modelbases_names) != len(list(set(new_modelbases_names))):
             raise Exception(f"Conflicted modelbase names: {self.modelbases_names}")
+        self.modelbases += models
+        self.modelbases_names = new_modelbases_names
 
     def get_modelbase(self, program: str):
         """
@@ -295,16 +296,6 @@ class Trainer:
             "weight_decay": self.args["weight_decay"],
             "batch_size": self.args["batch_size"],
         }
-
-    def get_loss_fn(self) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
-        if self.args["loss"] == "mse":
-            return nn.MSELoss()
-        elif self.args["loss"] == "r2":
-            return r2_loss
-        elif self.args["loss"] == "mae":
-            return nn.L1Loss()
-        else:
-            raise Exception(f"Loss function {self.args['loss']} not implemented.")
 
     @property
     def SPACE(self):
@@ -626,14 +617,14 @@ class Trainer:
                     keys: ["Training", "Testing", "Validation"]
                     values: (Predicted values, true values)
         """
-        if not os.path.exists(os.path.join(self.project_root, "cv")):
-            os.mkdir(os.path.join(self.project_root, "cv"))
         programs_predictions = {}
         for program in programs:
             programs_predictions[program] = {}
 
         if load_from_previous:
-            if not os.path.isfile(
+            if not os.path.exists(
+                os.path.join(self.project_root, "cv")
+            ) or not os.path.isfile(
                 os.path.join(self.project_root, "cv", "cv_state.pkl")
             ):
                 raise Exception(f"No previous state to load from.")
@@ -644,11 +635,7 @@ class Trainer:
             start_i = current_state["i_random"]
             self.load_state(current_state["trainer"])
             programs_predictions = current_state["programs_predictions"]
-            if "once_predictions" in current_state.keys():
-                reloaded_once_predictions = current_state["once_predictions"]
-            else:
-                # For compatibility
-                reloaded_once_predictions = None
+            reloaded_once_predictions = current_state["once_predictions"]
             skip_program = reloaded_once_predictions is not None
             if start_i >= n_random:
                 raise Exception(
@@ -673,6 +660,10 @@ class Trainer:
             self.datamodule.datasplitter.reset_cv(
                 cv=n_random if split_type == "cv" else -1
             )
+            if n_random > 0 and not os.path.exists(
+                os.path.join(self.project_root, "cv")
+            ):
+                os.mkdir(os.path.join(self.project_root, "cv"))
 
         def func_save_state(state):
             with open(
@@ -1180,16 +1171,6 @@ class Trainer:
         else:
             ax.set_xlabel("Feature importance")
         plt.tight_layout()
-
-        boxes = []
-        import matplotlib
-
-        for x in ax.get_children():
-            if isinstance(x, matplotlib.patches.PathPatch):
-                boxes.append(x)
-
-        for patch, color in zip(boxes, pal):
-            patch.set_facecolor(color)
 
         plt.savefig(
             os.path.join(

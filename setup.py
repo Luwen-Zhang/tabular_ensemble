@@ -28,6 +28,7 @@ setup(
             "pytest",
             "pytest-cov",
             "pytest-order",
+            "pytest-mock",
             "black",
         ],
     },

@@ -4,6 +4,8 @@ import numpy as np
 from tabensemb.trainer import Trainer, load_trainer, save_trainer
 from tabensemb.model import *
 from tabensemb.utils import HiddenPltShow
+from tabensemb.config import UserConfig
+from tabensemb.data.datasplitter import RandomSplitter
 import torch
 import pytest
 import matplotlib
@@ -92,15 +94,35 @@ def test_train_without_bayes():
 
 @pytest.mark.order(after="test_train_without_bayes")
 def test_get_leaderboard():
-    l0 = pytest.test_trainer_trainer.get_leaderboard(test_data_only=True)
+    no_model_trainer = Trainer(device="cpu")
+    no_model_trainer.load_config("sample")
+    with pytest.raises(Exception) as err:
+        no_model_trainer.get_leaderboard()
+    assert "No modelbase available" in err.value.args[0]
+
+    trainer = pytest.test_trainer_trainer
+    l0 = trainer.get_leaderboard(test_data_only=True)
     assert (
         "Training" not in l0.columns
         and "Validation" not in l0.columns
         and "Testing" not in l0.columns
         and "RMSE" in l0.columns
     )
-    l = pytest.test_trainer_trainer.get_leaderboard()
+    l = trainer.get_leaderboard()
     pytest.leaderboard_init = l
+
+    with pytest.warns(UserWarning):
+        # No cv exists
+        trainer.get_approx_cv_leaderboard(leaderboard=l, save=False)
+    with pytest.raises(Exception) as err:
+        trainer._read_cv_leaderboards()
+    assert "not found" in err.value.args[0]
+
+    with pytest.raises(Exception) as err:
+        _ = trainer.get_leaderboard(cross_validation=2, load_from_previous=True)
+    assert "No previous state to load from" in err.value.args[0]
+
+    best_model, best_metric = trainer.get_best_model()
 
 
 @pytest.mark.order(after="test_get_leaderboard")
@@ -193,6 +215,10 @@ def test_continue_previous():
     l0 = model_trainer.get_leaderboard(cross_validation=1, split_type="random")
     l1 = model_trainer.get_leaderboard(cross_validation=2, load_from_previous=True)
     l2 = model_trainer.get_leaderboard(cross_validation=2, split_type="random")
+    with pytest.raises(Exception) as err:
+        _ = model_trainer.get_leaderboard(cross_validation=1, load_from_previous=True)
+    assert "The loaded state is incompatible" in err.value.args[0]
+
     cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
     assert np.allclose(
         l1[cols].values.astype(float), l2[cols].values.astype(float)
@@ -364,7 +390,7 @@ def test_trainer_multitarget():
     ), f"Reloaded local trainer does not get consistent results."
 
 
-def test_permutation_importance():
+def test_feature_importance():
     configfile = "sample"
     tabensemb.setting["debug_mode"] = True
     trainer = Trainer(device="cpu")
@@ -409,8 +435,13 @@ def test_permutation_importance():
     torchmodel_perm = trainer.cal_feature_importance(
         program="CatEmbed", model_name="Category Embedding", method="permutation"
     )
+    np.random.seed(0)
     torchmodel_shap = trainer.cal_feature_importance(
         program="CatEmbed", model_name="Category Embedding", method="shap"
+    )
+    np.random.seed(0)
+    torchmodel_shap_direct = trainer.cal_shap(
+        program="CatEmbed", model_name="Category Embedding"
     )
 
     with pytest.raises(Exception):
@@ -436,6 +467,20 @@ def test_permutation_importance():
     assert np.all(np.abs(torchmodel_shap[0][: len(trainer.cont_feature_names)]) > 1e-8)
     # Unused data does not have feature importance.
     assert np.all(np.abs(torchmodel_shap[0][len(trainer.cont_feature_names) :]) < 1e-8)
+
+    assert np.allclose(torchmodel_shap[0], torchmodel_shap_direct)
+
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_copy():
+    trainer = pytest.test_trainer_trainer
+    copied_trainer = trainer.copy()
+    copied_leaderboard = copied_trainer.get_leaderboard()
+    cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
+    assert np.allclose(
+        pytest.leaderboard_init[cols].values.astype(float),
+        copied_leaderboard[cols].values.astype(float),
+    )
 
 
 @pytest.mark.order(after="test_train_without_bayes")
@@ -526,3 +571,96 @@ def test_exception_during_bayes_opt(capfd):
         trainer.train()
     out, err = capfd.readouterr()
     assert "Returning a large value instead" in out
+
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_exceptions():
+    trainer = pytest.test_trainer_trainer
+    with pytest.raises(Exception):
+        trainer.set_device("UNKNOWN_DEVICE")
+
+    with pytest.raises(Exception) as err:
+        trainer.add_modelbases(
+            [PytorchTabular(trainer, model_subset=["Category Embedding"])]
+        )
+    assert "Conflicted modelbase names" in err.value.args[0]
+
+
+def test_cmd_arguments(mocker):
+    mocker.patch(
+        "sys.argv",
+        [
+            "NOT_USED",  # The first arg is the positional name of the script
+            "--base",
+            "sample",
+            "--epoch",
+            "2",
+            "--bayes_opt",
+            "--data_imputer",
+            "GainImputer",
+            "--split_ratio",
+            "0.3",
+            "0.1",
+            "0.6",
+        ],
+    )
+    trainer = Trainer(device="cpu")
+    trainer.load_config()
+    assert trainer.args["epoch"] == 2
+    assert trainer.args["bayes_opt"]
+    assert trainer.args["data_imputer"] == "GainImputer"
+    assert all([x == y for x, y in zip(trainer.args["split_ratio"], [0.3, 0.1, 0.6])])
+
+
+def test_user_input_config():
+    trainer = Trainer(device="cpu")
+    cfg = UserConfig("sample")
+    with pytest.warns(UserWarning):
+        trainer.load_config(
+            cfg, manual_config={"epoch": 2}, project_root_subfolder="test"
+        )
+    assert trainer.args["epoch"] != 2
+    assert "test" in trainer.project_root
+
+    trainer.load_config("sample", manual_config={"epoch": 2})
+    assert trainer.args["epoch"] == 2
+
+    trainer.load_config(
+        "sample",
+        manual_config={
+            "SPACEs": {
+                "lr": {
+                    "type": "Real",
+                    "low": 1e-4,
+                    "high": 0.05,
+                    "prior": "log-uniform",
+                },
+                "hidden_dim": {
+                    "type": "Integer",
+                    "low": 16,
+                    "high": 64,
+                    "prior": "uniform",
+                    "dtype": int,
+                },
+                "batch_size": {
+                    "type": "Categorical",
+                    "categories": [64, 128, 256, 512, 1024, 2048],
+                },
+            }
+        },
+    )
+    _ = trainer.SPACE
+
+    trainer.load_config(
+        "sample",
+        manual_config={"SPACEs": {"lr": {"type": "UNKNOWN"}}},
+    )
+    with pytest.raises(Exception):
+        _ = trainer.SPACE
+
+
+def test_train_part_of_modelbases():
+    trainer = pytest.test_trainer_trainer
+    trainer.train(programs=["PytorchTabular"])
+    with pytest.warns(UserWarning):
+        trainer.train(programs=[])
