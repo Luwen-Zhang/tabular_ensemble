@@ -71,15 +71,6 @@ def is_notebook() -> bool:
         return False  # Probably standard Python interpreter
 
 
-# https://stackoverflow.com/questions/65840698/how-to-make-r2-score-in-nn-lstm-pytorch
-def r2_loss(output, target):
-    target_mean = torch.mean(target)
-    ss_tot = torch.sum((target - target_mean) ** 2)
-    ss_res = torch.sum((target - output) ** 2)
-    r2 = 1 - ss_res / ss_tot
-    return 1 - r2
-
-
 def set_random_seed(seed=0):
     set_torch(seed)
     np.random.seed(seed)
@@ -588,6 +579,7 @@ def debugger_is_active() -> bool:
 
 
 def gini(x, w=None):
+    # https://stackoverflow.com/questions/48999542/more-efficient-weighted-gini-coefficient-in-python
     # The rest of the code requires numpy arrays.
     x = np.asarray(x)
     if len(np.unique(x)) == 1:

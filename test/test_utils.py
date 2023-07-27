@@ -1,17 +1,25 @@
 import os
-
+import numpy as np
 import pytest
 import torch
 from import_utils import *
 import tabensemb
 from tabensemb.trainer import Trainer
 from tabensemb.trainer.utils import NoBayesOpt
-from tabensemb.utils import global_setting, torch_with_grad, Logging
+from tabensemb.utils import (
+    global_setting,
+    torch_with_grad,
+    Logging,
+    metric_sklearn,
+    get_figsize,
+    gini,
+)
 from tabensemb.utils.ranking import *
 from tabensemb.model import *
 import shutil
 import warnings
 from logging import getLogger
+import copy
 
 
 def test_no_bayes_opt():
@@ -102,3 +110,60 @@ def test_logging():
         lines = file.readlines()
     assert len(lines) == 1
     assert lines[0] == "1\n"
+
+
+def test_metric_sklearn():
+    y_true = np.ones((100, 1), dtype=np.float32)
+    y_pred = np.ones((100, 1), dtype=np.float32) + np.random.randn(100, 1) / 10
+
+    _ = metric_sklearn(y_true, y_pred, "mse")
+    _ = metric_sklearn(y_true, y_pred, "rmse")
+    _ = metric_sklearn(y_true, y_pred, "mae")
+    _ = metric_sklearn(y_true, y_pred, "mape")
+    _ = metric_sklearn(y_true, y_pred, "r2")
+    _ = metric_sklearn(y_true, y_pred, "rmse_conserv")
+    assert metric_sklearn(y_true, np.zeros_like(y_true), "rmse_conserv") == 0.0
+
+    with pytest.raises(Exception):
+        metric_sklearn(y_true, y_pred, "UNKNOWN_METRIC")
+
+    y_pred_na = copy.deepcopy(y_pred)
+    y_pred_na[10] = np.nan
+
+    tabensemb.setting["warn_nan_metric"] = True
+    with pytest.warns(UserWarning):
+        res = metric_sklearn(y_true, y_pred_na, "mse")
+        assert res == 100
+
+    tabensemb.setting["warn_nan_metric"] = False
+    with pytest.raises(Exception) as err:
+        _ = metric_sklearn(y_true, y_pred_na, "mse")
+    assert "NaNs exist in the tested prediction" in err.value.args[0]
+
+
+def test_get_figsize():
+    figsize, width, height = get_figsize(
+        12, max_col=3, width_per_item=1, height_per_item=1, max_width=10
+    )
+    assert width == 3 and height == 4
+
+    figsize, width, height = get_figsize(
+        13, max_col=3, width_per_item=1, height_per_item=1, max_width=10
+    )
+    assert width == 3 and height == 5
+
+    figsize, width, height = get_figsize(
+        3, max_col=3, width_per_item=1, height_per_item=1, max_width=10
+    )
+    assert width == 3 and height == 1
+
+    figsize, width, height = get_figsize(
+        2, max_col=3, width_per_item=1, height_per_item=1, max_width=10
+    )
+    assert width == 2 and height == 1
+
+
+def test_gini():
+    x = np.random.randn(100)
+    w = np.ones_like(x)
+    assert np.allclose(gini(x, w), gini(x))
