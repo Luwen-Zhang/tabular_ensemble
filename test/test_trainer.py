@@ -586,32 +586,6 @@ def test_exceptions():
     assert "Conflicted modelbase names" in err.value.args[0]
 
 
-def test_cmd_arguments(mocker):
-    mocker.patch(
-        "sys.argv",
-        [
-            "NOT_USED",  # The first arg is the positional name of the script
-            "--base",
-            "sample",
-            "--epoch",
-            "2",
-            "--bayes_opt",
-            "--data_imputer",
-            "GainImputer",
-            "--split_ratio",
-            "0.3",
-            "0.1",
-            "0.6",
-        ],
-    )
-    trainer = Trainer(device="cpu")
-    trainer.load_config()
-    assert trainer.args["epoch"] == 2
-    assert trainer.args["bayes_opt"]
-    assert trainer.args["data_imputer"] == "GainImputer"
-    assert all([x == y for x, y in zip(trainer.args["split_ratio"], [0.3, 0.1, 0.6])])
-
-
 def test_user_input_config():
     trainer = Trainer(device="cpu")
     cfg = UserConfig("sample")

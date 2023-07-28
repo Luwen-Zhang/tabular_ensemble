@@ -16,7 +16,6 @@ import torch.cuda
 import torch.utils.data as Data
 import scipy.stats as st
 from sklearn.utils import resample as skresample
-import argparse
 import platform, psutil, subprocess
 import shutil
 import pickle
@@ -228,7 +227,6 @@ class Trainer:
         """
         input_config = config is not None
         if isinstance(config, str) or not input_config:
-            base_config = UserConfig()
             # The base config is loaded using the --base argument
             if is_notebook() and not input_config:
                 raise Exception(
@@ -237,30 +235,7 @@ class Trainer:
             elif is_notebook() or input_config:
                 parse_res = {"base": config}
             else:  # not notebook and config is None
-                parser = argparse.ArgumentParser()
-                parser.add_argument("--base", required=True)
-                for key in base_config.keys():
-                    if type(base_config[key]) in [str, int, float]:
-                        parser.add_argument(
-                            f"--{key}", type=type(base_config[key]), required=False
-                        )
-                    elif type(base_config[key]) == list:
-                        parser.add_argument(
-                            f"--{key}",
-                            nargs="+",
-                            type=type(base_config[key][0])
-                            if len(base_config[key]) > 0
-                            else None,
-                            required=False,
-                        )
-                    elif type(base_config[key]) == bool:
-                        parser.add_argument(f"--{key}", dest=key, action="store_true")
-                        parser.add_argument(
-                            f"--no-{key}", dest=key, action="store_false"
-                        )
-                        parser.set_defaults(**{key: base_config[key]})
-                parse_res = parser.parse_args().__dict__
-
+                parse_res = UserConfig.from_parser()
             self.configfile = parse_res["base"]
             config = UserConfig(path=self.configfile)
             # Then, several args can be modified using other arguments like --lr, --weight_decay
