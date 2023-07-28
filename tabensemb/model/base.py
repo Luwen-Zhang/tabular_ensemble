@@ -1947,7 +1947,7 @@ class AbstractNN(pl.LightningModule):
     ) -> torch.Tensor:
         raise NotImplementedError
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch: Any, batch_idx: Any):
         if type(batch) == dict:
             tensors, data_required_models = batch["self"], batch["required"]
         else:

@@ -16,7 +16,6 @@ import torch.cuda
 import torch.utils.data as Data
 import scipy.stats as st
 from sklearn.utils import resample as skresample
-import argparse
 import platform, psutil, subprocess
 import shutil
 import pickle
@@ -200,11 +199,9 @@ class Trainer:
         Load a config in json format.
         Arguments passed to python when executing the script are parsed if ``configfile_path`` is left None. All keys in
         ``tabensemb.config.UserConfig().available_keys()`` can be parsed, for example:
-            For the loss function: ``--loss mse``,
-
-            For the total epoch: ``--epoch 200``,
-
-            For the option for bayes opt: ``--bayes_opt`` to turn on bayes opt, ``--no-bayes_opt`` to turn off.
+        For the loss function: ``--loss mse``,
+        For the total epoch: ``--epoch 200``,
+        For the option for bayes opt: ``--bayes_opt`` to turn on bayes opt, ``--no-bayes_opt`` to turn off.
 
         Default values can be seen in ``tabensemb.config.UserConfig().defaults()``.
 
@@ -216,19 +213,18 @@ class Trainer:
             Can be the path to the config in json or python format, or a UserConfig instance.
             If it is a path. Arguments passed to python will be parsed; therefore, do not leave it empty when
             ``argparse.ArgumentParser`` is used for other purposes. If the path does not contain "/" or is not a file,
-            the file ``configs/{config}``(.json/.py) will be read. The path can end with or without .json/.py.
+            the file configs/{config}(.json/.py) will be read. The path can end with or without .json/.py.
         verbose
             Verbosity.
         manual_config
-            Set configurations after the config file is loaded with a dict. For example:
-            ``manual_config={"bayes_opt": True}``
+            Set configurations after the config file is loaded with a dict.
+            For example: ``manual_config={"bayes_opt": True}``
         project_root_subfolder
             The subfolder that the project will locate in. The folder name will be
             ``{PATH OF THE MAIN SCRIPT}/output/{project}/{project_root_subfolder}/{TIME OF EXECUTION}-{configfile_path}``
         """
         input_config = config is not None
         if isinstance(config, str) or not input_config:
-            base_config = UserConfig()
             # The base config is loaded using the --base argument
             if is_notebook() and not input_config:
                 raise Exception(
@@ -237,30 +233,7 @@ class Trainer:
             elif is_notebook() or input_config:
                 parse_res = {"base": config}
             else:  # not notebook and config is None
-                parser = argparse.ArgumentParser()
-                parser.add_argument("--base", required=True)
-                for key in base_config.keys():
-                    if type(base_config[key]) in [str, int, float]:
-                        parser.add_argument(
-                            f"--{key}", type=type(base_config[key]), required=False
-                        )
-                    elif type(base_config[key]) == list:
-                        parser.add_argument(
-                            f"--{key}",
-                            nargs="+",
-                            type=type(base_config[key][0])
-                            if len(base_config[key]) > 0
-                            else None,
-                            required=False,
-                        )
-                    elif type(base_config[key]) == bool:
-                        parser.add_argument(f"--{key}", dest=key, action="store_true")
-                        parser.add_argument(
-                            f"--no-{key}", dest=key, action="store_false"
-                        )
-                        parser.set_defaults(**{key: base_config[key]})
-                parse_res = parser.parse_args().__dict__
-
+                parse_res = UserConfig.from_parser()
             self.configfile = parse_res["base"]
             config = UserConfig(path=self.configfile)
             # Then, several args can be modified using other arguments like --lr, --weight_decay
@@ -610,12 +583,8 @@ class Trainer:
         -------
         res
             A dict in the following format:
-            keys: programs
-            values:
-                keys: model names
-                values:
-                    keys: ["Training", "Testing", "Validation"]
-                    values: (Predicted values, true values)
+            {keys: programs, values: {keys: model names, values: {keys: ["Training", "Testing", "Validation"], values:
+            (Predicted values, true values)}}
         """
         programs_predictions = {}
         for program in programs:

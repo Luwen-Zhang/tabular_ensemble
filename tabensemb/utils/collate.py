@@ -25,11 +25,11 @@ def fix_collate_fn(batch):
     Fatal Python error: Segmentation fault
 
     Current thread 0x00007f910a78b100 (most recent call first):
-      File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 172 in default_collate
-      File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 52 in fetch
-      File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 692 in _next_data
-      File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 652 in __next__
-      File "segfault_test.py", line 52 in <module>
+    File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 172 in default_collate
+    File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 52 in fetch
+    File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 692 in _next_data
+    File "/home/xlluo/anaconda3/envs/mlfatigue/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 652 in __next__
+    File "segfault_test.py", line 52 in <module>
     Segmentation fault (core dumped)
     """
     elem = batch[0]

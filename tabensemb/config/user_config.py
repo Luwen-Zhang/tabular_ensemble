@@ -6,6 +6,7 @@ import types
 import tabensemb
 from tabensemb.utils import pretty
 from .default import cfg as default_cfg
+import argparse
 
 
 class UserConfig(dict):
@@ -25,6 +26,32 @@ class UserConfig(dict):
             if val is None:
                 d.__delitem__(key)
         super(UserConfig, self).update(d)
+
+    @staticmethod
+    def from_parser() -> Dict:
+        base_config = UserConfig()
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--base", required=True)
+        for key in base_config.keys():
+            if type(base_config[key]) in [str, int, float]:
+                parser.add_argument(
+                    f"--{key}", type=type(base_config[key]), required=False
+                )
+            elif type(base_config[key]) == list:
+                parser.add_argument(
+                    f"--{key}",
+                    nargs="+",
+                    type=type(base_config[key][0])
+                    if len(base_config[key]) > 0
+                    else None,
+                    required=False,
+                )
+            elif type(base_config[key]) == bool:
+                parser.add_argument(f"--{key}", dest=key, action="store_true")
+                parser.add_argument(f"--no-{key}", dest=key, action="store_false")
+                parser.set_defaults(**{key: base_config[key]})
+        parse_res = parser.parse_known_args()[0].__dict__
+        return parse_res
 
     @staticmethod
     def from_dict(cfg: Dict):

@@ -31,5 +31,13 @@ setup(
             "pytest-mock",
             "black",
         ],
+        "doc": [
+            "sphinx",
+            "sphinx_rtd_theme",
+            "myst-parser",
+            "sphinx_copybutton",
+            "sphinx-apidoc",
+            "sphinx_paramlinks",
+        ],
     },
 )
