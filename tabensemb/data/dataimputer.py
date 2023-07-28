@@ -16,9 +16,6 @@ class MiceLightgbmImputer(AbstractImputer):
     An implementation of MICE with lightgbm.
     """
 
-    def __init__(self):
-        super(MiceLightgbmImputer, self).__init__()
-
     def _fit_transform(
         self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
     ):
@@ -55,9 +52,6 @@ class MiceImputer(AbstractSklearnImputer):
     An implementation of MICE by sklearn.
     """
 
-    def __init__(self):
-        super(MiceImputer, self).__init__()
-
     def _new_imputer(self):
         # https://github.com/vanderschaarlab/hyperimpute/blob/main/src/hyperimpute/plugins/imputers/plugin_sklearn_ice.py
         warnings.simplefilter(
@@ -75,9 +69,6 @@ class MissForestImputer(AbstractSklearnImputer):
     """
     MICE-Random forest implemented using sklearn.
     """
-
-    def __init__(self):
-        super(MissForestImputer, self).__init__()
 
     def _new_imputer(self):
         warnings.simplefilter(
@@ -98,9 +89,6 @@ class GainImputer(AbstractSklearnImputer):
     Imputation using GAIN.
     """
 
-    def __init__(self):
-        super(GainImputer, self).__init__()
-
     def _new_imputer(self):
         from tabensemb.utils.imputers.gain import GainImputation
 
@@ -112,9 +100,6 @@ class MeanImputer(AbstractSklearnImputer):
     Imputation with average values implemented using sklearn's SimpleImputer.
     """
 
-    def __init__(self):
-        super(MeanImputer, self).__init__()
-
     def _new_imputer(self):
         return SimpleImputer(strategy="mean")
 
@@ -124,9 +109,6 @@ class MedianImputer(AbstractSklearnImputer):
     Imputation with median values implemented using sklearn's SimpleImputer.
     """
 
-    def __init__(self):
-        super(MedianImputer, self).__init__()
-
     def _new_imputer(self):
         return SimpleImputer(strategy="median")
 
@@ -135,9 +117,6 @@ class ModeImputer(AbstractSklearnImputer):
     """
     Imputation with mode values implemented using sklearn's SimpleImputer.
     """
-
-    def __init__(self):
-        super(ModeImputer, self).__init__()
 
     def _new_imputer(self):
         return SimpleImputer(strategy="most_frequent")
