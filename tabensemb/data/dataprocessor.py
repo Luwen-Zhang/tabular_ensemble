@@ -210,6 +210,8 @@ class RFEFeatureSelector(AbstractFeatureSelector):
             )
 
         rfecv = ExtendRFECV(
+            # RFECV does not support categorical encoding. The estimator should have `coef_` or `feature_importances_`
+            # so pipeline is not valid if importance_getter=="auto". shap can not handle a pipeline either.
             estimator=datamodule.get_base_predictor(
                 categorical=False,
                 n_estimators=100,

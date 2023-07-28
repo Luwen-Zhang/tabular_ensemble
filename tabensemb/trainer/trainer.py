@@ -73,10 +73,11 @@ class Trainer:
         models:
             A list of AbstractModels.
         """
-        self.modelbases += models
-        self.modelbases_names = [x.program for x in self.modelbases]
-        if len(self.modelbases_names) != len(list(set(self.modelbases_names))):
+        new_modelbases_names = self.modelbases_names + [x.program for x in models]
+        if len(new_modelbases_names) != len(list(set(new_modelbases_names))):
             raise Exception(f"Conflicted modelbase names: {self.modelbases_names}")
+        self.modelbases += models
+        self.modelbases_names = new_modelbases_names
 
     def get_modelbase(self, program: str):
         """
@@ -294,16 +295,6 @@ class Trainer:
             "batch_size": self.args["batch_size"],
         }
 
-    def get_loss_fn(self) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
-        if self.args["loss"] == "mse":
-            return nn.MSELoss()
-        elif self.args["loss"] == "r2":
-            return r2_loss
-        elif self.args["loss"] == "mae":
-            return nn.L1Loss()
-        else:
-            raise Exception(f"Loss function {self.args['loss']} not implemented.")
-
     @property
     def SPACE(self):
         SPACE = []
@@ -459,10 +450,12 @@ class Trainer:
         """
         default_path = tabensemb.setting["default_output_path"]
         if not os.path.exists(default_path):
-            os.makedirs(default_path)
+            os.makedirs(default_path, exist_ok=True)
         if project_root_subfolder is not None:
             if not os.path.exists(os.path.join(default_path, project_root_subfolder)):
-                os.makedirs(os.path.join(default_path, project_root_subfolder))
+                os.makedirs(
+                    os.path.join(default_path, project_root_subfolder), exist_ok=True
+                )
         subfolder = (
             self.project
             if project_root_subfolder is None
@@ -471,7 +464,7 @@ class Trainer:
         t = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
         folder_name = t + "-0" + "_" + os.path.split(self.configfile)[-1]
         if not os.path.exists(os.path.join(default_path, subfolder)):
-            os.mkdir(os.path.join(default_path, subfolder))
+            os.makedirs(os.path.join(default_path, subfolder), exist_ok=True)
         self.set_path(
             add_postfix(os.path.join(default_path, subfolder, folder_name)),
             verbose=verbose,
@@ -618,14 +611,14 @@ class Trainer:
             {keys: programs, values: {keys: model names, values: {keys: ["Training", "Testing", "Validation"], values:
             (Predicted values, true values)}}
         """
-        if not os.path.exists(os.path.join(self.project_root, "cv")):
-            os.mkdir(os.path.join(self.project_root, "cv"))
         programs_predictions = {}
         for program in programs:
             programs_predictions[program] = {}
 
         if load_from_previous:
-            if not os.path.isfile(
+            if not os.path.exists(
+                os.path.join(self.project_root, "cv")
+            ) or not os.path.isfile(
                 os.path.join(self.project_root, "cv", "cv_state.pkl")
             ):
                 raise Exception(f"No previous state to load from.")
@@ -636,11 +629,7 @@ class Trainer:
             start_i = current_state["i_random"]
             self.load_state(current_state["trainer"])
             programs_predictions = current_state["programs_predictions"]
-            if "once_predictions" in current_state.keys():
-                reloaded_once_predictions = current_state["once_predictions"]
-            else:
-                # For compatibility
-                reloaded_once_predictions = None
+            reloaded_once_predictions = current_state["once_predictions"]
             skip_program = reloaded_once_predictions is not None
             if start_i >= n_random:
                 raise Exception(
@@ -665,6 +654,10 @@ class Trainer:
             self.datamodule.datasplitter.reset_cv(
                 cv=n_random if split_type == "cv" else -1
             )
+            if n_random > 0 and not os.path.exists(
+                os.path.join(self.project_root, "cv")
+            ):
+                os.mkdir(os.path.join(self.project_root, "cv"))
 
         def func_save_state(state):
             with open(
@@ -1127,23 +1120,19 @@ class Trainer:
         clr = sns.color_palette("deep")
 
         # if feature type is not assigned in config files, the feature is from dataderiver.
-        pal = [
-            clr[self.args["feature_names_type"][x]]
-            if x in self.args["feature_names_type"].keys()
-            else clr[self.args["feature_types"].index("Derived")]
-            for x in self.cont_feature_names
-        ]
-
-        dims = self.datamodule.get_derived_data_sizes()
-        for key_idx, key in enumerate(self.derived_data.keys()):
-            if key == "categorical":
-                pal += [clr[self.args["feature_types"].index("Categorical")]] * dims[
-                    key_idx
-                ][-1]
+        pal = []
+        for key in names:
+            if key in self.cont_feature_names:
+                c = (
+                    clr[self.args["feature_names_type"][key]]
+                    if key in self.args["feature_names_type"].keys()
+                    else clr[self.args["feature_types"].index("Derived")]
+                )
+            elif key in self.cat_feature_names:
+                c = clr[self.args["feature_types"].index("Categorical")]
             else:
-                pal += [clr[self.args["feature_types"].index("Derived")]] * dims[
-                    key_idx
-                ][-1]
+                c = clr[self.args["feature_types"].index("Derived")]
+            pal.append(c)
 
         clr_map = dict()
         for idx, feature_type in enumerate(self.args["feature_types"]):
@@ -1151,11 +1140,11 @@ class Trainer:
 
         where_effective = np.abs(attr) > 1e-5
         effective_names = np.array(names)[where_effective]
-        print(
-            f"Feature importance less than 1e-5: {list(np.setdiff1d(names, effective_names))}"
-        )
+        not_effective = list(np.setdiff1d(names, effective_names))
+        if len(not_effective) > 0:
+            print(f"Feature importance less than 1e-5: {not_effective}")
         attr = attr[where_effective]
-        pal = [x for idx, x in enumerate(pal) if where_effective[idx]]
+        pal = [pal[x] for x in np.where(where_effective)[0]]
 
         plt.figure(figsize=fig_size)
         ax = plt.subplot(111)
@@ -1176,16 +1165,6 @@ class Trainer:
         else:
             ax.set_xlabel("Feature importance")
         plt.tight_layout()
-
-        boxes = []
-        import matplotlib
-
-        for x in ax.get_children():
-            if isinstance(x, matplotlib.patches.PathPatch):
-                boxes.append(x)
-
-        for patch, color in zip(boxes, pal):
-            patch.set_facecolor(color)
 
         plt.savefig(
             os.path.join(

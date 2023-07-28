@@ -23,7 +23,14 @@ setup(
     extras_require={
         "torch": ["torch>=1.12.0"],
         "all": req_all,
-        "test": ["torch>=1.12.0", "pytest", "pytest-cov"],
+        "test": [
+	    "torch>=1.12.0",
+            "pytest",
+            "pytest-cov",
+            "pytest-order",
+            "pytest-mock",
+            "black",
+ 	],
         "doc": [
             "sphinx",
             "sphinx_rtd_theme",

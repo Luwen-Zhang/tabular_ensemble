@@ -71,15 +71,6 @@ def is_notebook() -> bool:
         return False  # Probably standard Python interpreter
 
 
-# https://stackoverflow.com/questions/65840698/how-to-make-r2-score-in-nn-lstm-pytorch
-def r2_loss(output, target):
-    target_mean = torch.mean(target)
-    ss_tot = torch.sum((target - target_mean) ** 2)
-    ss_res = torch.sum((target - output) ** 2)
-    r2 = 1 - ss_res / ss_tot
-    return 1 - r2
-
-
 def set_random_seed(seed=0):
     set_torch(seed)
     np.random.seed(seed)
@@ -182,7 +173,7 @@ def plot_importance(ax, features, attr, pal, clr_map, **kwargs):
     # plt.grid(axis='x')
     plt.grid(axis="x", linewidth=0.2)
     # plt.barh(x,y, color= [clr_map[name] for name in x])
-    sns.barplot(y, x, palette=palette, **kwargs)
+    sns.barplot(x=y, y=x, palette=palette, **kwargs)
     # ax.set_xlim([0, 1])
     ax.set_xlabel("Permutation feature importance")
 
@@ -266,8 +257,12 @@ def plot_pdp(
             )
         else:
             yerr = (
-                np.vstack([transform(ci_left_list[idx]), transform(ci_right_list[idx])])
-                - transform(mean_pdp_list[idx])
+                np.abs(
+                    np.vstack(
+                        [transform(ci_left_list[idx]), transform(ci_right_list[idx])]
+                    )
+                    - transform(mean_pdp_list[idx])
+                )
                 if not np.isnan(ci_left_list[idx]).any()
                 else None
             )
@@ -584,6 +579,7 @@ def debugger_is_active() -> bool:
 
 
 def gini(x, w=None):
+    # https://stackoverflow.com/questions/48999542/more-efficient-weighted-gini-coefficient-in-python
     # The rest of the code requires numpy arrays.
     x = np.asarray(x)
     if len(np.unique(x)) == 1:

@@ -1,6 +1,5 @@
 cfg = {
     "database": "sample",
-    "loss": "mse",
     "bayes_opt": False,
     "bayes_calls": 50,
     "bayes_epoch": 30,

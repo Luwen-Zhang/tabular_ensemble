@@ -158,6 +158,10 @@ class AutoGluon(AbstractModel):
         }
         return name_mapping
 
+    @property
+    def _support_warm_start(self) -> bool:
+        return False
+
     def _space(self, model_name):
         """
         Spaces are selected according to the official definitions of AutoGluon.

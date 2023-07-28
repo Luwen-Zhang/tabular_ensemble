@@ -57,7 +57,7 @@ class AbstractModel:
         """
         self.trainer = trainer
         if not hasattr(trainer, "args"):
-            trainer.load_config(config="default")
+            raise Exception(f"trainer.load_config is not called.")
         self.model = None
         self.leaderboard = None
         self.model_subset = model_subset
@@ -242,7 +242,7 @@ class AbstractModel:
         model:
             An AbstractModel containing the chosen model.
         """
-        if not type(self.model) in [ModelDict, Dict]:
+        if not isinstance(self.model, dict) and not isinstance(self.model, ModelDict):
             raise Exception(f"The modelbase does not support model detaching.")
         program = program if program is not None else self.program
         tmp_model = cp(self)
@@ -464,16 +464,8 @@ class AbstractModel:
                         f"Using batch_size={_new_batch_size} instead."
                     )
                     new_batch_size = _new_batch_size
-            if (
-                n_train % new_batch_size < limit_batch_size
-                or new_batch_size < limit_batch_size
-            ):
-                if n_train % new_batch_size < limit_batch_size:
-                    _new_batch_size = int(
-                        math.ceil(n_train / (n_train // new_batch_size))
-                    )
-                else:
-                    _new_batch_size = n_train
+            if 0 < n_train % new_batch_size < limit_batch_size:
+                _new_batch_size = int(math.ceil(n_train / (n_train // new_batch_size)))
                 warnings.warn(
                     f"Using batch_size={new_batch_size} and len(training set)={n_train}, which will make the mini batch "
                     f"smaller than limit_batch_size={limit_batch_size}. Using batch_size={_new_batch_size} instead."
@@ -891,6 +883,11 @@ class AbstractModel:
                         "ignore",
                         message="`pytorch_lightning.utilities.cloud_io.get_filesystem` has been deprecated in v1.8.0 and will be removed in v1.10.0.",
                     )
+                    if (
+                        "batch_size" in tmp_params.keys()
+                        and "original_batch_size" in tmp_params.keys()
+                    ):
+                        tmp_params["batch_size"] = tmp_params["original_batch_size"]
                     result = gp_minimize(
                         _bayes_objective,
                         space,
@@ -921,7 +918,13 @@ class AbstractModel:
                 )
 
             tmp_params = self._check_params(model_name, **tmp_params)
-            if not warm_start or (warm_start and not self._trained):
+            if not warm_start or (
+                warm_start and (not self._trained or not self._support_warm_start)
+            ):
+                if warm_start and not self._support_warm_start:
+                    warnings.warn(
+                        f"{self.__class__.__name__} does not support warm_start."
+                    )
                 model = self.new_model(
                     model_name=model_name, verbose=verbose, **tmp_params
                 )
@@ -974,9 +977,9 @@ class AbstractModel:
             The evaluation of bayesian hyperparameter optimization.
         """
         y_val_pred = self._pred_single_model(model, X_val, verbose=False)
-        val_loss = metric_sklearn(y_val_pred, y_val, self.trainer.args["loss"])
+        val_loss = metric_sklearn(y_val_pred, y_val, "mse")
         y_train_pred = self._pred_single_model(model, X_train, verbose=False)
-        train_loss = metric_sklearn(y_train_pred, y_train, self.trainer.args["loss"])
+        train_loss = metric_sklearn(y_train_pred, y_train, "mse")
         return max([train_loss, val_loss])
 
     def _check_train_status(self):
@@ -1017,6 +1020,10 @@ class AbstractModel:
             return False
         else:
             return True
+
+    @property
+    def _support_warm_start(self) -> bool:
+        return True
 
     def _check_space(self):
         any_mismatch = False
@@ -1387,9 +1394,7 @@ class TorchModel(AbstractModel):
                     X_test=dataset,
                     verbose=False,
                 )
-                loss = float(
-                    metric_sklearn(test_label, prediction, self.trainer.args["loss"])
-                )
+                loss = float(metric_sklearn(test_label, prediction, "mse"))
                 return loss
 
             feature_perm = FeaturePermutation(forward_func)
@@ -1596,14 +1601,11 @@ class TorchModel(AbstractModel):
                 full_data_required_models[full_name + "_pred"] = res
                 full_data_required_models[full_name + "_hidden"] = hidden
         tensor_dataset = Data.TensorDataset(*tensors)
-        if len(full_data_required_models) == 0:
-            dataset = tensor_dataset
-        else:
-            dict_df_dataset = DictMixDataset(full_data_required_models)
-            dataset = DictDataset(
-                ListDataset([tensor_dataset, dict_df_dataset]),
-                keys=["self", "required"],
-            )
+        dict_df_dataset = DictMixDataset(full_data_required_models)
+        dataset = DictDataset(
+            ListDataset([tensor_dataset, dict_df_dataset]),
+            keys=["self", "required"],
+        )
         return dataset
 
     def _run_custom_data_module(self, df, derived_data, model_name):
@@ -1772,13 +1774,15 @@ class TorchModel(AbstractModel):
         if self.model is not None and model_name in self.model.keys():
             model = self.model[model_name]
         else:
+            self._prepare_custom_datamodule(model_name)
             model = self.new_model(
                 model_name, verbose=False, **self._get_params(model_name, verbose=False)
             )
-        if trainable_only:
-            return sum(p.numel() for p in model.parameters() if p.requires_grad)
-        else:
-            return sum(p.numel() for p in model.parameters())
+        return sum(
+            p.numel()
+            for p in model.parameters()
+            if (p.requires_grad if trainable_only else True)
+        )
 
 
 class AbstractWrapper:

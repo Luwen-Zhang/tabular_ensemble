@@ -1,19 +1,21 @@
-import unittest
 from import_utils import *
 import tabensemb
-from tabensemb.config import UserConfig
-from tabensemb.data import DataModule, AbstractSplitter
 import numpy as np
 from tabensemb.trainer import Trainer, load_trainer, save_trainer
 from tabensemb.model import *
+from tabensemb.utils import HiddenPltShow
+from tabensemb.config import UserConfig
+from tabensemb.data.datasplitter import RandomSplitter
 import torch
-from copy import deepcopy as cp
-import shutil
 import pytest
+import matplotlib
+import shutil
+from torch import nn
 
 
-def test_trainer():
-    print(f"\n-- Loading trainer --\n")
+def pytest_configure_trainer():
+    if getattr(pytest, "trainer_configure_excuted", False):
+        return
     configfile = "sample"
     tabensemb.setting["debug_mode"] = True
     trainer = Trainer(device="cpu")
@@ -33,6 +35,16 @@ def test_trainer():
                     },
                 ),
                 (
+                    "RelativeDeriver",
+                    {
+                        "stacked": False,
+                        "absolute_col": "cont_0",
+                        "relative2_col": "cont_1",
+                        "intermediate": False,
+                        "derived_name": "derived_cont_unstacked",
+                    },
+                ),
+                (
                     "SampleWeightDeriver",
                     {
                         "stacked": True,
@@ -44,9 +56,19 @@ def test_trainer():
         },
     )
     trainer.load_data()
-    trainer.summarize_setting()
+    pytest.test_trainer_trainer = trainer
+    pytest.test_trainer_trainer_configure_excuted = True
 
-    print(f"\n-- Initialize models --\n")
+
+@pytest.mark.order(2)
+def test_init_trainer():
+    pytest_configure_trainer()
+    pytest.test_trainer_trainer.summarize_setting()
+
+
+@pytest.mark.order(3)
+def test_init_models():
+    trainer = pytest.test_trainer_trainer
     models = [
         PytorchTabular(trainer, model_subset=["Category Embedding"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
@@ -59,19 +81,75 @@ def test_trainer():
         ),
     ]
     trainer.add_modelbases(models)
+    pytest.models = models
 
-    print(f"\n-- Pickling --\n")
-    save_trainer(trainer)
 
-    print(f"\n-- Training without bayes --\n")
-    trainer.train()
+def test_save_trainer():
+    save_trainer(pytest.test_trainer_trainer)
 
-    print(f"\n-- Leaderboard --\n")
+
+def test_train_without_bayes():
+    pytest.test_trainer_trainer.train()
+
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_get_leaderboard():
+    no_model_trainer = Trainer(device="cpu")
+    no_model_trainer.load_config("sample")
+    with pytest.raises(Exception) as err:
+        no_model_trainer.get_leaderboard()
+    assert "No modelbase available" in err.value.args[0]
+
+    trainer = pytest.test_trainer_trainer
+    l0 = trainer.get_leaderboard(test_data_only=True)
+    assert (
+        "Training" not in l0.columns
+        and "Validation" not in l0.columns
+        and "Testing" not in l0.columns
+        and "RMSE" in l0.columns
+    )
     l = trainer.get_leaderboard()
+    pytest.leaderboard_init = l
 
-    print(f"\n-- Prediction consistency --\n")
+    with pytest.warns(UserWarning):
+        # No cv exists
+        trainer.get_approx_cv_leaderboard(leaderboard=l, save=False)
+    with pytest.raises(Exception) as err:
+        trainer._read_cv_leaderboards()
+    assert "not found" in err.value.args[0]
+
+    with pytest.raises(Exception) as err:
+        _ = trainer.get_leaderboard(cross_validation=2, load_from_previous=True)
+    assert "No previous state to load from" in err.value.args[0]
+
+    best_model, best_metric = trainer.get_best_model()
+
+
+@pytest.mark.order(after="test_get_leaderboard")
+def test_load_trainer():
+    trainer = pytest.test_trainer_trainer
+    root = trainer.project_root + "_rename_test"
+    old_root = trainer.project_root
+    shutil.copytree(trainer.project_root, root)
+    shutil.rmtree(trainer.project_root)
+    trainer = load_trainer(os.path.join(root, "trainer.pkl"))
+    l2 = trainer.get_leaderboard()
+    cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
+    assert np.allclose(
+        pytest.leaderboard_init[cols].values.astype(float),
+        l2[cols].values.astype(float),
+    ), f"Reloaded local trainer does not get consistent results."
+    shutil.copytree(root, old_root)
+    shutil.rmtree(root)
+
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_predict_function():
+    trainer = pytest.test_trainer_trainer
+    models = trainer.modelbases
     x_test = trainer.datamodule.X_test
     d_test = trainer.datamodule.D_test
+    assert len(models) > 0
     for model in models:
         model_name = model.model_subset[0]
         pred = model.predict(x_test, model_name=model_name)
@@ -80,7 +158,10 @@ def test_trainer():
             pred, direct_pred
         ), f"{model.__class__.__name__} does not get consistent inference results."
 
-    print(f"\n-- Detach modelbase --\n")
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_detach_model():
+    trainer = pytest.test_trainer_trainer
     model_trainer = trainer.detach_model(
         program="CatEmbed", model_name="Category Embedding"
     )
@@ -98,95 +179,61 @@ def test_trainer():
     assert np.allclose(
         detached_pred, direct_pred
     ), f"The detached model does not get consistent results."
+    pytest.model_trainer = model_trainer
 
-    print(f"\n-- pytorch cuda functionality --\n")
+
+@pytest.mark.order(after="test_detach_model")
+def test_cuda():
+    model_trainer = pytest.model_trainer
     if torch.cuda.is_available():
         model_trainer.set_device("cuda")
         model_trainer.train()
     else:
         print(f"Skipping cuda tests since torch.cuda.is_available() is False.")
 
-    print(
-        f"\n-- Training after set_feature_names and without categorical features --\n"
-    )
+
+@pytest.mark.order(after="test_detach_model")
+def test_train_after_set_feature_names():
+    model_trainer = pytest.model_trainer
     model_trainer.datamodule.set_feature_names(
-        model_trainer.datamodule.cont_feature_names[:5]
+        model_trainer.datamodule.cont_feature_names[:3]
     )
     model_trainer.train()
 
-    print(f"\n-- Bayes optimization --\n")
+
+@pytest.mark.order(after="test_detach_model")
+def test_bayes_opt():
+    model_trainer = pytest.model_trainer
     model_trainer.args["bayes_opt"] = True
     model_trainer.get_leaderboard(cross_validation=2)
-
-    print(f"\n-- Load local trainer --\n")
-    root = trainer.project_root + "_rename_test"
-    shutil.copytree(trainer.project_root, root)
-    shutil.rmtree(trainer.project_root)
-    trainer = load_trainer(os.path.join(root, "trainer.pkl"))
-    l2 = trainer.get_leaderboard()
-    cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
-    assert np.allclose(
-        l[cols].values.astype(float), l2[cols].values.astype(float)
-    ), f"Reloaded local trainer does not get consistent results."
-
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+    model_trainer.args["bayes_opt"] = False
 
 
+@pytest.mark.order(after="test_detach_model")
 def test_continue_previous():
-    configfile = "sample"
-    tabensemb.setting["debug_mode"] = True
-    trainer = Trainer(device="cpu")
-    trainer.load_config(
-        configfile,
-        manual_config={
-            "data_splitter": "RandomSplitter",
-        },
-    )
-    trainer.load_data()
+    model_trainer = pytest.model_trainer
+    l0 = model_trainer.get_leaderboard(cross_validation=1, split_type="random")
+    l1 = model_trainer.get_leaderboard(cross_validation=2, load_from_previous=True)
+    l2 = model_trainer.get_leaderboard(cross_validation=2, split_type="random")
+    with pytest.raises(Exception) as err:
+        _ = model_trainer.get_leaderboard(cross_validation=1, load_from_previous=True)
+    assert "The loaded state is incompatible" in err.value.args[0]
 
-    models = [
-        PytorchTabular(trainer, model_subset=["Category Embedding"]),
-    ]
-    trainer.add_modelbases(models)
-    l0 = trainer.get_leaderboard(cross_validation=1, split_type="random")
-    l1 = trainer.get_leaderboard(cross_validation=2, load_from_previous=True)
-
-    l2 = trainer.get_leaderboard(cross_validation=2, split_type="random")
     cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
     assert np.allclose(
         l1[cols].values.astype(float), l2[cols].values.astype(float)
     ), f"load_from_previous does not get consistent results."
 
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
 
-
+@pytest.mark.order(after="test_detach_model")
 def test_inspect():
-    print(f"\n-- Loading trainer --\n")
-    configfile = "sample"
-    tabensemb.setting["debug_mode"] = True
-    trainer = Trainer(device="cpu")
-    trainer.load_config(
-        configfile,
-        manual_config={
-            "data_splitter": "RandomSplitter",
-        },
-    )
-    trainer.load_data()
-
-    print(f"\n-- Initialize model --\n")
-    model = CatEmbed(
-        trainer,
-        model_subset=[
-            "Category Embedding",
-        ],
-    )
-    trainer.add_modelbases([model])
-
-    print(f"\n-- Train model --\n")
-    trainer.train()
+    trainer = pytest.model_trainer
+    model = trainer.get_modelbase("CatEmbed_Category Embedding")
 
     print(f"\n-- Inspect model --\n")
-    direct_inspect = model.inspect_attr("Category Embedding", ["hidden_representation"])
+    direct_inspect = model.inspect_attr(
+        "Category Embedding", ["hidden_representation", "head"]
+    )
     train_inspect = model.inspect_attr(
         "Category Embedding",
         ["hidden_representation"],
@@ -200,7 +247,6 @@ def test_inspect():
             trainer.derived_data, trainer.train_indices
         ),
     )
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
     assert np.allclose(
         direct_inspect["train"]["prediction"],
         train_inspect["USER_INPUT"]["prediction"],
@@ -223,6 +269,8 @@ def test_inspect():
         direct_inspect["train"]["hidden_representation"],
         direct_inspect["val"]["hidden_representation"],
     )
+    assert isinstance(direct_inspect["train"]["head"], nn.Module)
+    assert direct_inspect["train"]["head"].bias.device.type == "cpu"
 
 
 def test_trainer_label_missing():
@@ -238,8 +286,6 @@ def test_trainer_label_missing():
     )
     with pytest.raises(Exception):
         trainer.load_data()
-
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
 
 
 def test_trainer_multitarget():
@@ -343,10 +389,8 @@ def test_trainer_multitarget():
         l[cols].values.astype(float), l2[cols].values.astype(float)
     ), f"Reloaded local trainer does not get consistent results."
 
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
 
-
-def test_permutation_importance():
+def test_feature_importance():
     configfile = "sample"
     tabensemb.setting["debug_mode"] = True
     trainer = Trainer(device="cpu")
@@ -391,8 +435,13 @@ def test_permutation_importance():
     torchmodel_perm = trainer.cal_feature_importance(
         program="CatEmbed", model_name="Category Embedding", method="permutation"
     )
+    np.random.seed(0)
     torchmodel_shap = trainer.cal_feature_importance(
         program="CatEmbed", model_name="Category Embedding", method="shap"
+    )
+    np.random.seed(0)
+    torchmodel_shap_direct = trainer.cal_shap(
+        program="CatEmbed", model_name="Category Embedding"
     )
 
     with pytest.raises(Exception):
@@ -419,4 +468,199 @@ def test_permutation_importance():
     # Unused data does not have feature importance.
     assert np.all(np.abs(torchmodel_shap[0][len(trainer.cont_feature_names) :]) < 1e-8)
 
-    shutil.rmtree(os.path.join(tabensemb.setting["default_output_path"]))
+    assert np.allclose(torchmodel_shap[0], torchmodel_shap_direct)
+
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_copy():
+    trainer = pytest.test_trainer_trainer
+    copied_trainer = trainer.copy()
+    copied_leaderboard = copied_trainer.get_leaderboard()
+    cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
+    assert np.allclose(
+        pytest.leaderboard_init[cols].values.astype(float),
+        copied_leaderboard[cols].values.astype(float),
+    )
+
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_finetune():
+    trainer = pytest.test_trainer_trainer
+    models = trainer.modelbases
+    for model in models:
+        model.fit(
+            trainer.df,
+            trainer.cont_feature_names,
+            trainer.cat_feature_names,
+            trainer.label_name,
+            derived_data=trainer.derived_data,
+            warm_start=True,
+        )
+
+
+def test_plots():
+    matplotlib.rc("text", usetex=False)
+    matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+    trainer = pytest.test_trainer_trainer
+
+    with HiddenPltShow():
+        print(f"\n-- Correlation --\n")
+        trainer.plot_corr()
+        trainer.plot_corr(imputed=False)
+
+        print(f"\n-- Pair --\n")
+        trainer.plot_pairplot()
+
+        print(f"\n-- Truth pred --\n")
+        trainer.plot_truth_pred(program="CatEmbed", log_trans=True)
+        trainer.plot_truth_pred(program="CatEmbed", log_trans=False)
+
+        print(f"\n-- Feature box --\n")
+        trainer.plot_feature_box()
+
+        print(f"\n-- Partial Err --\n")
+        trainer.plot_partial_err(program="CatEmbed", model_name="Category Embedding")
+
+        print(f"\n-- Importance --\n")
+        trainer.plot_feature_importance(program="WideDeep", model_name="TabMlp")
+        trainer.plot_feature_importance(
+            program="CatEmbed", model_name="Category Embedding", method="shap"
+        )
+
+        print(f"\n-- PDP --\n")
+        trainer.plot_partial_dependence(
+            program="WideDeep",
+            model_name="TabMlp",
+            n_bootstrap=1,
+            grid_size=2,
+            log_trans=True,
+        )
+        trainer.plot_partial_dependence(
+            program="WideDeep",
+            model_name="TabMlp",
+            n_bootstrap=2,
+            grid_size=2,
+            log_trans=False,
+            refit=False,
+        )
+
+
+def test_exception_during_bayes_opt(capfd):
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(configfile)
+    trainer.load_data()
+    models = [PytorchTabular(trainer, model_subset=["TabNet"])]
+    trainer.add_modelbases(models)
+
+    def _train_just_raise(*args, **kwargs):
+        raise Exception("CUDA error: device-side assert triggered")
+
+    models[0]._train_single_model = _train_just_raise
+    trainer.args["bayes_opt"] = True
+    with pytest.raises(ValueError) as err:
+        trainer.train()
+    assert "Unfortunately" in err.value.args[0]
+
+    def _train_just_raise(*args, **kwargs):
+        raise RuntimeError("Normal error")
+
+    models[0]._train_single_model = _train_just_raise
+    with pytest.raises(RuntimeError):
+        trainer.train()
+    out, err = capfd.readouterr()
+    assert "Returning a large value instead" in out
+
+
+@pytest.mark.order(after="test_train_without_bayes")
+def test_exceptions():
+    trainer = pytest.test_trainer_trainer
+    with pytest.raises(Exception):
+        trainer.set_device("UNKNOWN_DEVICE")
+
+    with pytest.raises(Exception) as err:
+        trainer.add_modelbases(
+            [PytorchTabular(trainer, model_subset=["Category Embedding"])]
+        )
+    assert "Conflicted modelbase names" in err.value.args[0]
+
+
+def test_cmd_arguments(mocker):
+    mocker.patch(
+        "sys.argv",
+        [
+            "NOT_USED",  # The first arg is the positional name of the script
+            "--base",
+            "sample",
+            "--epoch",
+            "2",
+            "--bayes_opt",
+            "--data_imputer",
+            "GainImputer",
+            "--split_ratio",
+            "0.3",
+            "0.1",
+            "0.6",
+        ],
+    )
+    trainer = Trainer(device="cpu")
+    trainer.load_config()
+    assert trainer.args["epoch"] == 2
+    assert trainer.args["bayes_opt"]
+    assert trainer.args["data_imputer"] == "GainImputer"
+    assert all([x == y for x, y in zip(trainer.args["split_ratio"], [0.3, 0.1, 0.6])])
+
+
+def test_user_input_config():
+    trainer = Trainer(device="cpu")
+    cfg = UserConfig("sample")
+    with pytest.warns(UserWarning):
+        trainer.load_config(
+            cfg, manual_config={"epoch": 2}, project_root_subfolder="test"
+        )
+    assert trainer.args["epoch"] != 2
+    assert "test" in trainer.project_root
+
+    trainer.load_config("sample", manual_config={"epoch": 2})
+    assert trainer.args["epoch"] == 2
+
+    trainer.load_config(
+        "sample",
+        manual_config={
+            "SPACEs": {
+                "lr": {
+                    "type": "Real",
+                    "low": 1e-4,
+                    "high": 0.05,
+                    "prior": "log-uniform",
+                },
+                "hidden_dim": {
+                    "type": "Integer",
+                    "low": 16,
+                    "high": 64,
+                    "prior": "uniform",
+                    "dtype": int,
+                },
+                "batch_size": {
+                    "type": "Categorical",
+                    "categories": [64, 128, 256, 512, 1024, 2048],
+                },
+            }
+        },
+    )
+    _ = trainer.SPACE
+
+    trainer.load_config(
+        "sample",
+        manual_config={"SPACEs": {"lr": {"type": "UNKNOWN"}}},
+    )
+    with pytest.raises(Exception):
+        _ = trainer.SPACE
+
+
+def test_train_part_of_modelbases():
+    trainer = pytest.test_trainer_trainer
+    trainer.train(programs=["PytorchTabular"])
+    with pytest.warns(UserWarning):
+        trainer.train(programs=[])

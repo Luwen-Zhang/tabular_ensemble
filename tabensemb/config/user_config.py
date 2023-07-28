@@ -49,6 +49,8 @@ class UserConfig(dict):
                 raise Exception(
                     f"Both {json_path} and {py_path} exist. Specify the full name of the file."
                 )
+            elif not is_json and not is_py:
+                raise Exception(f"{file_path} does not exist.")
             else:
                 file_path = json_path if is_json else py_path
                 ty = UserConfig.file_type(file_path)
