@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import warnings
+import sys
 
 np.int = int  # ``np.int`` is a deprecated alias for the builtin ``int``.
 
@@ -40,3 +41,44 @@ def check_grad_in_loss():
     if setting["test_with_no_grad"]:
         return False
     return True
+
+
+class Stream:
+    def __init__(self, stream, path=None):
+        self._stdout = sys.stdout
+        self._stderr = sys.stderr
+        self.set_stream(stream)
+        self.set_path(path)
+
+    def write(self, message):
+        self.stream.write(message)
+        if self.path is not None:
+            with open(self.path, "ab") as log:
+                log.write(message.encode("utf-8"))
+
+    def set_stream(self, stream):
+        if stream == "stdout":
+            self.stream = self._stdout
+        elif stream == "stderr":
+            self.stream = self._stderr
+        else:
+            self.stream = stream
+
+    def set_path(self, path):
+        self.path = path
+
+    def close(self):
+        self.stream.close()
+
+    def __getattr__(self, attr):
+        return getattr(self.stream, attr)
+
+
+_original_stdout_stream = sys.stdout
+_original_stderr_stream = sys.stderr
+stdout_stream = Stream("stdout")
+stderr_stream = Stream("stderr")
+
+if not "pytest" in sys.modules:
+    sys.stdout = stdout_stream
+    sys.stderr = stderr_stream

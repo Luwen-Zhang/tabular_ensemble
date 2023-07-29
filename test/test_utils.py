@@ -100,14 +100,32 @@ def test_logging():
     os.makedirs(tabensemb.setting["default_output_path"], exist_ok=True)
     logger.enter(path)
     print(1)
-    log = getLogger()
-    log.log(1, "2")
     logger.exit()
-    print(3)
-
-    log.log(1, "4")
+    print(2)
     with open(path, "r") as file:
         lines = file.readlines()
+    assert len(lines) == 1
+    assert lines[0] == "1\n"
+
+
+def test_logging_after_stream_modification():
+    tabensemb.stdout_stream = tabensemb.Stream("stdout")
+    tabensemb.stderr_stream = tabensemb.Stream("stderr")
+    sys.stdout = tabensemb.stdout_stream
+    sys.stderr = tabensemb.stderr_stream
+    logger = Logging()
+    path = os.path.join(tabensemb.setting["default_output_path"], "log.txt")
+    if os.path.exists(tabensemb.setting["default_output_path"]):
+        shutil.rmtree(tabensemb.setting["default_output_path"])
+    os.makedirs(tabensemb.setting["default_output_path"], exist_ok=True)
+    logger.enter(path)
+    print(1)
+    logger.exit()
+    print(2)
+    with open(path, "r") as file:
+        lines = file.readlines()
+    sys.stdout = tabensemb.stdout_stream._stdout
+    sys.stderr = tabensemb.stderr_stream._stderr
     assert len(lines) == 1
     assert lines[0] == "1\n"
 

@@ -524,6 +524,8 @@ class Trainer:
         self,
         programs: List[str] = None,
         verbose: bool = True,
+        *args,
+        **kwargs,
     ):
         """
         Train all added modelbases.
@@ -534,6 +536,10 @@ class Trainer:
             A selected subset of modelbases.
         verbose
             Verbosity.
+        *args
+            Arguments passed to AbstractModel.train
+        **kwargs
+            Arguments passed to AbstractModel.train
         """
         if programs is None:
             modelbases_to_train = self.modelbases
@@ -546,7 +552,7 @@ class Trainer:
             )
 
         for modelbase in modelbases_to_train:
-            modelbase.train(verbose=verbose)
+            modelbase.train(*args, verbose=verbose, **kwargs)
 
     def cross_validation(
         self,
@@ -556,6 +562,7 @@ class Trainer:
         test_data_only: bool,
         split_type: str = "cv",
         load_from_previous: bool = False,
+        **kwargs,
     ) -> Dict[str, Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray]]]]:
         """
         Repeat loading data, training modelbases, and evaluating all models for multiple times.
@@ -574,6 +581,8 @@ class Trainer:
             The type of data splitting. "random" and "cv" are supported. Ignored when load_from_previous is True.
         load_from_previous
             Load the state of a previous run (mostly because of an unexpected interruption).
+        **kwargs
+            Arguments for ``AbstractModel.train``
 
         Notes
         -------
@@ -666,7 +675,7 @@ class Trainer:
                     else:
                         skip_program = False
                 modelbase = self.get_modelbase(program)
-                modelbase.train(dump_trainer=True, verbose=verbose)
+                modelbase.train(dump_trainer=True, verbose=verbose, **kwargs)
                 predictions = modelbase._predict_all(
                     verbose=verbose, test_data_only=test_data_only
                 )
@@ -732,6 +741,7 @@ class Trainer:
         verbose: bool = True,
         load_from_previous: bool = False,
         split_type: str = "cv",
+        **kwargs,
     ) -> pd.DataFrame:
         """
         Run all modelbases with/without cross validation for a leaderboard.
@@ -750,6 +760,8 @@ class Trainer:
             Load the state of a previous run (mostly because of an unexpected interruption).
         split_type
             The type of data splitting. "random" and "cv" are supported. Ignored when load_from_previous is True.
+        **kwargs
+            Arguments for ``AbstractModel.train``
 
         Returns
         -------
@@ -768,6 +780,7 @@ class Trainer:
                 test_data_only=test_data_only,
                 load_from_previous=load_from_previous,
                 split_type=split_type,
+                **kwargs,
             )
         else:
             programs_predictions = {}

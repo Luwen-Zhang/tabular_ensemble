@@ -152,7 +152,7 @@ class AbstractModel:
         self.trainer.load_state(trainer_state)
         self.trainer.set_status(training=False)
 
-    def train(self, *args, **kwargs):
+    def train(self, *args, stderr_to_stdout=False, **kwargs):
         """
         Training the model using data in the trainer directly.
         The method can be rewritten to implement other training strategies.
@@ -161,6 +161,8 @@ class AbstractModel:
         ----------
         *args:
             Arguments of :func:``_train`` for models.
+        stderr_to_stdout:
+            Redirect stderr to stdout. Useful for notebooks.
         **kwargs:
             Arguments of :func:``_train`` for models.
         """
@@ -168,7 +170,8 @@ class AbstractModel:
         verbose = "verbose" not in kwargs.keys() or kwargs["verbose"]
         if verbose:
             print(f"\n-------------Run {self.program}-------------\n")
-        self._train(*args, **kwargs)
+        with PlainText(disable=not stderr_to_stdout):
+            self._train(*args, **kwargs)
         if self.model is None or len(self.model) == 0:
             warnings.warn(f"No model has been trained for {self.__class__.__name__}.")
         if verbose:

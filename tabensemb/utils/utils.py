@@ -488,6 +488,14 @@ def set_truth_pred(ax, log_trans=True, upper_lim=9):
     # ]
 
 
+def check_stream():
+    if not isinstance(sys.stdout, tabensemb.Stream) or not isinstance(
+        sys.stderr, tabensemb.Stream
+    ):
+        return False
+    return True
+
+
 class HiddenPrints:
     def __init__(self, disable_logging=True, disable_std=True):
         self.disable_logging = disable_logging
@@ -495,18 +503,45 @@ class HiddenPrints:
 
     def __enter__(self):
         if self.disable_std:
-            self._original_stdout = sys.stdout
-            sys.stdout = open(os.devnull, "w")
+            if check_stream():
+                tabensemb.stdout_stream.set_stream(open(os.devnull, "w"))
+            else:
+                self._original_stdout = sys.stdout
+                sys.stdout = open(os.devnull, "w")
         if self.disable_logging:
             self.logging_state = logging.root.manager.disable
             logging.disable(logging.CRITICAL)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.disable_std:
-            sys.stdout.close()
-            sys.stdout = self._original_stdout
+            if check_stream():
+                tabensemb.stdout_stream.stream.close()
+                tabensemb.stdout_stream.set_stream("stdout")
+            else:
+                sys.stdout.close()
+                sys.stdout = self._original_stdout
         if self.disable_logging:
             logging.disable(self.logging_state)
+
+
+class PlainText:
+    def __init__(self, disable=False):
+        self.disable = disable
+
+    def __enter__(self):
+        if not self.disable:
+            if check_stream():
+                tabensemb.stderr_stream.set_stream("stdout")
+            else:
+                self._original_stderr = sys.stderr
+                sys.stderr = sys.stdout
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.disable:
+            if check_stream():
+                tabensemb.stderr_stream.set_stream("stderr")
+            else:
+                sys.stderr = self._original_stderr
 
 
 class global_setting:
@@ -640,16 +675,24 @@ class Logger:
 
 class Logging:
     def enter(self, path):
-        self.out_logger = Logger(path, sys.stdout)
-        self.err_logger = Logger(path, sys.stderr)
-        self._stdout = sys.stdout
-        self._stderr = sys.stderr
-        sys.stdout = self.out_logger
-        sys.stderr = self.err_logger
+        if check_stream():
+            tabensemb.stdout_stream.set_path(path)
+            tabensemb.stderr_stream.set_path(path)
+        else:
+            self.out_logger = Logger(path, sys.stdout)
+            self.err_logger = Logger(path, sys.stderr)
+            self._stdout = sys.stdout
+            self._stderr = sys.stderr
+            sys.stdout = self.out_logger
+            sys.stderr = self.err_logger
 
     def exit(self):
-        sys.stdout = self._stdout
-        sys.stderr = self._stderr
+        if check_stream():
+            tabensemb.stdout_stream.set_path(None)
+            tabensemb.stderr_stream.set_path(None)
+        else:
+            sys.stdout = self._stdout
+            sys.stderr = self._stderr
 
 
 def add_postfix(path):
