@@ -537,22 +537,22 @@ class HiddenPltShow:
         plt.show = self.original
 
 
+def reload_module(name):
+    if name not in sys.modules:
+        mod = import_module(name)
+    else:
+        mod = reload(sys.modules.get(name))
+    return mod
+
+
 class TqdmController:
     def __init__(self):
         self.original_init = {}
         self.disabled = False
 
-    @staticmethod
-    def reload_tqdm(name):
-        if name not in sys.modules:
-            tqdm = import_module(name)
-        else:
-            tqdm = reload(sys.modules.get(name))
-        return tqdm
-
     def disable_tqdm(self):
         def disable_one(name):
-            tq = self.reload_tqdm(name).tqdm
+            tq = reload_module(name).tqdm
             self.original_init[name] = tq.__init__
             tq.__init__ = partialmethod(tq.__init__, disable=True)
 
@@ -563,7 +563,7 @@ class TqdmController:
 
     def enable_tqdm(self):
         def enable_one(name):
-            tq = self.reload_tqdm(name).tqdm
+            tq = reload_module(name).tqdm
             tq.__init__ = self.original_init[name]
 
         if self.disabled:
