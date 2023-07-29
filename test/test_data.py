@@ -450,7 +450,7 @@ def test_data_imputer():
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 
     print("\n-- MiceImputer --\n")
-    imputer = get_data_imputer("MiceImputer")()
+    imputer = get_data_imputer("MiceImputer")(max_iter=10)
     imputed = imputer.fit_transform(original.copy(), datamodule)
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 
@@ -460,7 +460,7 @@ def test_data_imputer():
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 
     print("\n-- GainImputer --\n")
-    imputer = get_data_imputer("GainImputer")()
+    imputer = get_data_imputer("GainImputer")(n_epochs=10)
     imputed = imputer.fit_transform(original.copy(), datamodule)
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 

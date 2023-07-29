@@ -90,10 +90,7 @@ def set_torch(seed=0):
     if torch.cuda.is_available():
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     os.environ["PYTHONHASHSEED"] = str(seed)
-    if "torch.utils.data" not in sys.modules:
-        dl = import_module("torch.utils.data").DataLoader
-    else:
-        dl = reload(sys.modules.get("torch.utils.data")).DataLoader
+    dl = reload_module("torch.utils.data").DataLoader
 
     if not dl.__init__.__name__ == "_method":
         # Actually, setting generator improves reproducibility, but torch._C.Generator does not support pickling.
@@ -505,6 +502,8 @@ class HiddenPrints:
         if self.disable_std:
             if check_stream():
                 tabensemb.stdout_stream.set_stream(open(os.devnull, "w"))
+                self._path = tabensemb.stdout_stream.path
+                tabensemb.stdout_stream.set_path(None)
             else:
                 self._original_stdout = sys.stdout
                 sys.stdout = open(os.devnull, "w")
@@ -517,6 +516,7 @@ class HiddenPrints:
             if check_stream():
                 tabensemb.stdout_stream.stream.close()
                 tabensemb.stdout_stream.set_stream("stdout")
+                tabensemb.stdout_stream.set_path(self._path)
             else:
                 sys.stdout.close()
                 sys.stdout = self._original_stdout
