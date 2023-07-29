@@ -15,23 +15,18 @@ class RelativeDeriver(AbstractDeriver):
         The feature that acts as the denominator.
     """
 
-    def _required_cols(self, **kwargs):
+    def _required_cols(self):
         return ["absolute_col", "relative2_col"]
 
-    def _required_params(self, **kwargs):
+    def _required_kwargs(self):
         return []
 
     def _defaults(self):
         return dict(stacked=True, intermediate=False)
 
-    def _derive(
-        self,
-        df,
-        datamodule,
-        **kwargs,
-    ):
-        absolute_col = kwargs["absolute_col"]
-        relative2_col = kwargs["relative2_col"]
+    def _derive(self, df, datamodule):
+        absolute_col = self.kwargs["absolute_col"]
+        relative2_col = self.kwargs["relative2_col"]
 
         relative = df[absolute_col] / df[relative2_col]
         relative = relative.values.reshape(-1, 1)
@@ -44,28 +39,23 @@ class SampleWeightDeriver(AbstractDeriver):
     Derive weight for each sample in the dataset.
     """
 
-    def __init__(self):
-        super(SampleWeightDeriver, self).__init__()
+    def __init__(self, **kwargs):
+        super(SampleWeightDeriver, self).__init__(**kwargs)
         self.percentile_dict = {}
         self.unique_vals = {}
         self.feature_weight = {}
         self.denominator = None
 
-    def _required_cols(self, **kwargs):
+    def _required_cols(self):
         return []
 
-    def _required_params(self, **kwargs):
+    def _required_kwargs(self):
         return []
 
     def _defaults(self):
         return dict(stacked=False, intermediate=False)
 
-    def _derive(
-        self,
-        df,
-        datamodule,
-        **kwargs,
-    ):
+    def _derive(self, df, datamodule):
         if datamodule.training:
             self.percentile_dict = {}
             self.unique_vals = {}
@@ -78,7 +68,7 @@ class SampleWeightDeriver(AbstractDeriver):
             index=df.index, columns=["weight"], data=np.ones((len(df), 1))
         )
         for feature in cont_feature_names:
-            if feature == kwargs["derived_name"]:
+            if feature == self.kwargs["derived_name"]:
                 continue
             # We can only calculate distributions based on known data, i.e. the training set.
             if datamodule.training:
@@ -157,22 +147,17 @@ class UnscaledDataDeriver(AbstractDeriver):
     Record unscaled data in DataModule.derived_data so that TorchModels can access it.
     """
 
-    def _required_cols(self, **kwargs):
+    def _required_cols(self):
         return []
 
-    def _required_params(self, **kwargs):
+    def _required_kwargs(self):
         return []
 
     def _defaults(self):
         return dict(stacked=False, intermediate=False)
 
-    def _derive(
-        self,
-        df,
-        datamodule,
-        **kwargs,
-    ):
-        if kwargs["stacked"]:
+    def _derive(self, df, datamodule):
+        if self.kwargs["stacked"]:
             raise Exception(
                 f"{self.__class__.__name__} can not derive stacked features (behavior when "
                 f"``datamodule._force_features=True`` is not defined)."

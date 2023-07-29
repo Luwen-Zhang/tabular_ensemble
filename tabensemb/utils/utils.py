@@ -90,10 +90,7 @@ def set_torch(seed=0):
     if torch.cuda.is_available():
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     os.environ["PYTHONHASHSEED"] = str(seed)
-    if "torch.utils.data" not in sys.modules:
-        dl = import_module("torch.utils.data").DataLoader
-    else:
-        dl = reload(sys.modules.get("torch.utils.data")).DataLoader
+    dl = reload_module("torch.utils.data").DataLoader
 
     if not dl.__init__.__name__ == "_method":
         # Actually, setting generator improves reproducibility, but torch._C.Generator does not support pickling.
@@ -488,6 +485,14 @@ def set_truth_pred(ax, log_trans=True, upper_lim=9):
     # ]
 
 
+def check_stream():
+    if not isinstance(sys.stdout, tabensemb.Stream) or not isinstance(
+        sys.stderr, tabensemb.Stream
+    ):
+        return False
+    return True
+
+
 class HiddenPrints:
     def __init__(self, disable_logging=True, disable_std=True):
         self.disable_logging = disable_logging
@@ -495,18 +500,48 @@ class HiddenPrints:
 
     def __enter__(self):
         if self.disable_std:
-            self._original_stdout = sys.stdout
-            sys.stdout = open(os.devnull, "w")
+            if check_stream():
+                tabensemb.stdout_stream.set_stream(open(os.devnull, "w"))
+                self._path = tabensemb.stdout_stream.path
+                tabensemb.stdout_stream.set_path(None)
+            else:
+                self._original_stdout = sys.stdout
+                sys.stdout = open(os.devnull, "w")
         if self.disable_logging:
             self.logging_state = logging.root.manager.disable
             logging.disable(logging.CRITICAL)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.disable_std:
-            sys.stdout.close()
-            sys.stdout = self._original_stdout
+            if check_stream():
+                tabensemb.stdout_stream.stream.close()
+                tabensemb.stdout_stream.set_stream("stdout")
+                tabensemb.stdout_stream.set_path(self._path)
+            else:
+                sys.stdout.close()
+                sys.stdout = self._original_stdout
         if self.disable_logging:
             logging.disable(self.logging_state)
+
+
+class PlainText:
+    def __init__(self, disable=False):
+        self.disable = disable
+
+    def __enter__(self):
+        if not self.disable:
+            if check_stream():
+                tabensemb.stderr_stream.set_stream("stdout")
+            else:
+                self._original_stderr = sys.stderr
+                sys.stderr = sys.stdout
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.disable:
+            if check_stream():
+                tabensemb.stderr_stream.set_stream("stderr")
+            else:
+                sys.stderr = self._original_stderr
 
 
 class global_setting:
@@ -537,22 +572,22 @@ class HiddenPltShow:
         plt.show = self.original
 
 
+def reload_module(name):
+    if name not in sys.modules:
+        mod = import_module(name)
+    else:
+        mod = reload(sys.modules.get(name))
+    return mod
+
+
 class TqdmController:
     def __init__(self):
         self.original_init = {}
         self.disabled = False
 
-    @staticmethod
-    def reload_tqdm(name):
-        if name not in sys.modules:
-            tqdm = import_module(name)
-        else:
-            tqdm = reload(sys.modules.get(name))
-        return tqdm
-
     def disable_tqdm(self):
         def disable_one(name):
-            tq = self.reload_tqdm(name).tqdm
+            tq = reload_module(name).tqdm
             self.original_init[name] = tq.__init__
             tq.__init__ = partialmethod(tq.__init__, disable=True)
 
@@ -563,7 +598,7 @@ class TqdmController:
 
     def enable_tqdm(self):
         def enable_one(name):
-            tq = self.reload_tqdm(name).tqdm
+            tq = reload_module(name).tqdm
             tq.__init__ = self.original_init[name]
 
         if self.disabled:
@@ -640,16 +675,24 @@ class Logger:
 
 class Logging:
     def enter(self, path):
-        self.out_logger = Logger(path, sys.stdout)
-        self.err_logger = Logger(path, sys.stderr)
-        self._stdout = sys.stdout
-        self._stderr = sys.stderr
-        sys.stdout = self.out_logger
-        sys.stderr = self.err_logger
+        if check_stream():
+            tabensemb.stdout_stream.set_path(path)
+            tabensemb.stderr_stream.set_path(path)
+        else:
+            self.out_logger = Logger(path, sys.stdout)
+            self.err_logger = Logger(path, sys.stderr)
+            self._stdout = sys.stdout
+            self._stderr = sys.stderr
+            sys.stdout = self.out_logger
+            sys.stderr = self.err_logger
 
     def exit(self):
-        sys.stdout = self._stdout
-        sys.stderr = self._stderr
+        if check_stream():
+            tabensemb.stdout_stream.set_path(None)
+            tabensemb.stderr_stream.set_path(None)
+        else:
+            sys.stdout = self._stdout
+            sys.stderr = self._stderr
 
 
 def add_postfix(path):

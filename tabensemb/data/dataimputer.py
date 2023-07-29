@@ -14,7 +14,15 @@ from .datamodule import DataModule
 class MiceLightgbmImputer(AbstractImputer):
     """
     An implementation of MICE with lightgbm.
+
+    Parameters
+    ----------
+    **kwargs
+        Arguments for ``miceforest.ImputationKernel.mice``
     """
+
+    def _defaults(self):
+        return dict(iterations=2, n_estimators=1)
 
     def _fit_transform(
         self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
@@ -28,7 +36,7 @@ class MiceLightgbmImputer(AbstractImputer):
         imputer = mf.ImputationKernel(
             input_data.loc[:, impute_features], random_state=0, train_nonmissing=no_nan
         )
-        imputer.mice(iterations=2, n_estimators=1)
+        imputer.mice(**self.kwargs)
         input_data.loc[:, impute_features] = imputer.complete_data().values.astype(
             np.float32
         )
@@ -50,76 +58,112 @@ class MiceLightgbmImputer(AbstractImputer):
 class MiceImputer(AbstractSklearnImputer):
     """
     An implementation of MICE by sklearn.
+
+    Parameters
+    ----------
+    **kwargs
+        Arguments for ``sklearn.impute.IterativeImputer``
     """
+
+    def _defaults(self):
+        return {
+            "max_iter": 1000,
+            "random_state": 0,
+            "tol": 1e-3,
+            "sample_posterior": False,
+        }
 
     def _new_imputer(self):
         # https://github.com/vanderschaarlab/hyperimpute/blob/main/src/hyperimpute/plugins/imputers/plugin_sklearn_ice.py
         warnings.simplefilter(
             action="ignore", category=sklearn.exceptions.ConvergenceWarning
         )
-        return IterativeImputer(
-            random_state=0,
-            max_iter=1000,
-            tol=1e-3,
-            sample_posterior=False,
-        )
+        return IterativeImputer(**self.kwargs)
 
 
 class MissForestImputer(AbstractSklearnImputer):
     """
     MICE-Random forest implemented using sklearn.
+
+    Parameters
+    ----------
+    **kwargs
+        Arguments for ``sklearn.ensemble.RandomForestRegressor``
     """
 
-    def _new_imputer(self):
-        warnings.simplefilter(
-            action="ignore", category=sklearn.exceptions.ConvergenceWarning
-        )
-        estimator_rf = RandomForestRegressor(
+    def _defaults(self):
+        return dict(
             n_estimators=1,
             max_depth=3,
             random_state=0,
             bootstrap=True,
             n_jobs=-1,
         )
+
+    def _new_imputer(self):
+        warnings.simplefilter(
+            action="ignore", category=sklearn.exceptions.ConvergenceWarning
+        )
+        estimator_rf = RandomForestRegressor(**self.kwargs)
         return IterativeImputer(estimator=estimator_rf, random_state=0, max_iter=10)
 
 
 class GainImputer(AbstractSklearnImputer):
     """
     Imputation using GAIN.
+
+    Parameters
+    ----------
+    **kwargs
+        Arguments for ``tabensemb.utils.imputers.gain.GainImputation``
     """
 
     def _new_imputer(self):
         from tabensemb.utils.imputers.gain import GainImputation
 
-        return GainImputation()
+        return GainImputation(**self.kwargs)
 
 
 class MeanImputer(AbstractSklearnImputer):
     """
     Imputation with average values implemented using sklearn's SimpleImputer.
+
+    Parameters
+    ----------
+    **kwargs
+        Arguments for ``sklearn.impute.SimpleImputer`` (except for ``strategy``)
     """
 
     def _new_imputer(self):
-        return SimpleImputer(strategy="mean")
+        return SimpleImputer(strategy="mean", **self.kwargs)
 
 
 class MedianImputer(AbstractSklearnImputer):
     """
     Imputation with median values implemented using sklearn's SimpleImputer.
+
+    Parameters
+    ----------
+    **kwargs
+        Arguments for ``sklearn.impute.SimpleImputer`` (except for ``strategy``)
     """
 
     def _new_imputer(self):
-        return SimpleImputer(strategy="median")
+        return SimpleImputer(strategy="median", **self.kwargs)
 
 
 class ModeImputer(AbstractSklearnImputer):
     """
     Imputation with mode values implemented using sklearn's SimpleImputer.
+
+    Parameters
+    ----------
+    **kwargs
+        Arguments for ``sklearn.impute.SimpleImputer`` (except for ``strategy``)
     """
 
     def _new_imputer(self):
-        return SimpleImputer(strategy="most_frequent")
+        return SimpleImputer(strategy="most_frequent", **self.kwargs)
 
 
 imputer_mapping = {}

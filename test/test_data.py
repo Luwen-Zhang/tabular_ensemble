@@ -450,7 +450,7 @@ def test_data_imputer():
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 
     print("\n-- MiceImputer --\n")
-    imputer = get_data_imputer("MiceImputer")()
+    imputer = get_data_imputer("MiceImputer")(max_iter=10)
     imputed = imputer.fit_transform(original.copy(), datamodule)
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 
@@ -460,7 +460,7 @@ def test_data_imputer():
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 
     print("\n-- GainImputer --\n")
-    imputer = get_data_imputer("GainImputer")()
+    imputer = get_data_imputer("GainImputer")(n_epochs=10)
     imputed = imputer.fit_transform(original.copy(), datamodule)
     assert not np.any(pd.isna(imputed[datamodule.all_feature_names]).values)
 
@@ -486,27 +486,34 @@ def test_abstract_deriver():
     datamodule = pytest.min_datamodule
 
     class NotImplementedDeriver(AbstractDeriver):
-        ...
+        def _required_cols(self):
+            return []
 
-    deriver = NotImplementedDeriver()
-    legal_deriver = RelativeDeriver()
-
+    with pytest.raises(Exception):
+        # "stacked", "intermediate", and "derived_name" is not specified.
+        _ = NotImplementedDeriver()
+    deriver = NotImplementedDeriver(
+        **{"stacked": True, "intermediate": False, "derived_name": "TEST_DERIVED"}
+    )
     with pytest.raises(NotImplementedError):
         deriver._derive(datamodule.df, datamodule)
     with pytest.raises(NotImplementedError):
-        deriver._required_cols()
-    with pytest.raises(NotImplementedError):
-        deriver._required_params()
+        super(NotImplementedDeriver, deriver)._required_cols()
+
     with pytest.raises(Exception):
-        legal_deriver._check_arg(name="absolute_col", **{"relative2_col": "TEST"})
-    legal_deriver._check_arg(name="relative2_col", **{"relative2_col": "TEST"})
-    with pytest.raises(Exception):
-        legal_deriver._check_exist(
-            df=datamodule.df, name="relative2_col", **{"relative2_col": "TEST"}
-        )
-    legal_deriver._check_exist(
-        df=datamodule.df, name="relative2_col", **{"relative2_col": "cont_0"}
+        _ = RelativeDeriver(**{"relative2_col": "TEST", "derived_name": "TEST_DERIVED"})
+    legal_deriver = RelativeDeriver(
+        **{
+            "relative2_col": "TEST",
+            "absolute_col": "TEST",
+            "derived_name": "TEST_DERIVED",
+        }
     )
+    legal_deriver._check_arg(name="relative2_col")
+    with pytest.raises(Exception):
+        legal_deriver._check_exist(df=datamodule.df, name="relative2_col")
+    legal_deriver.kwargs["relative2_col"] = "cont_0"
+    legal_deriver._check_exist(df=datamodule.df, name="relative2_col")
     with pytest.raises(Exception):
         legal_deriver._check_values(np.zeros((len(datamodule.df),)))
     legal_deriver._check_values(np.zeros((len(datamodule.df), 1)))

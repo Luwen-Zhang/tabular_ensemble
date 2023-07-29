@@ -6,21 +6,55 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 
 
-class AbstractDeriver:
+class AbstractRequireKwargs:
+    def __init__(self, **kwargs):
+        self.kwargs = self._defaults()
+        self.kwargs.update(kwargs)
+        for key in self._cls_required_kwargs():
+            self._check_arg(key)
+        for key in self._required_kwargs():
+            self._check_arg(key)
+
+    def _defaults(self):
+        return {}
+
+    def _cls_required_kwargs(self):
+        return []
+
+    def _required_kwargs(self):
+        return []
+
+    def _check_arg(self, name: str):
+        """
+        Check whether the required parameter or column name is specified in the configuration file or :func:`_defaults`.
+
+        Parameters
+        ----------
+        name:
+            The name of argument or a column name in the input arguments.
+        """
+        if name not in self.kwargs.keys():
+            raise Exception(f"{self.__class__.__name__}: {name} should be specified.")
+
+
+class AbstractDeriver(AbstractRequireKwargs):
     """
     The base class for all data-derivers. Data-derivers will derive new features based on the input dataframe and return
     the derived values.
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, **kwargs):
+        super(AbstractDeriver, self).__init__(**kwargs)
+        for arg_name in self._required_cols():
+            self._check_arg(arg_name)
+
+    def _cls_required_kwargs(self):
+        return ["stacked", "intermediate", "derived_name"]
 
     def derive(
         self,
         df: pd.DataFrame,
         datamodule: DataModule,
-        derived_name: str,
-        **kwargs,
     ) -> Tuple[np.ndarray, str, List]:
         """
         The method automatically checks input column names and the dataframe, calls the :func:``_derive`` method, and check output
@@ -32,10 +66,6 @@ class AbstractDeriver:
             The tabular dataset.
         datamodule:
             A DataModule instance. Data-derivers might use information in the DataModule, but would not change its contents.
-        derived_name:
-            The name of the derived feature.
-        **kwargs:
-            Other arguments for :py:meth: ``tabensemb.data.AbstractDeriver._derive``. These arguments are specified in configuration files.
 
         Returns
         -------
@@ -46,45 +76,21 @@ class AbstractDeriver:
         names:
             Names of each column in the derived data.
         """
-        kwargs = self.make_defaults(**kwargs)
-        for arg_name in self._required_cols(**kwargs):
-            self._check_arg(arg_name, **kwargs)
-            self._check_exist(df, arg_name, **kwargs)
-        for arg_name in self._required_params(**kwargs) + ["stacked", "intermediate"]:
-            self._check_arg(arg_name, **kwargs)
-        values = self._derive(df, datamodule, derived_name=derived_name, **kwargs)
+        for arg_name in self._required_cols():
+            self._check_exist(df, arg_name)
+        values = self._derive(df, datamodule)
         self._check_values(values)
         names = (
-            self._generate_col_names(derived_name, values.shape[-1], **kwargs)
-            if "col_names" not in kwargs
-            else kwargs["col_names"]
+            self._generate_col_names(values.shape[-1])
+            if "col_names" not in self.kwargs
+            else self.kwargs["col_names"]
         )
-        return values, derived_name, names
-
-    def make_defaults(self, **kwargs) -> Dict:
-        """
-        Complete absent arguments in ``kwargs`` using default values specified in :func:``_defaults``.
-
-        Parameters
-        ----------
-        kwargs:
-            Arguments pass to :func:``derive``.
-
-        Returns
-        -------
-        **kwargs:
-            Arguments that are completed by default values.
-        """
-        for key, value in self._defaults().items():
-            if key not in kwargs.keys():
-                kwargs[key] = value
-        return kwargs
+        return values, self.kwargs["derived_name"], names
 
     def _derive(
         self,
         df: pd.DataFrame,
         datamodule: DataModule,
-        **kwargs,
     ) -> np.ndarray:
         """
         The main function for a data-deriver.
@@ -95,8 +101,6 @@ class AbstractDeriver:
             The tabular dataset.
         datamodule:
             A DataModule instance. Data-derivers might use information in the DataModule, but would not change its contents.
-        **kwargs:
-            Arguments specified in configuration files and :func:``_defaults``.
 
         Returns
         -------
@@ -105,25 +109,9 @@ class AbstractDeriver:
         """
         raise NotImplementedError
 
-    def _defaults(self) -> Dict:
-        """
-        Default values of all arguments required by the data-deriver.
-
-        Returns
-        -------
-        dict:
-            A dict of default values of all arguments.
-        """
-        return {}
-
-    def _derived_names(self, **kwargs) -> List[str]:
+    def _derived_names(self) -> List[str]:
         """
         Default names for each column of the derived data.
-
-        Parameters
-        ----------
-        **kwargs:
-            Arguments specified in configuration files and :func:``_defaults``.
 
         Returns
         -------
@@ -132,9 +120,7 @@ class AbstractDeriver:
         """
         raise NotImplementedError
 
-    def _generate_col_names(
-        self, derived_name: str, length: int, **kwargs
-    ) -> List[str]:
+    def _generate_col_names(self, length: int) -> List[str]:
         """
         Use ``derived_name`` to generate column names for each column of the derived data.
 
@@ -144,8 +130,6 @@ class AbstractDeriver:
             The name of the derived feature.
         length:
             The number of columns of the derived data.
-        **kwargs:
-            Arguments specified in configuration files and :func:``_defaults``.
 
         Returns
         -------
@@ -153,8 +137,9 @@ class AbstractDeriver:
             Automatically generated column names.
         """
         try:
-            names = self._derived_names(**kwargs)
+            names = self._derived_names()
         except:
+            derived_name = self.kwargs["derived_name"]
             names = (
                 [f"{derived_name}-{idx}" for idx in range(length)]
                 if length > 1
@@ -162,15 +147,10 @@ class AbstractDeriver:
             )
         return names
 
-    def _required_cols(self, **kwargs) -> List[str]:
+    def _required_cols(self) -> List[str]:
         """
         Required column names in the tabular dataset by the data-deriver. Whether these names exist in the tabular
         dataset would be checked in :func:``derive``.
-
-        Parameters
-        ----------
-        **kwargs:
-            Arguments specified in configuration files and :func:``_defaults``.
 
         Returns
         -------
@@ -179,40 +159,7 @@ class AbstractDeriver:
         """
         raise NotImplementedError
 
-    def _required_params(self, **kwargs) -> List[str]:
-        """
-        Required parameter names by the data-deriver. Whether these names exist in :func:``_defaults`` or the
-        configuration file would be checked in :func:``derive``.
-
-        Parameters
-        ----------
-        **kwargs:
-            Arguments specified in configuration files and :func:`_defaults`.
-
-        Returns
-        -------
-        names:
-            Required parameter names by the data-deriver.
-        """
-        raise NotImplementedError
-
-    def _check_arg(self, name: str, **kwargs):
-        """
-        Check whether the required parameter or column name is specified in the configuration file or :func:`_defaults`.
-
-        Parameters
-        ----------
-        name:
-            The name of argument or a column name in the input arguments.
-        **kwargs:
-            Arguments specified in configuration files and :func:`_defaults`.
-        """
-        if name not in kwargs.keys():
-            raise Exception(
-                f"Derivation: {name} should be specified for deriver {self.__class__.__name__}"
-            )
-
-    def _check_exist(self, df: pd.DataFrame, name: str, **kwargs):
+    def _check_exist(self, df: pd.DataFrame, name: str):
         """
         Check whether the required column name exists in the tabular dataset.
 
@@ -222,10 +169,8 @@ class AbstractDeriver:
             The tabular dataset.
         name:
             The name of argument or a column name in the input arguments.
-        **kwargs:
-            Arguments specified in configuration files and :func:`_defaults`.
         """
-        if kwargs[name] not in df.columns:
+        if self.kwargs[name] not in df.columns:
             raise Exception(
                 f"Derivation: {name} is not a valid column in df for deriver {self.__class__.__name__}."
             )
@@ -246,17 +191,18 @@ class AbstractDeriver:
             )
 
 
-class AbstractImputer:
+class AbstractImputer(AbstractRequireKwargs):
     """
     The base class for all data-imputers. Data-imputers make imputations on the input tabular dataset.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        super(AbstractImputer, self).__init__(**kwargs)
         self.record_cont_features = None
         self.record_imputed_features = None
 
     def fit_transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
         Record feature names in the datamodule, fit the imputer, and transform the input dataframe. This should perform
@@ -269,8 +215,7 @@ class AbstractImputer:
             A tabular dataset.
         datamodule:
             A DataModule instance that contains necessary information required by imputers.
-        **kwargs:
-            Arguments specified in the configuration file.
+
         Returns
         -------
         df:
@@ -282,10 +227,10 @@ class AbstractImputer:
         data.loc[:, self.record_cat_features] = data[self.record_cat_features].fillna(
             "UNK"
         )
-        return self._fit_transform(data, datamodule, **kwargs)
+        return self._fit_transform(data, datamodule)
 
     def transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
         Restore feature names in datamodule using recorded features, and transform the input tabular data using the fitted
@@ -297,8 +242,6 @@ class AbstractImputer:
             A tabular dataset.
         datamodule:
             A DataModule instance that contains necessary information required by imputers.
-        **kwargs:
-            Arguments specified in the configuration file.
 
         Returns
         -------
@@ -312,10 +255,10 @@ class AbstractImputer:
         data.loc[:, datamodule.cat_feature_names] = data[
             datamodule.cat_feature_names
         ].fillna("UNK")
-        return self._transform(data, datamodule, **kwargs)
+        return self._transform(data, datamodule)
 
     def _fit_transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
         Fit the imputer and transform the input dataframe. This should perform on the training dataset.
@@ -326,8 +269,7 @@ class AbstractImputer:
             A tabular dataset.
         datamodule:
             A DataModule instance that contains necessary information required by imputers.
-        **kwargs:
-            Arguments specified in the configuration file.
+
         Returns
         -------
         df:
@@ -336,7 +278,7 @@ class AbstractImputer:
         raise NotImplementedError
 
     def _transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
         Transform the input tabular data using the fitted imputer. This should perform on the validation and testing
@@ -348,8 +290,6 @@ class AbstractImputer:
             A tabular dataset.
         datamodule:
             A DataModule instance that contains necessary information required by imputers.
-        **kwargs:
-            Arguments specified in the configuration file.
 
         Returns
         -------
@@ -391,11 +331,8 @@ class AbstractSklearnImputer(AbstractImputer):
     A base class for sklearn-style imputers.
     """
 
-    def __init__(self):
-        super(AbstractSklearnImputer, self).__init__()
-
     def _fit_transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         impute_features = self._get_impute_features(
             datamodule.cont_feature_names, input_data
@@ -416,7 +353,7 @@ class AbstractSklearnImputer(AbstractImputer):
         return input_data
 
     def _transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         res = self.transformer.transform(
             input_data.loc[:, self.record_imputed_features]
@@ -438,7 +375,7 @@ class AbstractSklearnImputer(AbstractImputer):
         raise NotImplementedError
 
 
-class AbstractProcessor:
+class AbstractProcessor(AbstractRequireKwargs):
     """
     The base class for data-processors that change the number of data.
 
@@ -449,12 +386,13 @@ class AbstractProcessor:
     restoring them in the wrapper methods ``fit_transform`` and ``transform``.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        super(AbstractProcessor, self).__init__(**kwargs)
         self.record_cont_features = None
         self.record_cat_features = None
 
     def fit_transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
         Record feature names in the datamodule, fit the processor and transform the input data. This should perform on the
@@ -466,21 +404,20 @@ class AbstractProcessor:
             A tabular dataset.
         datamodule:
             A datamodule instance that contains necessary information required by processors.
-        **kwargs:
-            Arguments specified in the configuration file.
+
         Returns
         -------
         df:
             A transformed tabular dataset.
         """
         data = input_data.copy()
-        res = self._fit_transform(data, datamodule, **kwargs)
+        res = self._fit_transform(data, datamodule)
         self.record_cont_features = cp(datamodule.cont_feature_names)
         self.record_cat_features = cp(datamodule.cat_feature_names)
         return res
 
     def transform(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
         Restore feature names in datamodule using recorded features and transform the input data. This should perform on
@@ -492,8 +429,6 @@ class AbstractProcessor:
             A tabular dataset.
         datamodule:
             A datamodule instance that contains necessary information required by processors.
-        **kwargs:
-            Arguments specified in the configuration file.
 
         Returns
         -------
@@ -504,30 +439,25 @@ class AbstractProcessor:
             datamodule.cont_feature_names = cp(self.record_cont_features)
             datamodule.cat_feature_names = cp(self.record_cat_features)
         data = input_data.copy()
-        return self._transform(data, datamodule, **kwargs)
+        return self._transform(data, datamodule)
 
     def _fit_transform(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         raise NotImplementedError
 
-    def _transform(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
-    ) -> pd.DataFrame:
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule) -> pd.DataFrame:
         raise NotImplementedError
 
 
 class AbstractAugmenter(AbstractProcessor):
-    def __init__(self):
-        super(AbstractAugmenter, self).__init__()
-
     def _fit_transform(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         already_augmented = max([np.max(data.index) - len(datamodule.df) + 1, 0])
         ###############################
         # Here is the augmentation part
-        augmented = self._get_augmented(data, datamodule, **kwargs)
+        augmented = self._get_augmented(data, datamodule)
         ###############################
         augmented.reset_index(drop=True, inplace=True)
         augmented.index = (
@@ -536,14 +466,12 @@ class AbstractAugmenter(AbstractProcessor):
         data = pd.concat([data, augmented], axis=0)
         return data
 
-    def _transform(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
-    ) -> pd.DataFrame:
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule) -> pd.DataFrame:
         # Do not do anything to the testing data.
         return data
 
     def _get_augmented(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         raise NotImplementedError
 
@@ -553,8 +481,8 @@ class AbstractTransformer(AbstractProcessor):
     The base class for data-processors that change the value of some features.
     """
 
-    def __init__(self):
-        super(AbstractTransformer, self).__init__()
+    def __init__(self, **kwargs):
+        super(AbstractTransformer, self).__init__(**kwargs)
         self.transformer = None
 
     def var_slip(self, feature_name, x) -> Union[int, float, Any]:
@@ -594,13 +522,10 @@ class AbstractFeatureSelector(AbstractProcessor):
     The base class for data-processors that change the number of features.
     """
 
-    def __init__(self):
-        super(AbstractFeatureSelector, self).__init__()
-
     def _fit_transform(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
-        retain_features = list(self._get_feature_names_out(data, datamodule, **kwargs))
+        retain_features = list(self._get_feature_names_out(data, datamodule))
         removed_features = list(
             np.setdiff1d(datamodule.all_feature_names, retain_features)
         )
@@ -617,13 +542,11 @@ class AbstractFeatureSelector(AbstractProcessor):
             )
         return data
 
-    def _transform(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
-    ) -> pd.DataFrame:
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule) -> pd.DataFrame:
         return data
 
     def _get_feature_names_out(
-        self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> List[str]:
         """
         Get selected features.
@@ -634,8 +557,6 @@ class AbstractFeatureSelector(AbstractProcessor):
             A tabular dataset.
         datamodule:
             A datamodule instance that contains necessary information required by processors.
-        **kwargs:
-            Arguments specified in the configuration file.
 
         Returns
         -------

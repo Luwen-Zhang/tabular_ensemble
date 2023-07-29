@@ -6,14 +6,7 @@ from import_utils import *
 import tabensemb
 from tabensemb.trainer import Trainer
 from tabensemb.trainer.utils import NoBayesOpt
-from tabensemb.utils import (
-    global_setting,
-    torch_with_grad,
-    Logging,
-    metric_sklearn,
-    get_figsize,
-    gini,
-)
+from tabensemb.utils import *
 from tabensemb.utils.ranking import *
 from tabensemb.model import *
 import shutil
@@ -100,16 +93,52 @@ def test_logging():
     os.makedirs(tabensemb.setting["default_output_path"], exist_ok=True)
     logger.enter(path)
     print(1)
-    log = getLogger()
-    log.log(1, "2")
+    with PlainText(disable=False):
+        print(2)
+        print(3, file=sys.stderr)
+    print(4, file=sys.stderr)
+    with HiddenPrints(disable_std=True):
+        print(5)
     logger.exit()
-    print(3)
-
-    log.log(1, "4")
+    print(6)
     with open(path, "r") as file:
         lines = file.readlines()
-    assert len(lines) == 1
+    assert len(lines) == 4
     assert lines[0] == "1\n"
+    assert lines[1] == "2\n"
+    assert lines[2] == "3\n"
+    assert lines[3] == "4\n"
+
+
+def test_logging_after_stream_modification():
+    tabensemb.stdout_stream = tabensemb.Stream("stdout")
+    tabensemb.stderr_stream = tabensemb.Stream("stderr")
+    sys.stdout = tabensemb.stdout_stream
+    sys.stderr = tabensemb.stderr_stream
+    logger = Logging()
+    path = os.path.join(tabensemb.setting["default_output_path"], "log.txt")
+    if os.path.exists(tabensemb.setting["default_output_path"]):
+        shutil.rmtree(tabensemb.setting["default_output_path"])
+    os.makedirs(tabensemb.setting["default_output_path"], exist_ok=True)
+    logger.enter(path)
+    print(1)
+    with PlainText(disable=False):
+        print(2)
+        print(3, file=sys.stderr)
+    print(4, file=sys.stderr)
+    with HiddenPrints(disable_std=True):
+        print(5)
+    logger.exit()
+    print(6)
+    with open(path, "r") as file:
+        lines = file.readlines()
+    sys.stdout = tabensemb.stdout_stream._stdout
+    sys.stderr = tabensemb.stderr_stream._stderr
+    assert len(lines) == 4
+    assert lines[0] == "1\n"
+    assert lines[1] == "2\n"
+    assert lines[2] == "3\n"
+    assert lines[3] == "4\n"
 
 
 def test_metric_sklearn():
@@ -167,3 +196,24 @@ def test_gini():
     x = np.random.randn(100)
     w = np.ones_like(x)
     assert np.allclose(gini(x, w), gini(x))
+
+
+def test_debugger():
+    debugger_is_active()
+
+
+def test_seed_worker():
+    from torch.utils.data import DataLoader, TensorDataset, RandomSampler
+
+    tensor = torch.randn(10, 2)
+    dataset = TensorDataset(tensor)
+    loader = DataLoader(
+        dataset,
+        sampler=RandomSampler(dataset),
+        num_workers=2,
+    )
+    set_torch(0)
+    res1 = [x[0] for x in loader]
+    set_torch(0)
+    res2 = [x[0] for x in loader]
+    assert all([torch.allclose(x, y) for x, y in zip(res1, res2)])

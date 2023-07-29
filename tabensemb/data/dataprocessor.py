@@ -23,7 +23,7 @@ class SampleDataAugmentor(AbstractAugmenter):
     """
 
     def _get_augmented(
-        self, data: pd.DataFrame, datamodule: DataModule, **kwargs
+        self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         augmented = data.loc[data.index[-2:], :].copy()
         return augmented
@@ -39,31 +39,18 @@ class FeatureValueSelector(AbstractProcessor):
         The specified feature value.
     """
 
-    def __init__(self):
-        super(FeatureValueSelector, self).__init__()
+    def _required_kwargs(self):
+        return ["feature", "value"]
 
-    def _fit_transform(
-        self,
-        data: pd.DataFrame,
-        datamodule: DataModule,
-        feature=None,
-        value=None,
-        **kwargs,
-    ):
-        if feature is None or value is None:
-            raise Exception(
-                'FeatureValueSelector requires arguments "feature" and "value".'
-            )
-        if value not in list(data[feature]):
-            raise Exception(
-                f"Value {value} not available for feature {feature}. Select from {data[feature].unique()}"
-            )
+    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
+        feature = self.kwargs["feature"]
+        value = self.kwargs["value"]
         where_value = data.index[np.where(data[feature] == value)[0]]
         data = data.loc[where_value, :]
         self.feature, self.value = feature, value
         return data
 
-    def _transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         if datamodule.training:
             if self.value not in list(data[self.feature]):
                 raise Exception(
@@ -86,10 +73,7 @@ class IQRRemover(AbstractProcessor):
     out of the range [25-percentile - 1.5 * IQR, 75-percentile + 1.5 * IQR], where IQR = 75-percentile - 25-percentile.
     """
 
-    def __init__(self):
-        super(IQRRemover, self).__init__()
-
-    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         print(f"Removing outliers by IQR. Original size: {len(data)}, ", end="")
         for feature in list(datamodule.args["feature_names_type"].keys()):
             if pd.isna(data[feature]).all():
@@ -107,7 +91,7 @@ class IQRRemover(AbstractProcessor):
         print(f"Final size: {len(data)}.")
         return data
 
-    def _transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         return data
 
 
@@ -116,10 +100,7 @@ class StdRemover(AbstractProcessor):
     Remove outliers using standard error strategy. Outliers are those out of the range of 3sigma.
     """
 
-    def __init__(self):
-        super(StdRemover, self).__init__()
-
-    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         print(f"Removing outliers by std. Original size: {len(data)}, ", end="")
         for feature in list(datamodule.args["feature_names_type"].keys()):
             if pd.isna(data[feature]).all():
@@ -136,7 +117,7 @@ class StdRemover(AbstractProcessor):
         print(f"Final size: {len(data)}.")
         return data
 
-    def _transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         return data
 
 
@@ -145,10 +126,7 @@ class NaNFeatureRemover(AbstractFeatureSelector):
     Remove features that contain no valid value.
     """
 
-    def __init__(self):
-        super(NaNFeatureRemover, self).__init__()
-
-    def _get_feature_names_out(self, data, datamodule, **kwargs):
+    def _get_feature_names_out(self, data, datamodule):
         retain_features = []
         all_missing_idx = np.where(
             pd.isna(data[datamodule.all_feature_names]).values.all(axis=0)
@@ -175,20 +153,12 @@ class RFEFeatureSelector(AbstractFeatureSelector):
         RandomForestRegressor, and "shap" for SHAP value (which may slow down the program but is more accurate).
     """
 
-    def __init__(self):
-        super(RFEFeatureSelector, self).__init__()
+    def _defaults(self):
+        return dict(
+            n_estimators=100, step=1, verbose=0, min_features_to_select=1, method="auto"
+        )
 
-    def _get_feature_names_out(
-        self,
-        data,
-        datamodule,
-        n_estimators=100,
-        step=1,
-        verbose=0,
-        min_features_to_select=1,
-        method="auto",
-        **kwargs,
-    ):
+    def _get_feature_names_out(self, data, datamodule):
         from tabensemb.utils.processors.rfecv import ExtendRFECV
         import shap
 
@@ -214,17 +184,19 @@ class RFEFeatureSelector(AbstractFeatureSelector):
             # so pipeline is not valid if importance_getter=="auto". shap can not handle a pipeline either.
             estimator=datamodule.get_base_predictor(
                 categorical=False,
-                n_estimators=100,
+                n_estimators=self.kwargs["n_estimators"],
                 n_jobs=-1,
                 random_state=0,
             ),
-            step=step,
+            step=self.kwargs["step"],
             cv=cv,
             scoring="neg_root_mean_squared_error",
-            min_features_to_select=min_features_to_select,
+            min_features_to_select=self.kwargs["min_features_to_select"],
             n_jobs=-1,
-            verbose=verbose,
-            importance_getter=importance_getter if method == "shap" else method,
+            verbose=self.kwargs["verbose"],
+            importance_getter=importance_getter
+            if self.kwargs["method"] == "shap"
+            else self.kwargs["method"],
         )
         if len(datamodule.label_name) > 1:
             warnings.warn(
@@ -247,10 +219,11 @@ class VarianceFeatureSelector(AbstractFeatureSelector):
         If more than thres * 100 percent of values are the same, the feature is removed.
     """
 
-    def __init__(self):
-        super(VarianceFeatureSelector, self).__init__()
+    def _defaults(self):
+        return dict(thres=0.8)
 
-    def _get_feature_names_out(self, data, datamodule, thres=0.8, **kwargs):
+    def _get_feature_names_out(self, data, datamodule):
+        thres = self.kwargs["thres"]
         sel = VarianceThreshold(threshold=(thres * (1 - thres)))
         sel.fit(
             data[datamodule.all_feature_names],
@@ -272,21 +245,22 @@ class CorrFeatureSelector(AbstractFeatureSelector):
         The number of trees used in random forests.
     """
 
-    def __init__(self):
-        super(CorrFeatureSelector, self).__init__()
+    def _defaults(self):
+        return dict(thres=0.8, n_estimators=100)
 
-    def _get_feature_names_out(
-        self, data, datamodule, thres=0.8, n_estimators=100, **kwargs
-    ):
+    def _get_feature_names_out(self, data, datamodule):
         import shap
 
         abs_corr = datamodule.cal_corr(imputed=False, features_only=True).abs()
-        where_corr = np.where(abs_corr > thres)
+        where_corr = np.where(abs_corr > self.kwargs["thres"])
         corr_feature, corr_sets = get_corr_sets(
             where_corr, datamodule.cont_feature_names
         )
         rf = datamodule.get_base_predictor(
-            categorical=False, n_estimators=n_estimators, n_jobs=-1, random_state=0
+            categorical=False,
+            n_estimators=self.kwargs["n_estimators"],
+            n_jobs=-1,
+            random_state=0,
         )
         rf.fit(
             data[datamodule.all_feature_names],
@@ -326,10 +300,7 @@ class StandardScaler(AbstractTransformer, AbstractScaler):
     The standard scaler implemented using StandardScaler from sklearn.
     """
 
-    def __init__(self):
-        super(StandardScaler, self).__init__()
-
-    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         scaler = skStandardScaler()
         data.loc[:, datamodule.cont_feature_names] = scaler.fit_transform(
             data.loc[:, datamodule.cont_feature_names]
@@ -338,7 +309,7 @@ class StandardScaler(AbstractTransformer, AbstractScaler):
         self.transformer = scaler
         return data
 
-    def _transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         data.loc[:, datamodule.cont_feature_names] = self.transformer.transform(
             data.loc[:, datamodule.cont_feature_names]
         ).astype(np.float32)
@@ -351,11 +322,11 @@ class CategoricalOrdinalEncoder(AbstractTransformer):
     OrdinalEncoder from sklearn.
     """
 
-    def __init__(self):
-        super(CategoricalOrdinalEncoder, self).__init__()
+    def __init__(self, **kwargs):
+        super(CategoricalOrdinalEncoder, self).__init__(**kwargs)
         self.record_feature_mapping = None
 
-    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         oe = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan)
         data.loc[:, datamodule.cat_feature_names] = oe.fit_transform(
             data.loc[:, datamodule.cat_feature_names]
@@ -366,7 +337,7 @@ class CategoricalOrdinalEncoder(AbstractTransformer):
         self.record_feature_mapping = cp(datamodule.cat_feature_mapping)
         return data
 
-    def _transform(self, data: pd.DataFrame, datamodule: DataModule, **kwargs):
+    def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         datamodule.cat_feature_mapping = cp(self.record_feature_mapping)
         try:
             res = self.transformer.transform(data.loc[:, datamodule.cat_feature_names])
