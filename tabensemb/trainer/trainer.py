@@ -191,7 +191,6 @@ class Trainer:
     def load_config(
         self,
         config: Union[str, UserConfig] = None,
-        verbose: bool = True,
         manual_config: Dict = None,
         project_root_subfolder: str = None,
     ) -> None:
@@ -249,7 +248,7 @@ class Trainer:
                 warnings.warn(f"manual_config is ignored when config is an UserConfig.")
             self.args = config
 
-        self.datamodule = DataModule(self.args, verbose=verbose)
+        self.datamodule = DataModule(self.args)
 
         self.project = self.args["database"] if self.project is None else self.project
         self._create_dir(project_root_subfolder=project_root_subfolder)
@@ -1548,10 +1547,10 @@ class Trainer:
                     bootstrap_model.fit(
                         df_bootstrap,
                         model_subset=[model_name],
-                        cont_feature_names=self.datamodule.dataprocessors[0][
+                        cont_feature_names=self.datamodule.dataprocessors[
                             0
                         ].record_cont_features,
-                        cat_feature_names=self.datamodule.dataprocessors[0][
+                        cat_feature_names=self.datamodule.dataprocessors[
                             0
                         ].record_cat_features,
                         label_name=self.label_name,

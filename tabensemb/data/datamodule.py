@@ -17,19 +17,16 @@ class DataModule:
     def __init__(
         self,
         config: Union[UserConfig, Dict],
-        verbose: bool = True,
         initialize: bool = True,
     ):
         self.args = config
         if initialize:
             self.set_data_splitter(
-                self.args["data_splitter"],
-                ratio=self.args["split_ratio"],
-                verbose=verbose,
+                self.args["data_splitter"], ratio=self.args["split_ratio"]
             )
-            self.set_data_imputer(name=self.args["data_imputer"], verbose=verbose)
-            self.set_data_processors(self.args["data_processors"], verbose=verbose)
-            self.set_data_derivers(self.args["data_derivers"], verbose=verbose)
+            self.set_data_imputer(self.args["data_imputer"])
+            self.set_data_processors(self.args["data_processors"])
+            self.set_data_derivers(self.args["data_derivers"])
         self.training = False
         self.data_path = None
 
@@ -49,7 +46,6 @@ class DataModule:
         self,
         config: Union[str, Tuple[str, Dict]],
         ratio: Union[List[float], np.ndarray] = None,
-        verbose=True,
     ):
         """
         Set the data splitter. The specified splitter should be implemented in ``data/datasplitter.py``. Also, data
@@ -62,8 +58,6 @@ class DataModule:
             of the data splitter
         ratio
             The ratio of training, validation, and testing sets. For example, [0.6, 0.2, 0.2].
-        verbose
-            Ignored.
         """
         from tabensemb.data.datasplitter import get_data_splitter
 
@@ -75,34 +69,34 @@ class DataModule:
             else:
                 self.datasplitter = get_data_splitter(config)(train_val_test=ratio)
 
-    def set_data_imputer(self, name, verbose=True):
+    def set_data_imputer(self, config):
         """
         Set the data imputer. The specified splitter should be implemented in ``data/dataimputer.py``. Also, data
         imputer can be set directly using ``datamodule.dataimputer = YourImputer()``
 
         Parameters
         ----------
-        name
-            The name of a data imputer implemented in ``data/dataimputer.py``.
-        verbose
-            Ignored.
+        config
+            The name of a data imputer implemented in ``data/dataimputer.py`` or a tuple providing the name and kwargs
+            of the data imputer
         """
         from tabensemb.data.dataimputer import get_data_imputer
 
-        self.dataimputer = get_data_imputer(name)()
+        if type(config) in [tuple, list]:
+            self.dataimputer = get_data_imputer(config[0])(**dict(config[1]))
+        else:
+            self.dataimputer = get_data_imputer(config)()
 
-    def set_data_processors(self, config: List[Tuple[str, Dict]], verbose=True):
+    def set_data_processors(self, config: List[Tuple[str, Dict]]):
         """
         Set a list of data processors with the name and arguments for each data processors. The processor should be
         implemented in ``data/dataprocessor.py``. Also, data processors can be set directly using
-        ``datamodule.dataprocessors = [(YourProcessor(), A Dict of kwargs) for EACH DATA PROCESSOR]``
+        ``datamodule.dataprocessors = [YourProcessor(**kwargs) for EACH DATA PROCESSOR]``
 
         Parameters
         ----------
         config
             A list of tuple. The tuple includes the name of the processor and a dict of kwargs for the processor.
-        verbose
-            Ignored.
 
         Notes
         ----------
@@ -112,13 +106,10 @@ class DataModule:
         from tabensemb.data.dataprocessor import get_data_processor, AbstractScaler
 
         self.dataprocessors = [
-            (get_data_processor(name)(), kwargs) for name, kwargs in config
+            get_data_processor(name)(**kwargs) for name, kwargs in config
         ]
         is_scaler = np.array(
-            [
-                int(isinstance(x, AbstractScaler))
-                for x in [processor for processor, _ in self.dataprocessors]
-            ]
+            [int(isinstance(x, AbstractScaler)) for x in self.dataprocessors]
         )
         if np.sum(is_scaler) > 1:
             raise Exception(f"More than one AbstractScaler.")
@@ -129,7 +120,7 @@ class DataModule:
         """
         Set a list of data derivers with the name and arguments for each data derivers. The deriver should be
         implemented in data/dataderiver.py. Also, data derivers can be set directly using
-        ``datamodule.dataderivers = [(YourDeriver(), A Dict of kwargs) for EACH DATA DERIVER]``
+        ``datamodule.dataderivers = [YourDeriver(**kwargs) for EACH DATA DERIVER]``
 
         Parameters
         ----------
@@ -141,7 +132,7 @@ class DataModule:
         from tabensemb.data.dataderiver import get_data_deriver
 
         self.dataderivers = [
-            (get_data_deriver(name)(), kwargs) for name, kwargs in config
+            get_data_deriver(name)(**kwargs) for name, kwargs in config
         ]
 
     def load_data(
@@ -711,7 +702,7 @@ class DataModule:
     def _get_categorical_ordinal_encoder(self):
         from tabensemb.data.dataprocessor import CategoricalOrdinalEncoder
 
-        for processor, _ in self.dataprocessors:
+        for processor in self.dataprocessors:
             if isinstance(processor, CategoricalOrdinalEncoder):
                 encoder = processor.transformer
                 cat_features = processor.record_cat_features
@@ -868,13 +859,10 @@ class DataModule:
         """
         df_tmp = df.copy()
         cont_feature_names = cp(self.cont_feature_names)
-        for deriver, kwargs in self.dataderivers:
-            kwargs = deriver.make_defaults(**kwargs)
-            if kwargs["stacked"]:
-                value, name, col_names = deriver.derive(
-                    df_tmp, datamodule=self, **kwargs
-                )
-                if not kwargs["intermediate"]:
+        for deriver in self.dataderivers:
+            if deriver.kwargs["stacked"]:
+                value, name, col_names = deriver.derive(df_tmp, datamodule=self)
+                if not deriver.kwargs["intermediate"]:
                     for col_name in col_names:
                         if col_name not in cont_feature_names:
                             cont_feature_names.append(col_name)
@@ -903,10 +891,9 @@ class DataModule:
         """
         derived_data = {}
         if not categorical_only:
-            for deriver, kwargs in self.dataderivers:
-                kwargs = deriver.make_defaults(**kwargs)
-                if not kwargs["stacked"]:
-                    value, name, _ = deriver.derive(df, datamodule=self, **kwargs)
+            for deriver in self.dataderivers:
+                if not deriver.kwargs["stacked"]:
+                    value, name, _ = deriver.derive(df, datamodule=self)
                     derived_data[name] = value
         if len(self.cat_feature_names) > 0:
             derived_data["categorical"] = self.categories_transform(
@@ -1154,7 +1141,7 @@ class DataModule:
         if skip_scaler and scaler_only:
             raise Exception(f"Both skip_scaler and scaler_only are True.")
         data = input_data.copy()
-        for processor, kwargs in self.dataprocessors:
+        for processor in self.dataprocessors:
             if skip_scaler and isinstance(processor, AbstractScaler):
                 continue
             if skip_selector and isinstance(processor, AbstractFeatureSelector):
@@ -1162,9 +1149,9 @@ class DataModule:
             if scaler_only and not isinstance(processor, AbstractScaler):
                 continue
             if warm_start:
-                data = processor.transform(data, self, **kwargs)
+                data = processor.transform(data, self)
             else:
-                data = processor.fit_transform(data, self, **kwargs)
+                data = processor.fit_transform(data, self)
         return data
 
     def data_transform(
@@ -1303,11 +1290,11 @@ class DataModule:
             raise Exception(f"Run load_config first.")
         elif len(self.dataprocessors) == 0 and feature_name in self.cont_feature_names:
             return 0
-        if feature_name not in self.dataprocessors[-1][0].record_cont_features:
+        if feature_name not in self.dataprocessors[-1].record_cont_features:
             raise Exception(f"Feature {feature_name} not available.")
 
         x = value
-        for processor, _ in self.dataprocessors:
+        for processor in self.dataprocessors:
             if isinstance(processor, AbstractTransformer) and hasattr(
                 processor, "transformer"
             ):
