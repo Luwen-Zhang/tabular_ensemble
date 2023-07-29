@@ -15,6 +15,10 @@ class PytorchTabular(AbstractModel):
 
     def _new_model(self, model_name, verbose, **kwargs):
         warnings.filterwarnings("ignore", message="Wandb")
+        from ._pytorch_tabular.mute_track import mute_track
+
+        mute_track()
+
         from functools import partialmethod
         from pytorch_tabular.config import ExperimentRunManager
 
