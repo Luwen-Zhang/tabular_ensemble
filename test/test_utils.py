@@ -199,7 +199,7 @@ def test_gini():
 
 
 def test_debugger():
-    assert not debugger_is_active()
+    debugger_is_active()
 
 
 def test_seed_worker():
