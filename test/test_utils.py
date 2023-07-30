@@ -98,16 +98,15 @@ def test_logging():
         print(3, file=sys.stderr)
     print(4, file=sys.stderr)
     with HiddenPrints(disable_std=True):
-        print(5)
-    logger.exit()
+        with HiddenPrints(disable_std=True):
+            print(5)
     print(6)
+    logger.exit()
+    print(7)
     with open(path, "r") as file:
         lines = file.readlines()
-    assert len(lines) == 4
-    assert lines[0] == "1\n"
-    assert lines[1] == "2\n"
-    assert lines[2] == "3\n"
-    assert lines[3] == "4\n"
+    assert len(lines) == 5
+    assert all([x == f"{y}\n" for x, y in zip(lines, [1, 2, 3, 4, 6])])
 
 
 def test_logging_after_stream_modification():
@@ -127,18 +126,17 @@ def test_logging_after_stream_modification():
         print(3, file=sys.stderr)
     print(4, file=sys.stderr)
     with HiddenPrints(disable_std=True):
-        print(5)
-    logger.exit()
+        with HiddenPrints(disable_std=True):
+            print(5)
     print(6)
+    logger.exit()
+    print(7)
     with open(path, "r") as file:
         lines = file.readlines()
     sys.stdout = tabensemb.stdout_stream._stdout
     sys.stderr = tabensemb.stderr_stream._stderr
-    assert len(lines) == 4
-    assert lines[0] == "1\n"
-    assert lines[1] == "2\n"
-    assert lines[2] == "3\n"
-    assert lines[3] == "4\n"
+    assert len(lines) == 5
+    assert all([x == f"{y}\n" for x, y in zip(lines, [1, 2, 3, 4, 6])])
 
 
 def test_metric_sklearn():

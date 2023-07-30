@@ -501,7 +501,9 @@ class HiddenPrints:
     def __enter__(self):
         if self.disable_std:
             if check_stream():
-                tabensemb.stdout_stream.set_stream(open(os.devnull, "w"))
+                self._stream = tabensemb.stdout_stream.stream
+                self._null_stream = open(os.devnull, "w")
+                tabensemb.stdout_stream.set_stream(self._null_stream)
                 self._path = tabensemb.stdout_stream.path
                 tabensemb.stdout_stream.set_path(None)
             else:
@@ -514,8 +516,8 @@ class HiddenPrints:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.disable_std:
             if check_stream():
-                tabensemb.stdout_stream.stream.close()
-                tabensemb.stdout_stream.set_stream("stdout")
+                self._null_stream.close()
+                tabensemb.stdout_stream.set_stream(self._stream)
                 tabensemb.stdout_stream.set_path(self._path)
             else:
                 sys.stdout.close()
@@ -531,6 +533,7 @@ class PlainText:
     def __enter__(self):
         if not self.disable:
             if check_stream():
+                self._stream = tabensemb.stderr_stream.stream
                 tabensemb.stderr_stream.set_stream("stdout")
             else:
                 self._original_stderr = sys.stderr
@@ -539,7 +542,7 @@ class PlainText:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.disable:
             if check_stream():
-                tabensemb.stderr_stream.set_stream("stderr")
+                tabensemb.stderr_stream.set_stream(self._stream)
             else:
                 sys.stderr = self._original_stderr
 
