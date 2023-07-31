@@ -7,12 +7,17 @@ Welcome to Tabular Ensemble's documentation!
 ============================================
 
 .. toctree::
-   :maxdepth: 2
    :caption: Get Started
+
+   examples/get_started/installation
+   examples/get_started/run_sample
+   examples/get_started/new_dataset
+   examples/get_started/inference
+   examples/get_started/use_data_processing
 
 .. toctree::
    :maxdepth: 2
-   :caption: Examples
+   :caption: Advanced Usage
 
 .. toctree::
    :maxdepth: 1

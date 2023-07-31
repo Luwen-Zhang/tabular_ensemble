@@ -21,6 +21,7 @@ release = "0.1"
 
 extensions = [
     "myst_parser",
+    "nbsphinx",
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",

@@ -116,7 +116,7 @@ class DataModule:
         if is_scaler[-1] != 1:
             raise Exception(f"The last dataprocessor should be an AbstractScaler.")
 
-    def set_data_derivers(self, config: List[Tuple[str, Dict]], verbose=True):
+    def set_data_derivers(self, config: List[Tuple[str, Dict]]):
         """
         Set a list of data derivers with the name and arguments for each data derivers. The deriver should be
         implemented in data/dataderiver.py. Also, data derivers can be set directly using

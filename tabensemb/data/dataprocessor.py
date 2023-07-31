@@ -31,8 +31,10 @@ class SampleDataAugmentor(AbstractAugmenter):
 
 class FeatureValueSelector(AbstractProcessor):
     """
-    Select data with the specified feature value. Required arguments:
+    Select data with the specified feature value.
 
+    Parameters
+    ----------
     feature: str
         The feature that will be filtered.
     value: float
@@ -213,8 +215,10 @@ class RFEFeatureSelector(AbstractFeatureSelector):
 
 class VarianceFeatureSelector(AbstractFeatureSelector):
     """
-    Remove features that almost (by a certain fraction) contain an identical value. Required arguments:
+    Remove features that almost (by a certain fraction) contain an identical value.
 
+    Parameters
+    ----------
     thres: float
         If more than thres * 100 percent of values are the same, the feature is removed.
     """
@@ -237,8 +241,9 @@ class CorrFeatureSelector(AbstractFeatureSelector):
     """
     Select features that are not correlated (in the sense of Pearson correlation). Correlated features will be ranked
     by SHAP using RandomForestRegressor, and the feature with the highest importance will be selected.
-    Required arguments:
 
+    Parameters
+    ----------
     thres:
         The threshold of pearson correlation.
     n_estimators:

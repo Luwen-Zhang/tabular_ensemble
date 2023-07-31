@@ -16,16 +16,15 @@ First, install `PyTorch` following its [documentation](https://pytorch.org/get-s
 Then install the package
 
 ```shell
-pip install -e .[all]
+pip install -e .
 ```
 
-If only the minimal functionality is needed (without any other model bases), install without the postfix`[all]`.
-
-To test basic functionalities like loading data and training model bases, run the following `unittest`
+To test basic functionalities like loading data and training model bases, run the following lines
 
 ```shell
+pip install -e .[test]
 cd test
-pytest
+pytest .
 ```
 
 ## Modelbases
