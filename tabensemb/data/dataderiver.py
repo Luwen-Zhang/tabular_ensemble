@@ -98,7 +98,7 @@ class SampleWeightDeriver(AbstractDeriver):
                 ]
                 train_outlier = np.union1d(train_upper, train_lower)
                 p_outlier = len(train_outlier) / len(train_idx)
-                feature_weight = -np.log10(p_outlier)
+                feature_weight = -np.log10(p_outlier + 1e-8)
                 self.feature_weight[feature] = feature_weight
             elif feature in self.feature_weight.keys():
                 feature_weight = self.feature_weight[feature]
@@ -121,7 +121,8 @@ class SampleWeightDeriver(AbstractDeriver):
                 )
                 p_unique_values = fitted_train_cnts / len(train_idx)
                 feature_weight = np.abs(
-                    np.log10(p_unique_values) - np.log10(max(p_unique_values))
+                    np.log10(p_unique_values + 1e-8)
+                    - np.log10(max(p_unique_values) + 1e-8)
                 )
                 self.unique_vals[feature] = unique_values
                 self.feature_weight[feature] = feature_weight
