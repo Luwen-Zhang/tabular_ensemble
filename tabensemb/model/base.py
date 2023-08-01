@@ -949,9 +949,9 @@ class AbstractModel:
 
             def pred_set(X, y, name):
                 pred = self._pred_single_model(model, X, verbose=False)
-                mse = metric_sklearn(pred, y, "mse")
+                metric, loss = self._default_metric_sklearn(y, pred)
                 if verbose:
-                    print(f"{name} MSE loss: {mse:.5f}, RMSE loss: {np.sqrt(mse):.5f}")
+                    print(f"{name} {metric} loss: {loss:.5f}")
 
             pred_set(data["X_train"], data["y_train"], "Training")
             pred_set(data["X_val"], data["y_val"], "Validation")
@@ -962,6 +962,21 @@ class AbstractModel:
         self.trainer.set_status(training=False)
         if dump_trainer:
             save_trainer(self.trainer)
+
+    def _default_metric_sklearn(self, y_true, y_pred):
+        task = self.trainer.datamodule.task
+        if task == "regression":
+            metric = "mse"
+            loss = auto_metric_sklearn(y_true, y_pred, metric, "regression")
+        elif task == "binary":
+            metric = "log_loss"
+            loss = auto_metric_sklearn(y_true, y_pred, metric, "binary")
+        elif task == "multiclass":
+            metric = "log_loss"
+            loss = auto_metric_sklearn(y_true, y_pred, metric, "multiclass")
+        else:
+            raise NotImplementedError
+        return metric, loss
 
     def _bayes_eval(
         self,
@@ -980,9 +995,9 @@ class AbstractModel:
             The evaluation of bayesian hyperparameter optimization.
         """
         y_val_pred = self._pred_single_model(model, X_val, verbose=False)
-        val_loss = metric_sklearn(y_val_pred, y_val, "mse")
+        _, val_loss = self._default_metric_sklearn(y_val, y_val_pred)
         y_train_pred = self._pred_single_model(model, X_train, verbose=False)
-        train_loss = metric_sklearn(y_train_pred, y_train, "mse")
+        _, train_loss = self._default_metric_sklearn(y_train, y_train_pred)
         return max([train_loss, val_loss])
 
     def _check_train_status(self):
