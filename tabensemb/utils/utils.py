@@ -28,6 +28,7 @@ from typing import Any
 import tabensemb
 from .collate import fix_collate_fn
 from typing import Dict
+from sklearn.metrics import *
 
 clr = sns.color_palette("deep")
 sns.reset_defaults()
@@ -102,8 +103,12 @@ def set_torch(seed=0):
 
 
 def metric_sklearn(y_true, y_pred, metric):
-    y_true = np.array(y_true).flatten()
-    y_pred = np.array(y_pred).flatten()
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    if len(y_true.shape) == 2 and y_true.shape[-1] == 1:
+        y_true = y_true.flatten()
+    if len(y_pred.shape) == 2 and y_pred.shape[-1] == 1:
+        y_true = y_true.flatten()
     if not np.all(np.isfinite(y_pred)):
         if tabensemb.setting["warn_nan_metric"]:
             warnings.warn(
@@ -116,29 +121,38 @@ def metric_sklearn(y_true, y_pred, metric):
                 f"NaNs exist in the tested prediction. To ignore this and return a large value (100) instead, turn "
                 f"the global setting `warn_nan_metric` to True"
             )
-    if metric == "mse":
-        from sklearn.metrics import mean_squared_error
 
-        return mean_squared_error(y_true, y_pred)
-    elif metric == "rmse":
-        from sklearn.metrics import mean_squared_error
-
-        return np.sqrt(mean_squared_error(y_true, y_pred))
-    elif metric == "mae":
-        from sklearn.metrics import mean_absolute_error
-
-        return mean_absolute_error(y_true, y_pred)
-    elif metric == "mape":
-        from sklearn.metrics import mean_absolute_percentage_error
-
-        return mean_absolute_percentage_error(y_true, y_pred)
-    elif metric == "r2":
-        from sklearn.metrics import r2_score
-
-        return r2_score(y_true, y_pred)
+    mapping = {
+        "mse": mean_squared_error,
+        "mae": mean_absolute_error,
+        "mape": mean_absolute_percentage_error,
+        "r2": r2_score,
+        "rmse": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true, y_pred)),
+        "r2_score": r2_score,
+        "median_absolute_error": median_absolute_error,
+        "max_error": max_error,
+        "mean_absolute_error": mean_absolute_error,
+        "mean_squared_error": mean_squared_error,
+        "mean_squared_log_error": mean_squared_log_error,
+        "mean_poisson_deviance": mean_poisson_deviance,
+        "mean_gamma_deviance": mean_gamma_deviance,
+        "accuracy_score": accuracy_score,
+        "top_k_accuracy_score": top_k_accuracy_score,
+        "f1_score": f1_score,
+        "roc_auc_score": roc_auc_score,
+        "average_precision_score": average_precision_score,
+        "precision_score": precision_score,
+        "recall_score": recall_score,
+        "log_loss": log_loss,
+        "balanced_accuracy_score": balanced_accuracy_score,
+        "explained_variance_score": explained_variance_score,
+        "brier_score_loss": brier_score_loss,
+        "jaccard_score": jaccard_score,
+        "mean_absolute_percentage_error": mean_absolute_percentage_error,
+    }
+    if metric in mapping.keys():
+        return mapping[metric](y_true, y_pred)
     elif metric == "rmse_conserv":
-        from sklearn.metrics import mean_squared_error
-
         y_pred = np.array(cp(y_pred)).reshape(-1, 1)
         y_true = np.array(cp(y_true)).reshape(-1, 1)
         where_not_conserv = y_pred > y_true
@@ -150,6 +164,99 @@ def metric_sklearn(y_true, y_pred, metric):
             return 0.0
     else:
         raise Exception(f"Metric {metric} not implemented.")
+
+
+def convert_proba_to_target(y_pred, task):
+    if task == "regression":
+        raise Exception(f"Not supported for regressions tasks.")
+    elif task == "multiclass":
+        return np.argmax(y_pred, axis=-1)
+    elif task == "binary":
+        return (y_pred > 0.5).astype(int)
+    else:
+        raise Exception(f"Unrecognized task {task}.")
+
+
+def convert_target_to_indicator(y_pred, n_classes):
+    indicator = np.zeros((y_pred.shape[0], n_classes))
+    indicator[np.arange(y_pred.shape[0]), y_pred] = 1
+    return indicator
+
+
+REGRESSION_METRICS = ["rmse", "mse", "mae", "mape", "r2", "rmse_conserv"]
+
+
+BINARY_METRICS = (
+    [
+        "f1_score",
+        "precision_score",
+        "recall_score",
+        "jaccard_score",
+        "accuracy_score",
+        "balanced_accuracy_score",
+    ]
+    + [
+        "roc_auc_score",
+        "log_loss",
+        "brier_score_loss",
+        "top_k_accuracy_score",
+    ]
+    + ["average_precision_score"]
+)
+
+MULTICLASS_METRICS = (
+    ["accuracy_score", "balanced_accuracy_score"]
+    + ["top_k_accuracy_score", "log_loss"]
+    + ["average_precision_score"]
+)
+
+
+def auto_metric_sklearn(y_true, y_pred, metric, task):
+    if task not in ["binary", "multiclass", "regression"]:
+        raise Exception(f"Task {task} does not support auto metrics.")
+    # For classification tasks, y_pred is proba, y_true is an integer array
+    if task == "regression":
+        return metric_sklearn(y_true, y_pred, metric)
+    elif task == "binary":
+        if metric in [
+            "f1_score",
+            "precision_score",
+            "recall_score",
+            "jaccard_score",
+            "accuracy_score",
+            "balanced_accuracy_score",
+        ]:
+            return metric_sklearn(
+                y_true, convert_proba_to_target(y_pred, "binary"), metric
+            )
+        elif metric in [
+            "roc_auc_score",
+            "log_loss",
+            "brier_score_loss",
+            "top_k_accuracy_score",
+        ]:
+            return metric_sklearn(y_true, y_pred, metric)
+        elif metric in ["average_precision_score"]:
+            y_pred_extend = y_pred.reshape(-1, 1)
+            y_pred_2d = np.concatenate([1 - y_pred_extend, y_pred_extend], axis=-1)
+            n_classes = len(np.unique(y_true))
+            y_true_indicator = convert_target_to_indicator(y_true, n_classes)
+            return metric_sklearn(y_true_indicator, y_pred_2d, metric)
+        else:
+            raise NotImplementedError
+    elif task == "multiclass":
+        if metric in ["accuracy_score", "balanced_accuracy_score"]:
+            return metric_sklearn(
+                y_true, convert_proba_to_target(y_pred, task="multiclass"), metric
+            )
+        if metric in ["top_k_accuracy_score", "log_loss"]:
+            return metric_sklearn(y_true, y_pred, metric)
+        if metric in ["average_precision_score"]:
+            n_classes = len(np.unique(y_true))
+            y_true_indicator = convert_target_to_indicator(y_true, n_classes)
+            return metric_sklearn(y_true_indicator, y_pred, metric)
+        else:
+            raise NotImplementedError
 
 
 def plot_importance(ax, features, attr, pal, clr_map, **kwargs):

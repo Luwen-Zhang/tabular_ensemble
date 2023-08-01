@@ -167,6 +167,95 @@ def test_metric_sklearn():
         _ = metric_sklearn(y_true, y_pred_na, "mse")
     assert "NaNs exist in the tested prediction" in err.value.args[0]
 
+    with pytest.raises(Exception) as err:
+        convert_proba_to_target(None, "regression")
+    assert "Not supported for regressions tasks" in err.value.args[0]
+    with pytest.raises(Exception) as err:
+        convert_proba_to_target(None, "TEST")
+    assert "Unrecognized task" in err.value.args[0]
+
+    y_true = np.random.randint(0, 4, (10,))
+    y_pred_prob = np.abs(np.random.randn(10, 4))
+    y_pred_prob /= np.repeat(np.sum(y_pred_prob, axis=1).reshape(-1, 1), 4, axis=1)
+    y_pred = convert_proba_to_target(y_pred_prob, "multiclass")
+    assert not np.any(y_pred > 3)
+    y_true_indicator = np.zeros((10, 4))
+    y_true_indicator[np.arange(10), y_true] = 1
+    assert np.allclose(convert_target_to_indicator(y_true, 4), y_true_indicator)
+    y_pred_indicator = np.zeros((10, 4))
+    y_pred_indicator[np.arange(10), y_pred] = 1
+    assert np.allclose(convert_target_to_indicator(y_pred, 4), y_pred_indicator)
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob, "accuracy_score", "multiclass"
+    ) == metric_sklearn(y_true, y_pred, "accuracy_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob, "balanced_accuracy_score", "multiclass"
+    ) == metric_sklearn(y_true, y_pred, "balanced_accuracy_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob, "top_k_accuracy_score", "multiclass"
+    ) == metric_sklearn(y_true, y_pred_prob, "top_k_accuracy_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob, "average_precision_score", "multiclass"
+    ) == metric_sklearn(y_true_indicator, y_pred_prob, "average_precision_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob, "log_loss", "multiclass"
+    ) == metric_sklearn(y_true, y_pred_prob, "log_loss")
+    with pytest.raises(Exception):
+        auto_metric_sklearn(None, None, None, "TEST")
+    with pytest.raises(NotImplementedError):
+        auto_metric_sklearn(None, None, "TEST", "binary")
+    with pytest.raises(NotImplementedError):
+        auto_metric_sklearn(None, None, "TEST", "multiclass")
+    # _ = metric_sklearn(y_true_indicator, y_pred_indicator, "f1_score") Please choose another average setting, one of [None, 'micro', 'macro', 'weighted', 'samples'].
+    # _ = metric_sklearn(y_true, y_pred_prob, "roc_auc_score") multi_class must be in ('ovo', 'ovr')
+
+    y_true = np.random.randint(0, 2, (10,))
+    y_pred_prob_1d = np.abs(np.random.randn(10))
+    y_pred_prob_1d /= np.max(y_pred_prob_1d)
+    y_pred = convert_proba_to_target(y_pred_prob_1d, "binary")
+    assert not np.any(y_pred > 1)
+    y_pred_prob_1d_extend = y_pred_prob_1d.reshape(-1, 1)
+    y_pred_prob = np.concatenate(
+        [1 - y_pred_prob_1d_extend, y_pred_prob_1d_extend], axis=-1
+    )
+    y_true_indicator = np.zeros((10, 2))
+    y_true_indicator[np.arange(10), y_true] = 1
+    assert np.allclose(convert_target_to_indicator(y_true, 2), y_true_indicator)
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "f1_score", "binary"
+    ) == metric_sklearn(y_true, y_pred, "f1_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "precision_score", "binary"
+    ) == metric_sklearn(y_true, y_pred, "precision_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "recall_score", "binary"
+    ) == metric_sklearn(y_true, y_pred, "recall_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "jaccard_score", "binary"
+    ) == metric_sklearn(y_true, y_pred, "jaccard_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "roc_auc_score", "binary"
+    ) == metric_sklearn(y_true, y_pred_prob_1d, "roc_auc_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "log_loss", "binary"
+    ) == metric_sklearn(y_true, y_pred_prob_1d, "log_loss")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "brier_score_loss", "binary"
+    ) == metric_sklearn(y_true, y_pred_prob_1d, "brier_score_loss")
+
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "accuracy_score", "binary"
+    ) == metric_sklearn(y_true, y_pred, "accuracy_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "balanced_accuracy_score", "binary"
+    ) == metric_sklearn(y_true, y_pred, "balanced_accuracy_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "top_k_accuracy_score", "binary"
+    ) == metric_sklearn(y_true, y_pred_prob_1d, "top_k_accuracy_score")
+    assert auto_metric_sklearn(
+        y_true, y_pred_prob_1d, "average_precision_score", "binary"
+    ) == metric_sklearn(y_true_indicator, y_pred_prob, "average_precision_score")
+
 
 def test_get_figsize():
     figsize, width, height = get_figsize(
