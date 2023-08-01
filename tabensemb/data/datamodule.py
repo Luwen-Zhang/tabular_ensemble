@@ -11,6 +11,7 @@ from torch.utils.data import Subset
 from sklearn.decomposition import PCA
 import sklearn.pipeline
 import sklearn.ensemble
+from collections.abc import Iterable
 
 
 class DataModule:
@@ -398,6 +399,84 @@ class DataModule:
         )
         self.update_dataset()
         self.set_status(training=False)
+        self.task = self._infer_task()
+        self.loss = self._infer_loss(self.task)
+        if self.task in ["binary", "multiclass"]:
+            self.n_classes = [
+                len(np.unique(self.label_data[col])) for col in self.label_name
+            ]
+
+    def _infer_task(self):
+        selected_task = self.args["task"] if "task" in self.args.keys() else None
+        # if isinstance(selected_task, dict):
+        #     return selected_task
+        if selected_task is not None and not isinstance(selected_task, str):
+            raise Exception(f"Multiple tasks is not supported.")
+        available_tasks = ["binary", "multiclass", "regression"]
+
+        def infer_one_col(col, task):
+            try:
+                is_int = np.all(np.mod(col, 1) == 0)
+            except:
+                raise Exception(f"Unrecognized target type {col.values.dtype}.")
+            if is_int:
+                n_unique = len(np.unique(col))
+                if n_unique <= 2:
+                    infer_task = "binary"
+                else:
+                    infer_task = "multiclass"
+            else:
+                infer_task = "regression"
+            if task is None:
+                return infer_task
+            elif task is not None and task not in available_tasks:
+                raise Exception(f"Unsupported task {task}.")
+            elif infer_task != task:
+                if tabensemb.setting["raise_inconsistent_inferred_task"]:
+                    raise Exception(
+                        f"The inferred task {infer_task} is not consistent with the selected task {task}."
+                    )
+                else:
+                    warnings.warn(
+                        f"The inferred task {infer_task} is not consistent with the selected task {task}. Using the "
+                        f"selected task."
+                    )
+                    return task
+            else:
+                return task
+
+        if len(self.label_name) > 1:
+            task = [
+                infer_one_col(self.label_data[name], selected)
+                for name, selected in zip(self.label_name, selected_task)
+            ]
+            if any([t in ["binary", "multiclass"] for t in task]):
+                raise Exception(f"Multi-target classification task is not supported.")
+            else:
+                task = "regression"
+        else:
+            task = infer_one_col(self.label_data, selected_task)
+        return task
+
+    def _infer_loss(self, task):
+        selected_loss = self.args["loss"] if "loss" in self.args.keys() else None
+        # if isinstance(selected_loss, dict):
+        #     return selected_loss
+        if selected_loss is not None and not isinstance(selected_loss, str):
+            raise Exception(f"Multiple losses is not supported.")
+        if task in ["binary", "multiclass"]:
+            available_losses = ["cross_entropy"]
+        else:
+            available_losses = ["mse", "mae"]
+        if selected_loss is None:
+            loss = available_losses[0]
+        else:
+            if selected_loss not in available_losses:
+                raise Exception(
+                    f"The selected loss {selected_loss} is not supported for {task} tasks"
+                )
+            loss = selected_loss
+        return loss
 
     def prepare_new_data(
         self, df: pd.DataFrame, derived_data: dict = None, ignore_absence=False
