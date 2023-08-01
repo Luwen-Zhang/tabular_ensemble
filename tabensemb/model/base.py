@@ -1874,7 +1874,10 @@ class AbstractNN(pl.LightningModule):
             A DataModule instance.
         """
         super(AbstractNN, self).__init__()
-        self.default_loss_fn = nn.MSELoss()
+        self.default_loss_fn = self.get_loss_fn(datamodule.loss, datamodule.task)
+        self.default_output_norm = self.get_output_norm(
+            datamodule.loss, datamodule.task
+        )
         self.cont_feature_names = cp(datamodule.cont_feature_names)
         self.cat_feature_names = cp(datamodule.cat_feature_names)
         self.n_cont = len(self.cont_feature_names)
@@ -1904,6 +1907,40 @@ class AbstractNN(pl.LightningModule):
         ):
             self.derived_feature_names_dims[name] = dim
         self._device_var = nn.Parameter(torch.empty(0, requires_grad=False))
+
+    @staticmethod
+    def get_output_norm(loss, task):
+        if task in ["binary", "multiclass"] and loss != "cross_entropy":
+            raise Exception(
+                f"Only cross entropy loss is supported for classification tasks."
+            )
+        if task == "binary":
+            return torch.nn.Sigmoid()
+        elif task == "multiclass":
+            return torch.nn.LogSoftmax()
+        elif task == "regression":
+            return torch.nn.Identity()
+        else:
+            raise Exception(f"Unrecognized task {task}.")
+
+    @staticmethod
+    def get_loss_fn(loss, task):
+        if task in ["binary", "multiclass"] and loss != "cross_entropy":
+            raise Exception(
+                f"Only cross entropy loss is supported for classification tasks."
+            )
+        if task == "binary":
+            return torch.nn.BCELoss()
+        elif task == "multiclass":
+            return torch.nn.NLLLoss()
+        elif task == "regression":
+            mapping = {
+                "mse": torch.nn.MSELoss(),
+                "mae": torch.nn.L1Loss(),
+            }
+            return mapping[loss]
+        else:
+            raise Exception(f"Unrecognized task {task}.")
 
     @property
     def device(self):
@@ -1971,12 +2008,13 @@ class AbstractNN(pl.LightningModule):
         y = self(
             *([data] + additional_tensors), data_required_models=data_required_models
         )
-        loss = self.loss_fn(yhat, y, *([data] + additional_tensors))
+        y = self.default_output_norm(y)
+        y, yhat = self.before_loss_fn(y, yhat)
+        loss = self.loss_fn(y, yhat, *([data] + additional_tensors))
         self.cal_backward_step(loss)
-        mse = self.default_loss_fn(yhat, y)
         self.log(
-            "train_mean_squared_error",
-            mse.item(),
+            "train_loss",
+            loss.item(),
             on_step=False,
             on_epoch=True,
             batch_size=y.shape[0],
@@ -1996,10 +2034,12 @@ class AbstractNN(pl.LightningModule):
                 *([data] + additional_tensors),
                 data_required_models=data_required_models,
             )
-            mse = self.default_loss_fn(yhat, y)
+            y = self.default_output_norm(y)
+            y, yhat = self.before_loss_fn(y, yhat)
+            loss = self.loss_fn(y, yhat, *([data] + additional_tensors))
             self.log(
-                "valid_mean_squared_error",
-                mse.item(),
+                "valid_loss",
+                loss.item(),
                 on_step=False,
                 on_epoch=True,
                 batch_size=y.shape[0],
@@ -2053,6 +2093,8 @@ class AbstractNN(pl.LightningModule):
                     *([data] + additional_tensors),
                     data_required_models=data_required_models,
                 )
+                y = self.default_output_norm(y)
+                y, yhat = self.before_loss_fn(y, yhat)
                 loss = self.default_loss_fn(y, yhat)
                 avg_loss += loss.item() * len(y)
                 pred += list(y.cpu().detach().numpy())
@@ -2060,7 +2102,13 @@ class AbstractNN(pl.LightningModule):
             avg_loss /= len(test_loader.dataset)
         return np.array(pred), np.array(truth), avg_loss
 
-    def loss_fn(self, y_true, y_pred, *data, **kwargs):
+    def before_loss_fn(self, y, yhat):
+        if self.task == "binary":
+            y = y[:, 1]
+            yhat = torch.flatten(yhat)
+        return y, yhat
+
+    def loss_fn(self, y_pred, y_true, *data, **kwargs):
         """
         User defined loss function.
 
@@ -2447,13 +2495,13 @@ class PytorchLightningLossCallback(Callback):
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
         logs = trainer.callback_metrics
-        train_loss = logs["train_mean_squared_error"].detach().cpu().numpy()
-        val_loss = logs["valid_mean_squared_error"].detach().cpu().numpy()
+        train_loss = logs["train_loss"].detach().cpu().numpy()
+        val_loss = logs["valid_loss"].detach().cpu().numpy()
         self.val_ls.append(val_loss)
         if hasattr(pl_module, "_early_stopping_eval"):
             early_stopping_eval = pl_module._early_stopping_eval(
-                trainer.logged_metrics["train_mean_squared_error"],
-                trainer.logged_metrics["valid_mean_squared_error"],
+                trainer.logged_metrics["train_loss"],
+                trainer.logged_metrics["valid_loss"],
             ).item()
             pl_module.log("early_stopping_eval", early_stopping_eval)
             self.es_val_ls.append(early_stopping_eval)

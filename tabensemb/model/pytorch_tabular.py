@@ -50,9 +50,9 @@ class PytorchTabular(AbstractModel):
         trainer_config = TrainerConfig(
             batch_size=int(kwargs["batch_size"]),
             progress_bar="none",
-            early_stopping="valid_mean_squared_error",
+            early_stopping="valid_loss",
             early_stopping_patience=self.trainer.static_params["patience"],
-            checkpoints="valid_mean_squared_error",
+            checkpoints="valid_loss",
             checkpoints_path=os.path.join(self.root, "ckpts"),
             checkpoints_save_top_k=1,
             checkpoints_name=model_name,
