@@ -268,9 +268,15 @@ class WideDeep(AbstractModel):
         tab_model = mapping[model_name](**args)
         model = WideDeep(deeptabular=tab_model)
 
+        task = self.trainer.datamodule.task
+        loss = self.trainer.datamodule.loss
+        if task == "binary" and loss == "cross_entropy":
+            loss = "binary_cross_entropy"
+        self.task = task
+
         wd_trainer = wd_Trainer(
             model,
-            objective="regression",
+            objective=loss,
             verbose=0,
             device="cpu" if self.trainer.device == "cpu" else "cuda",
             num_workers=0,
@@ -358,7 +364,12 @@ class WideDeep(AbstractModel):
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
         original_batch_size = model.batch_size
         delattr(model, "batch_size")
-        res = model.predict(X_tab=X_test, batch_size=len(X_test)).reshape(-1, 1)
+        if self.task == "regression":
+            res = model.predict(X_tab=X_test, batch_size=len(X_test)).reshape(-1, 1)
+        elif self.task == "binary":
+            res = model.predict_proba(X_tab=X_test, batch_size=len(X_test))[:, 1]
+        else:
+            res = model.predict_proba(X_tab=X_test, batch_size=len(X_test))
         setattr(model, "batch_size", original_batch_size)
         return res
 

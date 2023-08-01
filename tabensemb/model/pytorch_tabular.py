@@ -39,6 +39,20 @@ class PytorchTabular(AbstractModel):
         )
         from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
 
+        task = self.trainer.datamodule.task
+        if task == "binary":
+            task = "classification"
+        self.task = task
+        loss = self.trainer.datamodule.loss
+        mapping = {
+            "cross_entropy": "CrossEntropyLoss",
+            "mse": "MSELoss",
+            "mae": "L1Loss",
+        }
+        if loss in mapping.keys():
+            loss = mapping[loss]
+        self.loss = loss
+
         data_config = DataConfig(
             target=self.trainer.label_name,
             continuous_cols=self.trainer.cont_feature_names,
@@ -92,10 +106,10 @@ class PytorchTabular(AbstractModel):
                     pass
         with HiddenPrints():
             model_config = (
-                model_configs[model_name](task="regression", **legal_kwargs)
+                model_configs[model_name](task=task, loss=loss, **legal_kwargs)
                 if model_name not in special_configs.keys()
                 else model_configs[model_name](
-                    task="regression", **special_configs[model_name], **legal_kwargs
+                    task=task, loss=loss, **special_configs[model_name], **legal_kwargs
                 )
             )
             tabular_model = TabularModel(
@@ -158,7 +172,6 @@ class PytorchTabular(AbstractModel):
             model.fit(
                 train=train_data,
                 validation=val_data,
-                loss=nn.MSELoss(),
                 max_epochs=epoch,
                 callbacks=[
                     PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch)
@@ -185,11 +198,20 @@ class PytorchTabular(AbstractModel):
             )
             all_res = model.predict(X_test, include_input_features=False)
             model.datamodule.batch_size = original_batch_size
-            preds = [
-                np.array(all_res[f"{target}_prediction"]).reshape(-1, 1)
-                for target in targets
-            ]
-            res = np.concatenate(preds, axis=1)
+            if self.task == "regression":
+                preds = [
+                    np.array(all_res[f"{target}_prediction"]).reshape(-1, 1)
+                    for target in targets
+                ]
+                res = np.concatenate(preds, axis=1)
+            elif self.task == "binary":
+                res = np.array(all_res[f"1_probability"]).reshape(-1, 1)
+            else:
+                n_classes = len(all_res.columns) - 1
+                if n_classes == 2:
+                    res = np.array(all_res[f"1_probability"])
+                else:
+                    res = np.array(all_res[f"1_probability"])[:, :n_classes]
         return res
 
     @staticmethod

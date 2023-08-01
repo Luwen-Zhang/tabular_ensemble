@@ -92,6 +92,30 @@ def test_train_without_bayes():
     pytest.test_trainer_trainer.train()
 
 
+def test_train_binary():
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config("sample", manual_config={"label_name": ["target_binary"]})
+    # trainer.load_config("sample")
+    trainer.load_data()
+    assert trainer.datamodule.task == "binary"
+
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(
+            trainer,
+            model_subset=[
+                "Category Embedding",
+            ],
+        ),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    l = trainer.get_leaderboard()
+
+
 @pytest.mark.order(after="test_train_without_bayes")
 def test_get_leaderboard():
     no_model_trainer = Trainer(device="cpu")

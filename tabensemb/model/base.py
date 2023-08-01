@@ -228,6 +228,10 @@ class AbstractModel:
             **kwargs,
         )
 
+    def predict_proba(self, *args, **kwargs):
+        res = self.predict(*args, **kwargs)
+        return convert_proba_to_target(res, self.trainer.datamodule.task)
+
     def detach_model(self, model_name: str, program: str = None) -> "AbstractModel":
         """
         Detach the chosen sub-model to a separate AbstractModel with the same trainer.

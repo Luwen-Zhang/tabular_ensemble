@@ -5,6 +5,7 @@ from tabensemb.data import DataModule
 from skopt.space import Integer, Categorical, Real
 from typing import Dict
 import shutil
+from collections.abc import Iterable
 
 
 class AutoGluon(AbstractModel):
@@ -15,18 +16,52 @@ class AutoGluon(AbstractModel):
         from autogluon.tabular import TabularPredictor
         from ._autogluon.multilabel import MultilabelPredictor
 
+        task = self.trainer.datamodule.task
+        loss = self.trainer.datamodule.loss
+        if loss == "cross_entropy":
+            loss = None
+        self.task = task
         path = os.path.join(self.root, model_name)
         if len(self.trainer.label_name) > 1:
             predictor = MultilabelPredictor(
                 labels=self.trainer.label_name,
                 path=os.path.join(self.root, model_name),
-                problem_types=["regression"] * len(self.trainer.label_name),
+                problem_types=task
+                if not isinstance(task, str) or task is None
+                else [task] * len(self.trainer.label_name),
+                eval_metrics=loss
+                if not isinstance(loss, str) or loss is None
+                else [loss] * len(self.trainer.label_name),
+                learner_kwargs={"label_count_threshold": 1},
             )
         else:
+            if not isinstance(task, str):
+                raise Exception("Specifying multiple tasks for the single target task.")
+            if task == "regression":
+                mapping = {
+                    "mse": "mean_squared_error",
+                    "rmse": "root_mean_squared_error",
+                    "mae": "mean_absolute_error",
+                    "mape": "mean_absolute_percentage_error",
+                }
+                if loss in mapping.keys():
+                    loss = mapping[loss]
+                available_reg_metric = [
+                    "root_mean_squared_error",
+                    "mean_squared_error",
+                    "mean_absolute_error",
+                    "median_absolute_error",
+                    "mean_absolute_percentage_error",
+                    "r2",
+                ]
+                if loss not in available_reg_metric:
+                    raise Exception(f"Unrecognized loss {loss} for AutoGluon.")
             predictor = TabularPredictor(
                 label=self.trainer.label_name[0],
                 path=os.path.join(self.root, model_name),
-                problem_type="regression",
+                problem_type=task,
+                eval_metric=loss,
+                learner_kwargs={"label_count_threshold": 1},
             )
         if not os.path.exists(path):
             os.mkdir(path)
@@ -122,10 +157,15 @@ class AutoGluon(AbstractModel):
         warnings.simplefilter(action="default")
 
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
-        if len(self.trainer.label_name) > 1:
-            return model[1].predict(X_test).values
+        if self.task == "regression":
+            if len(self.trainer.label_name) > 1:
+                return model[1].predict(X_test).values
+            else:
+                return model[1].predict(X_test).values.reshape(-1, 1)
+        elif self.task == "binary":
+            return model[1].predict_proba(X_test).values[:, 1]
         else:
-            return model[1].predict(X_test).values.reshape(-1, 1)
+            return model[1].predict_proba(X_test).values
 
     @staticmethod
     def _get_model_names():
