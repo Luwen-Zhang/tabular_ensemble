@@ -13,8 +13,12 @@ def read_lbs(paths: List[Union[os.PathLike, str]]) -> List[pd.DataFrame]:
 
 def merge_leaderboards(dfs: List[pd.DataFrame]):
     df = pd.concat(dfs, ignore_index=True)
+    metrics = list(df.columns)[2:]
+    first_metric = metrics[0].split(" ")[-1]
     df.sort_values(
-        by="Testing RMSE" if "Testing RMSE" in df.columns else "RMSE",
+        by=f"Testing {first_metric}"
+        if f"Testing {first_metric}" in df.columns
+        else first_metric,
         ascending=True,
         inplace=True,
     )
