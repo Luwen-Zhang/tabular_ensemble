@@ -447,8 +447,8 @@ class DataModule:
 
         if len(self.label_name) > 1:
             task = [
-                infer_one_col(self.label_data[name], selected)
-                for name, selected in zip(self.label_name, selected_task)
+                infer_one_col(self.label_data[name], selected_task)
+                for name in self.label_name
             ]
             if any([t in ["binary", "multiclass"] for t in task]):
                 raise Exception(f"Multi-target classification task is not supported.")
