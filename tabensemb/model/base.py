@@ -1885,6 +1885,15 @@ class AbstractNN(pl.LightningModule):
         self.automatic_optimization = False
         self.hidden_representation = None
         self.hidden_rep_dim = None
+        self.task = datamodule.task
+        self.n_inputs = len(self.cont_feature_names)
+        if datamodule.task == "regression":
+            self.n_outputs = len(datamodule.label_name)
+        elif datamodule.task in ["binary", "multiclass"]:
+            self.n_outputs = datamodule.n_classes[0]
+        else:
+            raise Exception(f"Unsupported type of task {self.task}")
+        self.cat_num_unique = [len(x) for x in datamodule.cat_feature_mapping.values()]
         if len(kwargs) > 0:
             self.save_hyperparameters(
                 *list(kwargs.keys()),
