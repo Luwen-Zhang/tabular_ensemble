@@ -43,9 +43,9 @@ class PytorchTabular(AbstractModel):
         from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
 
         task = self.trainer.datamodule.task
-        if task == "binary":
-            task = "classification"
         self.task = task
+        if task in ["binary", "multiclass"]:
+            task = "classification"
         loss = self.trainer.datamodule.loss
         mapping = {
             "cross_entropy": "CrossEntropyLoss",
@@ -212,10 +212,7 @@ class PytorchTabular(AbstractModel):
                 res = np.array(all_res[f"1_probability"]).reshape(-1, 1)
             else:
                 n_classes = len(all_res.columns) - 1
-                if n_classes == 2:
-                    res = np.array(all_res[f"1_probability"])
-                else:
-                    res = np.array(all_res[f"1_probability"])[:, :n_classes]
+                res = np.array(all_res)[:, :n_classes]
         return res
 
     @staticmethod

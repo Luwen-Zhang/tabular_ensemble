@@ -163,7 +163,7 @@ class AutoGluon(AbstractModel):
             else:
                 return model[1].predict(X_test).values.reshape(-1, 1)
         elif self.task == "binary":
-            return model[1].predict_proba(X_test).values[:, 1]
+            return model[1].predict_proba(X_test).values[:, 1].reshape(-1, 1)
         else:
             return model[1].predict_proba(X_test).values
 

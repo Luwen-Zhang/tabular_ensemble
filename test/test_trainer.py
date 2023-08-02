@@ -73,12 +73,7 @@ def test_init_models():
         PytorchTabular(trainer, model_subset=["Category Embedding"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
         AutoGluon(trainer, model_subset=["Linear Regression"]),
-        CatEmbed(
-            trainer,
-            model_subset=[
-                "Category Embedding",
-            ],
-        ),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
     ]
     trainer.add_modelbases(models)
     pytest.models = models
@@ -104,6 +99,43 @@ def test_train_binary():
         PytorchTabular(trainer, model_subset=["Category Embedding"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
         AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+
+    def test_one_modelbase(modelbase, model_name):
+        res = modelbase.predict(
+            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+        )
+        assert np.all(np.mod(res, 1) == 0)
+        res_prob = modelbase.predict_proba(
+            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+        )
+        assert np.all(np.mod(res_prob, 1) != 0)
+        assert np.all(res_prob > 0) and np.all(res_prob < 1)
+
+        assert res_prob.shape[0] == len(trainer.df) and res_prob.shape[1] == 1
+
+    test_one_modelbase(models[0], "Category Embedding")
+    test_one_modelbase(models[1], "TabMlp")
+    test_one_modelbase(models[2], "Linear Regression")
+    test_one_modelbase(models[3], "Category Embedding")
+    l = trainer.get_leaderboard()
+
+
+def test_train_multiclass():
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config("sample", manual_config={"label_name": ["target_multi_class"]})
+    # trainer.load_config("sample")
+    trainer.load_data()
+    assert trainer.datamodule.task == "multiclass"
+
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
         CatEmbed(
             trainer,
             model_subset=[
@@ -113,6 +145,28 @@ def test_train_binary():
     ]
     trainer.add_modelbases(models)
     trainer.train()
+
+    def test_one_modelbase(modelbase, model_name):
+        res = modelbase.predict(
+            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+        )
+        assert np.all(np.mod(res, 1) == 0)
+        res_prob = modelbase.predict_proba(
+            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+        )
+        assert np.all(np.mod(res_prob, 1) != 0)
+        assert np.all(res_prob > 0) and np.all(res_prob < 1)
+
+        assert (
+            res_prob.shape[0] == len(trainer.df)
+            and res_prob.shape[1] == trainer.datamodule.n_classes[0]
+        )
+
+    test_one_modelbase(models[0], "Category Embedding")
+    test_one_modelbase(models[1], "TabMlp")
+    test_one_modelbase(models[2], "Linear Regression")
+    test_one_modelbase(models[3], "Category Embedding")
+
     l = trainer.get_leaderboard()
 
 

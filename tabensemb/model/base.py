@@ -211,7 +211,7 @@ class AbstractModel:
         Returns
         -------
         prediction:
-            Predicted target.
+            Predicted target. Always 2d np.ndarray.
         """
         self.trainer.set_status(training=False)
         if self.model is None:
@@ -249,8 +249,8 @@ class AbstractModel:
         Returns
         -------
         res
-            For binary tasks, a 1d np.ndarray is returned as the probability of positive. For multiclass tasks, a
-            (n_samples, n_classes) np.ndarray is returned.
+            For binary tasks, a (n_samples, 1) np.ndarray is returned as the probability of positive. For multiclass
+            tasks, a (n_samples, n_classes) np.ndarray is returned.
         """
         if self.trainer.datamodule.task == "regression":
             raise Exception(f"Calling predict_proba on regression models.")
@@ -2174,15 +2174,23 @@ class AbstractNN(pl.LightningModule):
                 y_out = self.output_norm(y)
                 loss = self.default_loss_fn(y, yhat)
                 avg_loss += loss.item() * len(y)
-                pred += list(y_out.cpu().detach().numpy())
-                truth += list(yhat.cpu().detach().numpy())
+                pred.append(y_out.cpu().detach().numpy())
+                truth.append(yhat.cpu().detach().numpy())
             avg_loss /= len(test_loader.dataset)
-        return np.array(pred), np.array(truth), avg_loss
+        all_pred = np.concatenate(pred, axis=0)
+        all_truth = np.concatenate(truth, axis=0)
+        if len(all_pred.shape) == 1:
+            all_pred = all_pred.reshape(-1, 1)
+        if len(all_truth.shape) == 1:
+            all_truth = all_truth.reshape(-1, 1)
+        return all_pred, all_truth, avg_loss
 
     def before_loss_fn(self, y, yhat):
         if self.task == "binary":
             y = torch.flatten(y)
             yhat = torch.flatten(yhat)
+        elif self.task == "multiclass":
+            yhat = torch.flatten(yhat).long()
         return y, yhat
 
     def loss_fn(self, y_pred, y_true, *data, **kwargs):
