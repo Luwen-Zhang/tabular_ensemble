@@ -405,6 +405,8 @@ class DataModule:
             self.n_classes = [
                 len(np.unique(self.label_data[col])) for col in self.label_name
             ]
+        else:
+            self.n_classes = [None]
 
     def _infer_task(self):
         selected_task = self.args["task"] if "task" in self.args.keys() else None

@@ -1920,9 +1920,7 @@ class AbstractNN(pl.LightningModule):
         """
         super(AbstractNN, self).__init__()
         self.default_loss_fn = self.get_loss_fn(datamodule.loss, datamodule.task)
-        self.default_output_norm = self.get_output_norm(
-            datamodule.loss, datamodule.task
-        )
+        self.default_output_norm = self.get_output_norm(datamodule.task)
         self.cont_feature_names = cp(datamodule.cont_feature_names)
         self.cat_feature_names = cp(datamodule.cat_feature_names)
         self.n_cont = len(self.cont_feature_names)
@@ -1935,10 +1933,13 @@ class AbstractNN(pl.LightningModule):
         self.hidden_rep_dim = None
         self.task = datamodule.task
         self.n_inputs = len(self.cont_feature_names)
-        if datamodule.task == "regression":
-            self.n_outputs = len(datamodule.label_name)
-        elif datamodule.task in ["binary", "multiclass"]:
-            self.n_outputs = datamodule.n_classes[0]
+        task_outputs = {
+            "regression": len(datamodule.label_name),
+            "multiclass": datamodule.n_classes[0],
+            "binary": 1,
+        }
+        if self.task in task_outputs.keys():
+            self.n_outputs = task_outputs[self.task]
         else:
             raise Exception(f"Unsupported type of task {self.task}")
         self.cat_num_unique = [len(x) for x in datamodule.cat_feature_mapping.values()]
@@ -1954,30 +1955,56 @@ class AbstractNN(pl.LightningModule):
         self._device_var = nn.Parameter(torch.empty(0, requires_grad=False))
 
     @staticmethod
-    def get_output_norm(loss, task):
-        if task in ["binary", "multiclass"] and loss != "cross_entropy":
-            raise Exception(
-                f"Only cross entropy loss is supported for classification tasks."
-            )
-        if task == "binary":
-            return torch.nn.Sigmoid()
-        elif task == "multiclass":
-            return torch.nn.LogSoftmax()
-        elif task == "regression":
-            return torch.nn.Identity()
+    def get_output_norm(task) -> torch.nn.Module:
+        """
+        The operation on the output of ``forward`` in training/validation/testing step. This will not affect the input
+        of loss functions.
+
+        Parameters
+        ----------
+        task
+            "regression", "multiclass", or "binary"
+
+        Returns
+        -------
+        nm
+            The operation on the output.
+        """
+        task_norm = {
+            "regression": torch.nn.Identity(),
+            "multiclass": torch.nn.Softmax(),
+            "binary": torch.nn.Sigmoid(),
+        }
+        if task in task_norm.keys():
+            return task_norm[task]
         else:
             raise Exception(f"Unrecognized task {task}.")
 
     @staticmethod
-    def get_loss_fn(loss, task):
+    def get_loss_fn(loss, task) -> torch.nn.Module:
+        """
+        The loss function for the output of ``forward`` and the target.
+
+        Parameters
+        ----------
+        loss
+            "cross_entropy", "mae", or "mse"
+        task
+            "regression", "multiclass", or "binary"
+
+        Returns
+        -------
+        loss_fn
+            The loss function.
+        """
         if task in ["binary", "multiclass"] and loss != "cross_entropy":
             raise Exception(
                 f"Only cross entropy loss is supported for classification tasks."
             )
         if task == "binary":
-            return torch.nn.BCELoss()
+            return torch.nn.BCEWithLogitsLoss()
         elif task == "multiclass":
-            return torch.nn.NLLLoss()
+            return torch.torch.nn.CrossEntropyLoss()
         elif task == "regression":
             mapping = {
                 "mse": torch.nn.MSELoss(),
@@ -2013,6 +2040,11 @@ class AbstractNN(pl.LightningModule):
         -------
         result:
             The obtained tensor.
+
+        Notes
+        -------
+        For classification tasks, DO NOT turn logits into probabilities in ``forward`` because we have already
+        implemented this later. See also ``get_output_norm``.
         """
         with torch.no_grad() if tabensemb.setting[
             "test_with_no_grad"
@@ -2053,13 +2085,13 @@ class AbstractNN(pl.LightningModule):
         y = self(
             *([data] + additional_tensors), data_required_models=data_required_models
         )
-        y = self.default_output_norm(y)
         y, yhat = self.before_loss_fn(y, yhat)
         loss = self.loss_fn(y, yhat, *([data] + additional_tensors))
         self.cal_backward_step(loss)
+        default_loss = self.default_loss_fn(y, yhat)
         self.log(
             "train_loss",
-            loss.item(),
+            default_loss.item(),
             on_step=False,
             on_epoch=True,
             batch_size=y.shape[0],
@@ -2079,9 +2111,9 @@ class AbstractNN(pl.LightningModule):
                 *([data] + additional_tensors),
                 data_required_models=data_required_models,
             )
-            y = self.default_output_norm(y)
             y, yhat = self.before_loss_fn(y, yhat)
-            loss = self.loss_fn(y, yhat, *([data] + additional_tensors))
+            y_out = self.output_norm(y)
+            loss = self.default_loss_fn(y, yhat)
             self.log(
                 "valid_loss",
                 loss.item(),
@@ -2089,7 +2121,7 @@ class AbstractNN(pl.LightningModule):
                 on_epoch=True,
                 batch_size=y.shape[0],
             )
-        return yhat, y
+        return yhat, y_out
 
     def configure_optimizers(self) -> Any:
         return torch.optim.Adam(
@@ -2138,18 +2170,18 @@ class AbstractNN(pl.LightningModule):
                     *([data] + additional_tensors),
                     data_required_models=data_required_models,
                 )
-                y = self.default_output_norm(y)
                 y, yhat = self.before_loss_fn(y, yhat)
+                y_out = self.output_norm(y)
                 loss = self.default_loss_fn(y, yhat)
                 avg_loss += loss.item() * len(y)
-                pred += list(y.cpu().detach().numpy())
+                pred += list(y_out.cpu().detach().numpy())
                 truth += list(yhat.cpu().detach().numpy())
             avg_loss /= len(test_loader.dataset)
         return np.array(pred), np.array(truth), avg_loss
 
     def before_loss_fn(self, y, yhat):
         if self.task == "binary":
-            y = y[:, 1]
+            y = torch.flatten(y)
             yhat = torch.flatten(yhat)
         return y, yhat
 
@@ -2174,6 +2206,22 @@ class AbstractNN(pl.LightningModule):
             A torch-like loss.
         """
         return self.default_loss_fn(y_pred, y_true)
+
+    def output_norm(self, y_pred):
+        """
+        User defined operation before output. This is not related to the input of ``loss_fn``.
+
+        Parameters
+        ----------
+        y_pred
+            Predicted value by the model.
+
+        Returns
+        -------
+        y_pred
+            The modified value.
+        """
+        return self.default_output_norm(y_pred)
 
     def cal_zero_grad(self):
         """

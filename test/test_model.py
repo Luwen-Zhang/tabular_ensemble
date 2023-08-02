@@ -626,26 +626,30 @@ def test_get_loss_fn():
     with pytest.raises(Exception):
         _ = AbstractNN.get_loss_fn(loss="mse", task="TEST")
 
-    a = torch.tensor([0.6, 0.5, 0.3, 0.2], dtype=torch.float32)
+    a = torch.tensor([-0.1, 1.1, 0.3, 0.2], dtype=torch.float32)
     b = torch.tensor([0, 1, 0, 1], dtype=torch.float32)
-    nm = AbstractNN.get_output_norm(loss="cross_entropy", task="binary")
+    nm = AbstractNN.get_output_norm(task="binary")
     fn = AbstractNN.get_loss_fn(loss="cross_entropy", task="binary")
     assert torch.allclose(
-        torch.nn.functional.binary_cross_entropy_with_logits(a, b), fn(nm(a), b)
+        torch.nn.functional.binary_cross_entropy_with_logits(a, b), fn(a, b)
     )
+    assert torch.all(nm(a) < 1) and torch.all(nm(a) > 0)
 
     fn = AbstractNN.get_loss_fn(loss="mse", task="regression")
-    nm = AbstractNN.get_output_norm(loss="mse", task="regression")
-    assert torch.allclose(torch.nn.functional.mse_loss(a, b), fn(nm(a), b))
+    nm = AbstractNN.get_output_norm(task="regression")
+    assert torch.allclose(torch.nn.functional.mse_loss(a, b), fn(a, b))
+    assert torch.equal(a, nm(a))
     fn = AbstractNN.get_loss_fn(loss="mae", task="regression")
-    nm = AbstractNN.get_output_norm(loss="mae", task="regression")
-    assert torch.allclose(torch.nn.functional.l1_loss(a, b), fn(nm(a), b))
+    nm = AbstractNN.get_output_norm(task="regression")
+    assert torch.allclose(torch.nn.functional.l1_loss(a, b), fn(a, b))
+    assert torch.equal(a, nm(a))
 
     a = torch.tensor(
-        [[0.6, 0.5, 0.3, 0.2], [-0.2, 0.8, 0.1, 0.2], [10, -10, 0, 0.2]],
+        [[-0.1, 1.1, 0.3, 0.2], [-0.2, 0.8, 0.1, 0.2], [10, -10, 0, 0.2]],
         dtype=torch.float32,
     ).T
     b = torch.tensor([0, 2, 0, 1], dtype=torch.float32).long()
     fn = AbstractNN.get_loss_fn(loss="cross_entropy", task="multiclass")
-    nm = AbstractNN.get_output_norm(loss="cross_entropy", task="multiclass")
-    assert torch.allclose(torch.nn.functional.cross_entropy(a, b), fn(nm(a), b))
+    nm = AbstractNN.get_output_norm(task="multiclass")
+    assert torch.allclose(torch.nn.functional.cross_entropy(a, b), fn(a, b))
+    assert torch.all(nm(a) < 1) and torch.all(nm(a) > 0)
