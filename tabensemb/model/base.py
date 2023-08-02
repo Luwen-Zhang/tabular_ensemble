@@ -2090,7 +2090,7 @@ class AbstractNN(pl.LightningModule):
         self.cal_backward_step(loss)
         default_loss = self.default_loss_fn(y, yhat)
         self.log(
-            "train_loss",
+            "train_loss_verbose",
             default_loss.item(),
             on_step=False,
             on_epoch=True,
@@ -2115,7 +2115,7 @@ class AbstractNN(pl.LightningModule):
             y_out = self.output_norm(y)
             loss = self.default_loss_fn(y, yhat)
             self.log(
-                "valid_loss",
+                "valid_loss_verbose",
                 loss.item(),
                 on_step=False,
                 on_epoch=True,
@@ -2588,13 +2588,13 @@ class PytorchLightningLossCallback(Callback):
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
         logs = trainer.callback_metrics
-        train_loss = logs["train_loss"].detach().cpu().numpy()
-        val_loss = logs["valid_loss"].detach().cpu().numpy()
+        train_loss = logs["train_loss_verbose"].detach().cpu().numpy()
+        val_loss = logs["valid_loss_verbose"].detach().cpu().numpy()
         self.val_ls.append(val_loss)
         if hasattr(pl_module, "_early_stopping_eval"):
             early_stopping_eval = pl_module._early_stopping_eval(
-                trainer.logged_metrics["train_loss"],
-                trainer.logged_metrics["valid_loss"],
+                trainer.logged_metrics["train_loss_verbose"],
+                trainer.logged_metrics["valid_loss_verbose"],
             ).item()
             pl_module.log("early_stopping_eval", early_stopping_eval)
             self.es_val_ls.append(early_stopping_eval)

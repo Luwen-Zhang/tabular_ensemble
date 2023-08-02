@@ -1,8 +1,11 @@
+import torch
 from tabensemb.utils import *
 from tabensemb.model import AbstractModel
 from skopt.space import Integer, Real, Categorical
 import shutil
 import numpy as np
+from pytorch_lightning import Callback
+import pytorch_lightning as pl
 from .base import PytorchLightningLossCallback
 from .base import AbstractWrapper
 from typing import Dict, Any
@@ -174,7 +177,8 @@ class PytorchTabular(AbstractModel):
                 validation=val_data,
                 max_epochs=epoch,
                 callbacks=[
-                    PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch)
+                    PytorchTabularVerboseLossCallback(),
+                    PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch),
                 ],
             )
         if os.path.exists(os.path.join(self.root, "ckpts")):
@@ -450,3 +454,28 @@ class PytorchTabularWrapper(AbstractWrapper):
         return getattr(
             self.wrapped_model.model[self.model_name].model, "_hidden_representation"
         )
+
+
+class PytorchTabularVerboseLossCallback(Callback):
+    def on_train_batch_end(
+        self,
+        trainer: "pl.Trainer",
+        pl_module: pl.LightningModule,
+        outputs,
+        batch: Any,
+        batch_idx: int,
+    ) -> None:
+        pl_module.log(
+            "train_loss_verbose",
+            outputs["loss"],
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch["target"].shape[0],
+        )
+
+    def on_validation_end(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
+    ) -> None:
+        trainer.callback_metrics["valid_loss_verbose"] = trainer.callback_metrics[
+            "valid_loss"
+        ]
