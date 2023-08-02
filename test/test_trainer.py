@@ -378,7 +378,8 @@ def test_trainer_multitarget():
             "label_name": ["target", "cont_0"],
         },
     )
-    trainer.load_data()
+    with pytest.warns(UserWarning):
+        trainer.load_data()
     trainer.summarize_setting()
 
     print(f"\n-- Initialize models --\n")
@@ -447,9 +448,10 @@ def test_trainer_multitarget():
     print(
         f"\n-- Training after set_feature_names and without categorical features --\n"
     )
-    model_trainer.datamodule.set_feature_names(
-        model_trainer.datamodule.cont_feature_names[:10]
-    )
+    with pytest.warns(UserWarning):
+        model_trainer.datamodule.set_feature_names(
+            model_trainer.datamodule.cont_feature_names[:10]
+        )
     model_trainer.train()
 
     print(f"\n-- Bayes optimization --\n")

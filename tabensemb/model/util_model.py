@@ -29,7 +29,7 @@ class RFE(TorchModel):
         super(RFE, self).__init__(
             trainer=trainer, program=program, model_subset=model_subset, **kwargs
         )
-        self.trainer_modelbase = {}
+        self.model = {}
 
         internal_trainer.project_root = self.root
 
@@ -37,7 +37,7 @@ class RFE(TorchModel):
             tmp_trainer = cp(internal_trainer)
             modelbase = self.model_class(tmp_trainer, model_subset=[model_name])
             tmp_trainer.add_modelbases([modelbase])
-            self.trainer_modelbase[model_name] = (tmp_trainer, modelbase)
+            self.model[model_name] = (tmp_trainer, modelbase)
         self.metrics = {}
         self.features_eliminated = {}
         self.selected_features = {}
@@ -50,18 +50,16 @@ class RFE(TorchModel):
         return self._model_names
 
     def _new_model(self, model_name, verbose, **kwargs):
-        return self.trainer_modelbase[model_name][1].new_model(
-            model_name, verbose, **kwargs
-        )
+        return self.model[model_name][1].new_model(model_name, verbose, **kwargs)
 
     def _predict(self, df: pd.DataFrame, model_name, derived_data=None, **kwargs):
-        return self.trainer_modelbase[model_name][1]._predict(
+        return self.model[model_name][1]._predict(
             df, model_name, derived_data, **kwargs
         )
 
     def _predict_all(self, **kwargs):
         predictions = {}
-        for name, (trainer, modelbase) in self.trainer_modelbase.items():
+        for name, (trainer, modelbase) in self.model.items():
             predictions[name] = modelbase._predict_all(**kwargs)[name]
         return predictions
 
@@ -76,7 +74,7 @@ class RFE(TorchModel):
             self.get_model_names() if model_subset is None else model_subset
         ):
             if warm_start:
-                self.trainer_modelbase[model_name][1]._train(
+                self.model[model_name][1]._train(
                     warm_start=warm_start,
                     model_subset=[model_name],
                     verbose=verbose,
@@ -84,7 +82,7 @@ class RFE(TorchModel):
                 )
             else:
                 self.run(verbose=verbose, model_name=model_name)
-                self.trainer_modelbase[model_name][1]._train(
+                self.model[model_name][1]._train(
                     warm_start=warm_start,
                     model_subset=[model_name],
                     verbose=verbose,
@@ -93,7 +91,7 @@ class RFE(TorchModel):
 
     def run(self, model_name, verbose=True):
         rest_features = cp(self.trainer.all_feature_names)
-        trainer, modelbase = self.trainer_modelbase[model_name]
+        trainer, modelbase = self.model[model_name]
         metrics = []
         features_eliminated = []
         impor_dicts = []

@@ -1972,7 +1972,7 @@ class AbstractNN(pl.LightningModule):
         """
         task_norm = {
             "regression": torch.nn.Identity(),
-            "multiclass": torch.nn.Softmax(),
+            "multiclass": torch.nn.Softmax(dim=-1),
             "binary": torch.nn.Sigmoid(),
         }
         if task in task_norm.keys():

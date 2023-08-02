@@ -272,7 +272,8 @@ def test_check_batch_size():
 
     with pytest.raises(Exception):
         model.limit_batch_size = -1
-        res = model._check_params("TEST", **{"batch_size": 2})
+        with pytest.warns(UserWarning):
+            res = model._check_params("TEST", **{"batch_size": 2})
 
     with pytest.warns(UserWarning):
         model.limit_batch_size = -1
@@ -374,7 +375,8 @@ def test_abstract_model_exceptions():
         abs_torch_model.cal_feature_importance(model_name="TEST", method="NOT_EXIST")
 
     with pytest.raises(Exception) as err:
-        abs_torch_model.train()
+        with pytest.warns(UserWarning):
+            abs_torch_model.train()
     assert "_new_model must return an AbstractNN" in err.value.args[0]
 
 

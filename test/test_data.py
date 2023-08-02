@@ -403,14 +403,17 @@ def test_data_splitter():
     ), "RandomSplitter is not getting correct k-fold results."
 
     print("\n-- k-fold RandomSplitter in a new iteration --\n")
-    res_random = [spl.split(df, [], [], [], cv=5) for i in range(5)]
+    with pytest.warns(UserWarning):
+        res_random = [spl.split(df, [], [], [], cv=5) for i in range(5)]
     assert np.allclose(
         np.sort(np.hstack([i[2] for i in res_random])), np.arange(100)
     ), "RandomSplitter is not getting correct k-fold results in a new iteration."
 
     print("\n-- k-fold RandomSplitter change k --\n")
-    spl.split(df, [], [], [], cv=5)
-    res_random = [spl.split(df, [], [], [], cv=3) for i in range(3)]
+    with pytest.warns(UserWarning):
+        spl.split(df, [], [], [], cv=5)
+    with pytest.warns(UserWarning):
+        res_random = [spl.split(df, [], [], [], cv=3) for i in range(3)]
     assert np.allclose(
         np.sort(np.hstack([i[2] for i in res_random])), np.arange(100)
     ), "RandomSplitter is not getting correct k-fold results after changing the number of k-fold."
@@ -743,12 +746,13 @@ def test_infer_task():
     assert "is not supported" in err.value.args[0]
 
     with pytest.raises(Exception) as err:
-        _ = test_once(
-            {
-                "label_name": ["target", "target_multi_class"],
-                "task": ["regression", "multiclass"],
-            }
-        )
+        with pytest.warns(UserWarning):
+            _ = test_once(
+                {
+                    "label_name": ["target", "target_multi_class"],
+                    "task": ["regression", "multiclass"],
+                }
+            )
     assert "Multiple tasks is not supported" in err.value.args[0]
 
     with global_setting({"raise_inconsistent_inferred_task": True}):
