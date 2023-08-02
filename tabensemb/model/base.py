@@ -185,6 +185,7 @@ class AbstractModel:
         model: Any = None,
         derived_data: dict = None,
         ignore_absence: bool = False,
+        proba: bool = False,
         **kwargs,
     ) -> np.ndarray:
         """
@@ -202,6 +203,8 @@ class AbstractModel:
             Data derived from :func:``DataModule.derive_unstacked``. If not None, unstacked data will be re-derived.
         ignore_absence:
             Whether to ignore absent keys in derived_data. Use True only when the model does not use derived_data.
+        proba:
+            Return probabilities instead of targets for classification models.
         **kwargs:
             Arguments of :func:``_predict`` for models.
 
@@ -220,17 +223,40 @@ class AbstractModel:
         df, derived_data = self.trainer.datamodule.prepare_new_data(
             df, derived_data, ignore_absence
         )
-        return self._predict(
+        res = self._predict(
             df,
             model_name,
             derived_data,
             model=model,
             **kwargs,
         )
+        if self.trainer.datamodule.task == "regression" or proba:
+            return res
+        else:
+            return convert_proba_to_target(res, self.trainer.datamodule.task)
 
-    def predict_proba(self, *args, **kwargs):
-        res = self.predict(*args, **kwargs)
-        return convert_proba_to_target(res, self.trainer.datamodule.task)
+    def predict_proba(self, *args, **kwargs) -> np.ndarray:
+        """
+        Predict probabilities of each class.
+
+        Parameters
+        ----------
+        args
+            Positional arguments of ``predict``.
+        kwargs
+            Arguments of ``predict``, except for ``proba``.
+
+        Returns
+        -------
+        res
+            For binary tasks, a 1d np.ndarray is returned as the probability of positive. For multiclass tasks, a
+            (n_samples, n_classes) np.ndarray is returned.
+        """
+        if self.trainer.datamodule.task == "regression":
+            raise Exception(f"Calling predict_proba on regression models.")
+        if "proba" in kwargs.keys():
+            del kwargs["proba"]
+        return self.predict(*args, proba=True, **kwargs)
 
     def detach_model(self, model_name: str, program: str = None) -> "AbstractModel":
         """
