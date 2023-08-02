@@ -156,8 +156,11 @@ class DataModule:
         """
         if data_path is None:
             if self.data_path is None:
-                data_path = os.path.join(
-                    tabensemb.setting["default_data_path"], f"{self.args['database']}"
+                path = self.args["database"]
+                data_path = (
+                    path
+                    if "/" in path or os.path.isfile(path)
+                    else os.path.join(tabensemb.setting["default_data_path"], path)
                 )
             else:
                 print(f"Using previously used data path {self.data_path}")
