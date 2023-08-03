@@ -265,12 +265,23 @@ class WideDeep(AbstractModel):
             "TabFastFormer": TabFastFormer,
         }
 
+        task = self.trainer.datamodule.task
+        loss = self.trainer.datamodule.loss
+        if task == "binary" and loss == "cross_entropy":
+            loss = "binary_cross_entropy"
+        self.task = task
+
         tab_model = mapping[model_name](**args)
-        model = WideDeep(deeptabular=tab_model)
+        if task == "multiclass":
+            model = WideDeep(
+                deeptabular=tab_model, pred_dim=self.trainer.datamodule.n_classes[0]
+            )
+        else:
+            model = WideDeep(deeptabular=tab_model)
 
         wd_trainer = wd_Trainer(
             model,
-            objective="regression",
+            objective=loss,
             verbose=0,
             device="cpu" if self.trainer.device == "cpu" else "cuda",
             num_workers=0,
@@ -295,11 +306,11 @@ class WideDeep(AbstractModel):
         self.tab_preprocessor = tab_preprocessor
         return {
             "X_train": X_tab_train,
-            "y_train": data.y_train,
+            "y_train": data.y_train.flatten(),
             "X_val": X_tab_val,
-            "y_val": data.y_val,
+            "y_val": data.y_val.flatten(),
             "X_test": X_tab_test,
-            "y_test": data.y_test,
+            "y_test": data.y_test.flatten(),
         }
 
     def _train_single_model(
@@ -358,7 +369,14 @@ class WideDeep(AbstractModel):
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
         original_batch_size = model.batch_size
         delattr(model, "batch_size")
-        res = model.predict(X_tab=X_test, batch_size=len(X_test)).reshape(-1, 1)
+        if self.task == "regression":
+            res = model.predict(X_tab=X_test, batch_size=len(X_test)).reshape(-1, 1)
+        elif self.task == "binary":
+            res = model.predict_proba(X_tab=X_test, batch_size=len(X_test))[
+                :, 1
+            ].reshape(-1, 1)
+        else:
+            res = model.predict_proba(X_tab=X_test, batch_size=len(X_test))
         setattr(model, "batch_size", original_batch_size)
         return res
 

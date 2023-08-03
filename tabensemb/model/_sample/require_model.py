@@ -7,13 +7,13 @@ from tabensemb.model.base import get_sequential, AbstractWrapper
 
 
 class RequireOthersNN(AbstractNN):
-    def __init__(self, n_inputs, n_outputs, datamodule, required_models, **kwargs):
+    def __init__(self, datamodule, required_models, **kwargs):
         super(RequireOthersNN, self).__init__(datamodule, **kwargs)
         self.required_model = list(required_models.values())[0]
         self.required_model_name = list(required_models.keys())[0]
 
         self.use_hidden_rep, hidden_rep_dim = self._test_required_model(
-            n_inputs, self.required_model
+            self.n_inputs, self.required_model
         )
         if self.use_hidden_rep:
             self.head = get_sequential(

@@ -1,8 +1,11 @@
+import torch
 from tabensemb.utils import *
 from tabensemb.model import AbstractModel
 from skopt.space import Integer, Real, Categorical
 import shutil
 import numpy as np
+from pytorch_lightning import Callback
+import pytorch_lightning as pl
 from .base import PytorchLightningLossCallback
 from .base import AbstractWrapper
 from typing import Dict, Any
@@ -39,6 +42,20 @@ class PytorchTabular(AbstractModel):
         )
         from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
 
+        task = self.trainer.datamodule.task
+        self.task = task
+        if task in ["binary", "multiclass"]:
+            task = "classification"
+        loss = self.trainer.datamodule.loss
+        mapping = {
+            "cross_entropy": "CrossEntropyLoss",
+            "mse": "MSELoss",
+            "mae": "L1Loss",
+        }
+        if loss in mapping.keys():
+            loss = mapping[loss]
+        self.loss = loss
+
         data_config = DataConfig(
             target=self.trainer.label_name,
             continuous_cols=self.trainer.cont_feature_names,
@@ -50,9 +67,9 @@ class PytorchTabular(AbstractModel):
         trainer_config = TrainerConfig(
             batch_size=int(kwargs["batch_size"]),
             progress_bar="none",
-            early_stopping="valid_mean_squared_error",
+            early_stopping="valid_loss",
             early_stopping_patience=self.trainer.static_params["patience"],
-            checkpoints="valid_mean_squared_error",
+            checkpoints="valid_loss",
             checkpoints_path=os.path.join(self.root, "ckpts"),
             checkpoints_save_top_k=1,
             checkpoints_name=model_name,
@@ -92,10 +109,10 @@ class PytorchTabular(AbstractModel):
                     pass
         with HiddenPrints():
             model_config = (
-                model_configs[model_name](task="regression", **legal_kwargs)
+                model_configs[model_name](task=task, loss=loss, **legal_kwargs)
                 if model_name not in special_configs.keys()
                 else model_configs[model_name](
-                    task="regression", **special_configs[model_name], **legal_kwargs
+                    task=task, loss=loss, **special_configs[model_name], **legal_kwargs
                 )
             )
             tabular_model = TabularModel(
@@ -158,10 +175,10 @@ class PytorchTabular(AbstractModel):
             model.fit(
                 train=train_data,
                 validation=val_data,
-                loss=nn.MSELoss(),
                 max_epochs=epoch,
                 callbacks=[
-                    PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch)
+                    PytorchTabularVerboseLossCallback(),
+                    PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch),
                 ],
             )
         if os.path.exists(os.path.join(self.root, "ckpts")):
@@ -185,11 +202,17 @@ class PytorchTabular(AbstractModel):
             )
             all_res = model.predict(X_test, include_input_features=False)
             model.datamodule.batch_size = original_batch_size
-            preds = [
-                np.array(all_res[f"{target}_prediction"]).reshape(-1, 1)
-                for target in targets
-            ]
-            res = np.concatenate(preds, axis=1)
+            if self.task == "regression":
+                preds = [
+                    np.array(all_res[f"{target}_prediction"]).reshape(-1, 1)
+                    for target in targets
+                ]
+                res = np.concatenate(preds, axis=1)
+            elif self.task == "binary":
+                res = np.array(all_res[f"1_probability"]).reshape(-1, 1)
+            else:
+                n_classes = len(all_res.columns) - 1
+                res = np.array(all_res)[:, :n_classes]
         return res
 
     @staticmethod
@@ -428,3 +451,28 @@ class PytorchTabularWrapper(AbstractWrapper):
         return getattr(
             self.wrapped_model.model[self.model_name].model, "_hidden_representation"
         )
+
+
+class PytorchTabularVerboseLossCallback(Callback):
+    def on_train_batch_end(
+        self,
+        trainer: "pl.Trainer",
+        pl_module: pl.LightningModule,
+        outputs,
+        batch: Any,
+        batch_idx: int,
+    ) -> None:
+        pl_module.log(
+            "train_loss_verbose",
+            outputs["loss"],
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch["target"].shape[0],
+        )
+
+    def on_validation_end(
+        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
+    ) -> None:
+        trainer.callback_metrics["valid_loss_verbose"] = trainer.callback_metrics[
+            "valid_loss"
+        ]

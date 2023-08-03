@@ -26,10 +26,7 @@ class CatEmbed(TorchModel):
 
     def _new_model(self, model_name, verbose, **kwargs):
         fix_kwargs = dict(
-            n_inputs=len(self.datamodule.cont_feature_names),
-            n_outputs=len(self.datamodule.label_name),
             layers=self.datamodule.args["layers"],
-            cat_num_unique=[len(x) for x in self.trainer.cat_feature_mapping.values()],
             datamodule=self.datamodule,
         )
         if "Category Embedding" in model_name:
@@ -84,7 +81,9 @@ class CatEmbed(TorchModel):
         datamodule.set_data_derivers(
             [("UnscaledDataDeriver", {"derived_name": "Unscaled"})]
         )
-        datamodule.set_data_processors([("StandardScaler", {})])
+        datamodule.set_data_processors(
+            [("CategoricalOrdinalEncoder", {}), ("StandardScaler", {})]
+        )
         datamodule.set_data(
             base.df,
             cont_feature_names=base.cont_feature_names,

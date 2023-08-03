@@ -6,8 +6,10 @@ from tabensemb.config import UserConfig
 from tabensemb.data import *
 from tabensemb.data.dataderiver import RelativeDeriver
 from tabensemb.data.dataimputer import get_data_imputer
+from tabensemb.utils.utils import global_setting
 import numpy as np
 import pandas as pd
+import torch
 
 relative_deriver_kwargs = {
     "stacked": True,
@@ -401,14 +403,17 @@ def test_data_splitter():
     ), "RandomSplitter is not getting correct k-fold results."
 
     print("\n-- k-fold RandomSplitter in a new iteration --\n")
-    res_random = [spl.split(df, [], [], [], cv=5) for i in range(5)]
+    with pytest.warns(UserWarning):
+        res_random = [spl.split(df, [], [], [], cv=5) for i in range(5)]
     assert np.allclose(
         np.sort(np.hstack([i[2] for i in res_random])), np.arange(100)
     ), "RandomSplitter is not getting correct k-fold results in a new iteration."
 
     print("\n-- k-fold RandomSplitter change k --\n")
-    spl.split(df, [], [], [], cv=5)
-    res_random = [spl.split(df, [], [], [], cv=3) for i in range(3)]
+    with pytest.warns(UserWarning):
+        spl.split(df, [], [], [], cv=5)
+    with pytest.warns(UserWarning):
+        res_random = [spl.split(df, [], [], [], cv=3) for i in range(3)]
     assert np.allclose(
         np.sort(np.hstack([i[2] for i in res_random])), np.arange(100)
     ), "RandomSplitter is not getting correct k-fold results after changing the number of k-fold."
@@ -709,3 +714,96 @@ def test_datamodule_data_path():
     assert np.allclose(
         original.values, excel_loaded[datamodule.cont_feature_names].values
     )
+
+
+def test_infer_task():
+    def test_once(manual_config):
+        config = UserConfig("sample")
+        config.merge(manual_config)
+        datamodule = DataModule(config=config)
+        datamodule.load_data()
+        return datamodule
+
+    datamodule = test_once({"label_name": ["target"]})
+    assert datamodule.task == "regression"
+    assert datamodule.loss == "mse"
+
+    datamodule = test_once({"label_name": ["target"], "task": "regression"})
+    assert datamodule.task == "regression"
+
+    datamodule.scaled_df["target"] = [
+        pd.Timestamp(20201010) for x in datamodule.df["target"]
+    ]
+    with pytest.raises(Exception) as err:
+        datamodule._infer_task()
+    assert "Unrecognized target type" in err.value.args[0]
+
+    datamodule = test_once({"label_name": ["target_binary"]})
+    assert datamodule.task == "binary"
+    assert datamodule.loss == "cross_entropy"
+
+    datamodule = test_once({"label_name": ["target_multi_class"]})
+    assert datamodule.task == "multiclass"
+    assert datamodule.loss == "cross_entropy"
+
+    with pytest.raises(Exception) as err:
+        _ = test_once({"label_name": ["target_multi_class"], "loss": "TEST"})
+    assert "is not supported" in err.value.args[0]
+
+    with pytest.raises(Exception) as err:
+        _ = test_once({"label_name": ["target_multi_class"], "task": "TEST"})
+    assert "Unsupported task" in err.value.args[0]
+
+    with pytest.raises(Exception) as err:
+        with pytest.warns(UserWarning):
+            _ = test_once(
+                {
+                    "label_name": ["target", "target_multi_class"],
+                    "task": ["regression", "multiclass"],
+                }
+            )
+    assert "Multiple tasks is not supported" in err.value.args[0]
+
+    with global_setting({"raise_inconsistent_inferred_task": True}):
+        with pytest.raises(Exception) as err:
+            _ = test_once(
+                {
+                    "label_name": ["target"],
+                    "task": "binary",
+                }
+            )
+        assert "is not consistent with" in err.value.args[0]
+
+    with pytest.warns(UserWarning):
+        _ = test_once(
+            {
+                "label_name": ["target"],
+                "task": "binary",
+            }
+        )
+
+    with pytest.raises(Exception) as err:
+        with pytest.warns(UserWarning):
+            _ = test_once({"label_name": ["target", "target_multi_class"]})
+    assert "Multi-target classification" in err.value.args[0]
+
+
+def test_infer_loss():
+    config = UserConfig("sample")
+    datamodule = DataModule(config=config)
+    assert datamodule._infer_loss("binary") == "cross_entropy"
+    assert datamodule._infer_loss("multiclass") == "cross_entropy"
+    assert datamodule._infer_loss("regression") == "mse"
+
+    config.merge({"loss": "mse"})
+    datamodule = DataModule(config=config)
+    with pytest.raises(Exception) as err:
+        _ = datamodule._infer_loss("binary")
+    assert "not supported for binary tasks" in err.value.args[0]
+    assert datamodule._infer_loss("regression") == "mse"
+
+    config.merge({"loss": ["mse", "mae"]})
+    datamodule = DataModule(config=config)
+    with pytest.raises(Exception) as err:
+        _ = datamodule._infer_loss("binary")
+    assert "Multiple losses is not supported" in err.value.args[0]

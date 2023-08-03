@@ -10,7 +10,7 @@ try:
     import tabensemb
 except:
     raise Exception(
-        f"Test units should be placed in a folder named `test` that is in the same parent folder as `src`."
+        f"Test units should be placed in a folder named `test` that is in the same parent folder as `tabensemb`."
     )
 
 tabensemb.setting["default_data_path"] = "../data"

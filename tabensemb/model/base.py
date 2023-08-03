@@ -185,6 +185,7 @@ class AbstractModel:
         model: Any = None,
         derived_data: dict = None,
         ignore_absence: bool = False,
+        proba: bool = False,
         **kwargs,
     ) -> np.ndarray:
         """
@@ -202,13 +203,15 @@ class AbstractModel:
             Data derived from :func:``DataModule.derive_unstacked``. If not None, unstacked data will be re-derived.
         ignore_absence:
             Whether to ignore absent keys in derived_data. Use True only when the model does not use derived_data.
+        proba:
+            Return probabilities instead of targets for classification models.
         **kwargs:
             Arguments of :func:``_predict`` for models.
 
         Returns
         -------
         prediction:
-            Predicted target.
+            Predicted target. Always 2d np.ndarray.
         """
         self.trainer.set_status(training=False)
         if self.model is None:
@@ -220,13 +223,42 @@ class AbstractModel:
         df, derived_data = self.trainer.datamodule.prepare_new_data(
             df, derived_data, ignore_absence
         )
-        return self._predict(
+        res = self._predict(
             df,
             model_name,
             derived_data,
             model=model,
             **kwargs,
         )
+        if self.trainer.datamodule.task == "regression" or proba:
+            return res
+        else:
+            return self.trainer.datamodule.label_ordinal_encoder.inverse_transform(
+                convert_proba_to_target(res, self.trainer.datamodule.task)
+            )
+
+    def predict_proba(self, *args, **kwargs) -> np.ndarray:
+        """
+        Predict probabilities of each class.
+
+        Parameters
+        ----------
+        args
+            Positional arguments of ``predict``.
+        kwargs
+            Arguments of ``predict``, except for ``proba``.
+
+        Returns
+        -------
+        res
+            For binary tasks, a (n_samples, 1) np.ndarray is returned as the probability of positive. For multiclass
+            tasks, a (n_samples, n_classes) np.ndarray is returned.
+        """
+        if self.trainer.datamodule.task == "regression":
+            raise Exception(f"Calling predict_proba on regression models.")
+        if "proba" in kwargs.keys():
+            del kwargs["proba"]
+        return self.predict(*args, proba=True, **kwargs)
 
     def detach_model(self, model_name: str, program: str = None) -> "AbstractModel":
         """
@@ -949,9 +981,9 @@ class AbstractModel:
 
             def pred_set(X, y, name):
                 pred = self._pred_single_model(model, X, verbose=False)
-                mse = metric_sklearn(pred, y, "mse")
+                metric, loss = self._default_metric_sklearn(y, pred)
                 if verbose:
-                    print(f"{name} MSE loss: {mse:.5f}, RMSE loss: {np.sqrt(mse):.5f}")
+                    print(f"{name} {metric} loss: {loss:.5f}")
 
             pred_set(data["X_train"], data["y_train"], "Training")
             pred_set(data["X_val"], data["y_val"], "Validation")
@@ -962,6 +994,21 @@ class AbstractModel:
         self.trainer.set_status(training=False)
         if dump_trainer:
             save_trainer(self.trainer)
+
+    def _default_metric_sklearn(self, y_true, y_pred):
+        task = self.trainer.datamodule.task
+        if task == "regression":
+            metric = "mse"
+            loss = auto_metric_sklearn(y_true, y_pred, metric, "regression")
+        elif task == "binary":
+            metric = "log_loss"
+            loss = auto_metric_sklearn(y_true, y_pred, metric, "binary")
+        elif task == "multiclass":
+            metric = "log_loss"
+            loss = auto_metric_sklearn(y_true, y_pred, metric, "multiclass")
+        else:
+            raise NotImplementedError
+        return metric, loss
 
     def _bayes_eval(
         self,
@@ -980,9 +1027,9 @@ class AbstractModel:
             The evaluation of bayesian hyperparameter optimization.
         """
         y_val_pred = self._pred_single_model(model, X_val, verbose=False)
-        val_loss = metric_sklearn(y_val_pred, y_val, "mse")
+        _, val_loss = self._default_metric_sklearn(y_val, y_val_pred)
         y_train_pred = self._pred_single_model(model, X_train, verbose=False)
-        train_loss = metric_sklearn(y_train_pred, y_train, "mse")
+        _, train_loss = self._default_metric_sklearn(y_train, y_train_pred)
         return max([train_loss, val_loss])
 
     def _check_train_status(self):
@@ -1874,7 +1921,8 @@ class AbstractNN(pl.LightningModule):
             A DataModule instance.
         """
         super(AbstractNN, self).__init__()
-        self.default_loss_fn = nn.MSELoss()
+        self.default_loss_fn = self.get_loss_fn(datamodule.loss, datamodule.task)
+        self.default_output_norm = self.get_output_norm(datamodule.task)
         self.cont_feature_names = cp(datamodule.cont_feature_names)
         self.cat_feature_names = cp(datamodule.cat_feature_names)
         self.n_cont = len(self.cont_feature_names)
@@ -1885,6 +1933,18 @@ class AbstractNN(pl.LightningModule):
         self.automatic_optimization = False
         self.hidden_representation = None
         self.hidden_rep_dim = None
+        self.task = datamodule.task
+        self.n_inputs = len(self.cont_feature_names)
+        task_outputs = {
+            "regression": len(datamodule.label_name),
+            "multiclass": datamodule.n_classes[0],
+            "binary": 1,
+        }
+        if self.task in task_outputs.keys():
+            self.n_outputs = task_outputs[self.task]
+        else:
+            raise Exception(f"Unsupported type of task {self.task}")
+        self.cat_num_unique = [len(x) for x in datamodule.cat_feature_mapping.values()]
         if len(kwargs) > 0:
             self.save_hyperparameters(
                 *list(kwargs.keys()),
@@ -1895,6 +1955,66 @@ class AbstractNN(pl.LightningModule):
         ):
             self.derived_feature_names_dims[name] = dim
         self._device_var = nn.Parameter(torch.empty(0, requires_grad=False))
+
+    @staticmethod
+    def get_output_norm(task) -> torch.nn.Module:
+        """
+        The operation on the output of ``forward`` in training/validation/testing step. This will not affect the input
+        of loss functions.
+
+        Parameters
+        ----------
+        task
+            "regression", "multiclass", or "binary"
+
+        Returns
+        -------
+        nm
+            The operation on the output.
+        """
+        task_norm = {
+            "regression": torch.nn.Identity(),
+            "multiclass": torch.nn.Softmax(dim=-1),
+            "binary": torch.nn.Sigmoid(),
+        }
+        if task in task_norm.keys():
+            return task_norm[task]
+        else:
+            raise Exception(f"Unrecognized task {task}.")
+
+    @staticmethod
+    def get_loss_fn(loss, task) -> torch.nn.Module:
+        """
+        The loss function for the output of ``forward`` and the target.
+
+        Parameters
+        ----------
+        loss
+            "cross_entropy", "mae", or "mse"
+        task
+            "regression", "multiclass", or "binary"
+
+        Returns
+        -------
+        loss_fn
+            The loss function.
+        """
+        if task in ["binary", "multiclass"] and loss != "cross_entropy":
+            raise Exception(
+                f"Only cross entropy loss is supported for classification tasks."
+            )
+        if task == "binary":
+            return torch.nn.BCEWithLogitsLoss()
+        elif task == "multiclass":
+            return torch.torch.nn.CrossEntropyLoss()
+        elif task == "regression":
+            mapping = {
+                "mse": torch.nn.MSELoss(),
+                "mae": torch.nn.L1Loss(),
+            }
+            return mapping[loss]
+        else:
+            raise Exception(f"Unrecognized task {task}.")
 
     @property
     def device(self):
@@ -1922,6 +2042,11 @@ class AbstractNN(pl.LightningModule):
         -------
         result:
             The obtained tensor.
+
+        Notes
+        -------
+        For classification tasks, DO NOT turn logits into probabilities in ``forward`` because we have already
+        implemented this later. See also ``get_output_norm``.
         """
         with torch.no_grad() if tabensemb.setting[
             "test_with_no_grad"
@@ -1962,12 +2087,13 @@ class AbstractNN(pl.LightningModule):
         y = self(
             *([data] + additional_tensors), data_required_models=data_required_models
         )
-        loss = self.loss_fn(yhat, y, *([data] + additional_tensors))
+        y, yhat = self.before_loss_fn(y, yhat)
+        loss = self.loss_fn(y, yhat, *([data] + additional_tensors))
         self.cal_backward_step(loss)
-        mse = self.default_loss_fn(yhat, y)
+        default_loss = self.default_loss_fn(y, yhat)
         self.log(
-            "train_mean_squared_error",
-            mse.item(),
+            "train_loss_verbose",
+            default_loss.item(),
             on_step=False,
             on_epoch=True,
             batch_size=y.shape[0],
@@ -1987,15 +2113,17 @@ class AbstractNN(pl.LightningModule):
                 *([data] + additional_tensors),
                 data_required_models=data_required_models,
             )
-            mse = self.default_loss_fn(yhat, y)
+            y, yhat = self.before_loss_fn(y, yhat)
+            y_out = self.output_norm(y)
+            loss = self.default_loss_fn(y, yhat)
             self.log(
-                "valid_mean_squared_error",
-                mse.item(),
+                "valid_loss_verbose",
+                loss.item(),
                 on_step=False,
                 on_epoch=True,
                 batch_size=y.shape[0],
             )
-        return yhat, y
+        return yhat, y_out
 
     def configure_optimizers(self) -> Any:
         return torch.optim.Adam(
@@ -2044,14 +2172,30 @@ class AbstractNN(pl.LightningModule):
                     *([data] + additional_tensors),
                     data_required_models=data_required_models,
                 )
+                y, yhat = self.before_loss_fn(y, yhat)
+                y_out = self.output_norm(y)
                 loss = self.default_loss_fn(y, yhat)
                 avg_loss += loss.item() * len(y)
-                pred += list(y.cpu().detach().numpy())
-                truth += list(yhat.cpu().detach().numpy())
+                pred.append(y_out.cpu().detach().numpy())
+                truth.append(yhat.cpu().detach().numpy())
             avg_loss /= len(test_loader.dataset)
-        return np.array(pred), np.array(truth), avg_loss
+        all_pred = np.concatenate(pred, axis=0)
+        all_truth = np.concatenate(truth, axis=0)
+        if len(all_pred.shape) == 1:
+            all_pred = all_pred.reshape(-1, 1)
+        if len(all_truth.shape) == 1:
+            all_truth = all_truth.reshape(-1, 1)
+        return all_pred, all_truth, avg_loss
 
-    def loss_fn(self, y_true, y_pred, *data, **kwargs):
+    def before_loss_fn(self, y, yhat):
+        if self.task == "binary":
+            y = torch.flatten(y)
+            yhat = torch.flatten(yhat)
+        elif self.task == "multiclass":
+            yhat = torch.flatten(yhat).long()
+        return y, yhat
+
+    def loss_fn(self, y_pred, y_true, *data, **kwargs):
         """
         User defined loss function.
 
@@ -2072,6 +2216,22 @@ class AbstractNN(pl.LightningModule):
             A torch-like loss.
         """
         return self.default_loss_fn(y_pred, y_true)
+
+    def output_norm(self, y_pred):
+        """
+        User defined operation before output. This is not related to the input of ``loss_fn``.
+
+        Parameters
+        ----------
+        y_pred
+            Predicted value by the model.
+
+        Returns
+        -------
+        y_pred
+            The modified value.
+        """
+        return self.default_output_norm(y_pred)
 
     def cal_zero_grad(self):
         """
@@ -2438,13 +2598,13 @@ class PytorchLightningLossCallback(Callback):
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
         logs = trainer.callback_metrics
-        train_loss = logs["train_mean_squared_error"].detach().cpu().numpy()
-        val_loss = logs["valid_mean_squared_error"].detach().cpu().numpy()
+        train_loss = logs["train_loss_verbose"].detach().cpu().numpy()
+        val_loss = logs["valid_loss_verbose"].detach().cpu().numpy()
         self.val_ls.append(val_loss)
         if hasattr(pl_module, "_early_stopping_eval"):
             early_stopping_eval = pl_module._early_stopping_eval(
-                trainer.logged_metrics["train_mean_squared_error"],
-                trainer.logged_metrics["valid_mean_squared_error"],
+                trainer.logged_metrics["train_loss_verbose"],
+                trainer.logged_metrics["valid_loss_verbose"],
             ).item()
             pl_module.log("early_stopping_eval", early_stopping_eval)
             self.es_val_ls.append(early_stopping_eval)

@@ -272,7 +272,8 @@ def test_check_batch_size():
 
     with pytest.raises(Exception):
         model.limit_batch_size = -1
-        res = model._check_params("TEST", **{"batch_size": 2})
+        with pytest.warns(UserWarning):
+            res = model._check_params("TEST", **{"batch_size": 2})
 
     with pytest.warns(UserWarning):
         model.limit_batch_size = -1
@@ -374,7 +375,8 @@ def test_abstract_model_exceptions():
         abs_torch_model.cal_feature_importance(model_name="TEST", method="NOT_EXIST")
 
     with pytest.raises(Exception) as err:
-        abs_torch_model.train()
+        with pytest.warns(UserWarning):
+            abs_torch_model.train()
     assert "_new_model must return an AbstractNN" in err.value.args[0]
 
 
@@ -616,3 +618,40 @@ def test_custom_dataset():
         and dataset[3]["second"] == 6
         and dataset[3]["third"][0] == 3
     )
+
+
+def test_get_loss_fn():
+    with pytest.raises(Exception):
+        _ = AbstractNN.get_loss_fn(loss="TEST", task="binary")
+    with pytest.raises(Exception):
+        _ = AbstractNN.get_loss_fn(loss="TEST", task="multiclass")
+    with pytest.raises(Exception):
+        _ = AbstractNN.get_loss_fn(loss="mse", task="TEST")
+
+    a = torch.tensor([-0.1, 1.1, 0.3, 0.2], dtype=torch.float32)
+    b = torch.tensor([0, 1, 0, 1], dtype=torch.float32)
+    nm = AbstractNN.get_output_norm(task="binary")
+    fn = AbstractNN.get_loss_fn(loss="cross_entropy", task="binary")
+    assert torch.allclose(
+        torch.nn.functional.binary_cross_entropy_with_logits(a, b), fn(a, b)
+    )
+    assert torch.all(nm(a) < 1) and torch.all(nm(a) > 0)
+
+    fn = AbstractNN.get_loss_fn(loss="mse", task="regression")
+    nm = AbstractNN.get_output_norm(task="regression")
+    assert torch.allclose(torch.nn.functional.mse_loss(a, b), fn(a, b))
+    assert torch.equal(a, nm(a))
+    fn = AbstractNN.get_loss_fn(loss="mae", task="regression")
+    nm = AbstractNN.get_output_norm(task="regression")
+    assert torch.allclose(torch.nn.functional.l1_loss(a, b), fn(a, b))
+    assert torch.equal(a, nm(a))
+
+    a = torch.tensor(
+        [[-0.1, 1.1, 0.3, 0.2], [-0.2, 0.8, 0.1, 0.2], [10, -10, 0, 0.2]],
+        dtype=torch.float32,
+    ).T
+    b = torch.tensor([0, 2, 0, 1], dtype=torch.float32).long()
+    fn = AbstractNN.get_loss_fn(loss="cross_entropy", task="multiclass")
+    nm = AbstractNN.get_output_norm(task="multiclass")
+    assert torch.allclose(torch.nn.functional.cross_entropy(a, b), fn(a, b))
+    assert torch.all(nm(a) < 1) and torch.all(nm(a) > 0)

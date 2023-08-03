@@ -73,12 +73,7 @@ def test_init_models():
         PytorchTabular(trainer, model_subset=["Category Embedding"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
         AutoGluon(trainer, model_subset=["Linear Regression"]),
-        CatEmbed(
-            trainer,
-            model_subset=[
-                "Category Embedding",
-            ],
-        ),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
     ]
     trainer.add_modelbases(models)
     pytest.models = models
@@ -90,6 +85,129 @@ def test_save_trainer():
 
 def test_train_without_bayes():
     pytest.test_trainer_trainer.train()
+
+
+def test_train_binary():
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config("sample", manual_config={"label_name": ["target_binary"]})
+    # trainer.load_config("sample")
+    trainer.load_data()
+    assert trainer.datamodule.task == "binary"
+
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+
+    def test_one_modelbase(modelbase, model_name):
+        res = modelbase.predict(
+            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+        )
+        assert np.all(np.mod(res, 1) == 0)
+        res_prob = modelbase.predict_proba(
+            trainer.df,
+            derived_data=trainer.derived_data,
+            model_name=model_name,
+            proba=False,  # This will be ignored
+        )
+        assert np.all(np.mod(res_prob, 1) != 0)
+        assert np.all(res_prob > 0) and np.all(res_prob < 1)
+
+        assert res_prob.shape[0] == len(trainer.df) and res_prob.shape[1] == 1
+
+    test_one_modelbase(models[0], "Category Embedding")
+    test_one_modelbase(models[1], "TabMlp")
+    test_one_modelbase(models[2], "Linear Regression")
+    test_one_modelbase(models[3], "Category Embedding")
+    l = trainer.get_leaderboard()
+
+    df = trainer.df.copy()
+    df.loc[:, "target_binary"] = np.array([f"test_{x}" for x in df["target_binary"]])
+    trainer.clear_modelbase()
+    trainer.datamodule.set_data(
+        df,
+        cont_feature_names=trainer.cont_feature_names,
+        cat_feature_names=trainer.cat_feature_names,
+        label_name=trainer.label_name,
+    )
+    assert trainer.datamodule.task == "binary"
+    model = PytorchTabular(trainer, model_subset=["Category Embedding"])
+    trainer.add_modelbases([model])
+    trainer.train()
+    res = model.predict(
+        trainer.df, derived_data=trainer.derived_data, model_name="Category Embedding"
+    )
+    assert res.dtype == object
+
+
+def test_train_multiclass():
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config("sample", manual_config={"label_name": ["target_multi_class"]})
+    # trainer.load_config("sample")
+    trainer.load_data()
+    assert trainer.datamodule.task == "multiclass"
+
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(
+            trainer,
+            model_subset=[
+                "Category Embedding",
+            ],
+        ),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+
+    def test_one_modelbase(modelbase, model_name):
+        res = modelbase.predict(
+            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+        )
+        assert np.all(np.mod(res, 1) == 0)
+        res_prob = modelbase.predict_proba(
+            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+        )
+        assert np.all(np.mod(res_prob, 1) != 0)
+        assert np.all(res_prob > 0) and np.all(res_prob < 1)
+
+        assert (
+            res_prob.shape[0] == len(trainer.df)
+            and res_prob.shape[1] == trainer.datamodule.n_classes[0]
+        )
+
+    test_one_modelbase(models[0], "Category Embedding")
+    test_one_modelbase(models[1], "TabMlp")
+    test_one_modelbase(models[2], "Linear Regression")
+    test_one_modelbase(models[3], "Category Embedding")
+    l = trainer.get_leaderboard()
+
+    df = trainer.df.copy()
+    df.loc[:, "target_multi_class"] = np.array(
+        [f"test_{x}" for x in df["target_multi_class"]]
+    )
+    trainer.clear_modelbase()
+    trainer.datamodule.set_data(
+        df,
+        cont_feature_names=trainer.cont_feature_names,
+        cat_feature_names=trainer.cat_feature_names,
+        label_name=trainer.label_name,
+    )
+    assert trainer.datamodule.task == "multiclass"
+    model = PytorchTabular(trainer, model_subset=["Category Embedding"])
+    trainer.add_modelbases([model])
+    trainer.train()
+    res = model.predict(
+        trainer.df, derived_data=trainer.derived_data, model_name="Category Embedding"
+    )
+    assert res.dtype == object
 
 
 @pytest.mark.order(after="test_train_without_bayes")
@@ -157,6 +275,9 @@ def test_predict_function():
         assert np.allclose(
             pred, direct_pred
         ), f"{model.__class__.__name__} does not get consistent inference results."
+        with pytest.raises(Exception) as err:
+            model.predict_proba(x_test, model_name=model_name)
+        assert "Calling predict_proba on regression models" in err.value.args[0]
 
 
 @pytest.mark.order(after="test_train_without_bayes")
@@ -300,7 +421,8 @@ def test_trainer_multitarget():
             "label_name": ["target", "cont_0"],
         },
     )
-    trainer.load_data()
+    with pytest.warns(UserWarning):
+        trainer.load_data()
     trainer.summarize_setting()
 
     print(f"\n-- Initialize models --\n")
@@ -369,9 +491,10 @@ def test_trainer_multitarget():
     print(
         f"\n-- Training after set_feature_names and without categorical features --\n"
     )
-    model_trainer.datamodule.set_feature_names(
-        model_trainer.datamodule.cont_feature_names[:10]
-    )
+    with pytest.warns(UserWarning):
+        model_trainer.datamodule.set_feature_names(
+            model_trainer.datamodule.cont_feature_names[:10]
+        )
     model_trainer.train()
 
     print(f"\n-- Bayes optimization --\n")

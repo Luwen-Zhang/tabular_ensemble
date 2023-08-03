@@ -31,6 +31,9 @@ setting = dict(
     # If False, raise an Exception if calculating metrics for predictions containing NaNs. If True, the metric will
     # be 100 instead.
     warn_nan_metric=True,
+    # Model bases will check the task type before training. If set to True and the inferred task is not consistent with
+    # the configuration, an exception will be raised.
+    raise_inconsistent_inferred_task=False,
 )
 
 if setting["debug_mode"]:

@@ -958,10 +958,14 @@ class Trainer:
             The leaderboard dataframe.
         """
         if metrics is None:
-            metrics = ["rmse", "mse", "mae", "mape", "r2", "rmse_conserv"]
+            metrics = {
+                "regression": REGRESSION_METRICS,
+                "binary": BINARY_METRICS,
+                "multiclass": MULTICLASS_METRICS,
+            }[self.datamodule.task]
         dfs = []
         for modelbase_name in self.modelbases_names:
-            df = Trainer._metrics(
+            df = self._metrics(
                 programs_predictions[modelbase_name],
                 metrics,
                 test_data_only=test_data_only,
@@ -970,8 +974,9 @@ class Trainer:
             dfs.append(df)
 
         df_leaderboard = pd.concat(dfs, axis=0, ignore_index=True)
+        sorted_by = metrics[0].upper()
         df_leaderboard.sort_values(
-            "Testing RMSE" if not test_data_only else "RMSE", inplace=True
+            f"Testing {sorted_by}" if not test_data_only else sorted_by, inplace=True
         )
         df_leaderboard.reset_index(drop=True, inplace=True)
         df_leaderboard = df_leaderboard[["Program"] + list(df_leaderboard.columns)[:-1]]
@@ -1635,8 +1640,8 @@ class Trainer:
             self.leaderboard["Model"].values[0],
         )
 
-    @staticmethod
     def _metrics(
+        self,
         predictions: Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray]]],
         metrics: List[str],
         test_data_only: bool,
@@ -1666,7 +1671,9 @@ class Trainer:
                 if test_data_only and tvt != "Testing":
                     continue
                 for metric in metrics:
-                    metric_value = Trainer._metric_sklearn(y_true, y_pred, metric)
+                    metric_value = auto_metric_sklearn(
+                        y_true, y_pred, metric, self.datamodule.task
+                    )
                     df[
                         tvt + " " + metric.upper()
                         if not test_data_only
@@ -1675,27 +1682,6 @@ class Trainer:
             df_metrics = pd.concat([df_metrics, df], axis=0, ignore_index=True)
 
         return df_metrics
-
-    @staticmethod
-    def _metric_sklearn(y_true: np.ndarray, y_pred: np.ndarray, metric: str):
-        """
-        Evaluate a prediction using a certain metric. It is a wrapper method to call ``tabensemb.utils.metric_sklearn``.
-
-        Parameters
-        ----------
-        y_true
-            The true value of the target.
-        y_pred
-            The predicted value of the target.
-        metric
-            A metric that has been implemented in tabensemb.utils.metric_sklearn.
-
-        Returns
-        -------
-        metric_value
-            The metric of prediction.
-        """
-        return metric_sklearn(y_true, y_pred, metric)
 
 
 def save_trainer(

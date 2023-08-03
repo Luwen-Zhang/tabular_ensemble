@@ -120,15 +120,14 @@ class Embedding1d(nn.Module):
 class CategoryEmbeddingNN(AbstractNN):
     def __init__(
         self,
-        n_inputs,
-        n_outputs,
         datamodule,
-        cat_num_unique: List[int] = None,
         embed_extend_dim: bool = False,
         **kwargs,
     ):
         super(CategoryEmbeddingNN, self).__init__(datamodule, **kwargs)
-
+        n_inputs = self.n_inputs
+        cat_num_unique = self.cat_num_unique
+        n_outputs = self.n_outputs
         run_cat = "categorical" in self.derived_feature_names
         self.embed_extend_dim = embed_extend_dim
         if embed_extend_dim:
