@@ -1,3 +1,4 @@
+import os
 from import_utils import *
 import tabensemb
 import numpy as np
@@ -788,3 +789,73 @@ def test_train_part_of_modelbases():
     trainer.train(programs=["PytorchTabular"])
     with pytest.warns(UserWarning):
         trainer.train(programs=[])
+
+
+def test_uci_iris_multiclass():
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    cfg = UserConfig.from_uci("Iris", datafile_name="iris")
+    trainer.load_config(cfg)
+    trainer.load_data()
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(
+            trainer,
+            model_subset=[
+                "Category Embedding",
+            ],
+        ),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    l = trainer.get_leaderboard()
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "iris.csv"))
+
+
+def test_uci_autompg_regression():
+    tabensemb.setting["debug_mode"] = True
+    cfg = UserConfig.from_uci("Auto MPG", sep="\s+")
+    trainer = Trainer(device="cpu")
+    trainer.load_config(cfg)
+    trainer.load_data()
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(
+            trainer,
+            model_subset=[
+                "Category Embedding",
+            ],
+        ),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    l = trainer.get_leaderboard()
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "auto-mpg.csv"))
+
+
+def test_uci_adult_binary():
+    tabensemb.setting["debug_mode"] = True
+    cfg = UserConfig.from_uci("Adult", sep=", ")
+    trainer = Trainer(device="cpu")
+    trainer.load_config(cfg)
+    trainer.load_data()
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(
+            trainer,
+            model_subset=[
+                "Category Embedding",
+            ],
+        ),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    l = trainer.get_leaderboard()
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "adult.csv"))
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "Adult.zip"))
