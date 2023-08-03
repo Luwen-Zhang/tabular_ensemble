@@ -20,7 +20,7 @@ import torch
 import torch.optim
 from distutils.spawn import find_executable
 from importlib import import_module, reload
-from functools import partialmethod
+from functools import partialmethod, partial
 import itertools
 from copy import deepcopy as cp
 from torch.autograd.grad_mode import _DecoratorContextManager
@@ -143,7 +143,7 @@ def metric_sklearn(y_true, y_pred, metric):
         "average_precision_score": average_precision_score,
         "precision_score": precision_score,
         "recall_score": recall_score,
-        "log_loss": log_loss,
+        "log_loss": partial(log_loss, eps=1e-5),
         "balanced_accuracy_score": balanced_accuracy_score,
         "explained_variance_score": explained_variance_score,
         "brier_score_loss": brier_score_loss,
