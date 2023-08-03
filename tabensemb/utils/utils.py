@@ -29,6 +29,7 @@ import tabensemb
 from .collate import fix_collate_fn
 from typing import Dict
 from sklearn.metrics import *
+from io import StringIO
 
 clr = sns.color_palette("deep")
 sns.reset_defaults()
@@ -255,6 +256,31 @@ def auto_metric_sklearn(y_true, y_pred, metric, task):
             return metric_sklearn(y_true_indicator, y_pred, metric)
         else:
             raise NotImplementedError
+
+
+def str_to_dataframe(s, sep=",", names=None, check_nan_on=None) -> pd.DataFrame:
+    df = pd.read_csv(StringIO(s), names=names, sep=sep)
+    if names is not None:
+        if len(df.columns) != len(names) or (
+            df.dtypes[names[0]] == object and pd.isna(df[names[1:]]).all().all()
+        ):
+            raise Exception(
+                f"pd.read_csv can not handle the delimiters. Consider specifying `sep`."
+            )
+
+    if check_nan_on is not None:
+        is_object = df[check_nan_on].dtypes == object
+        object_features = is_object.index[np.where(is_object)[0]]
+        if len(object_features) > 0:
+            print(
+                f"Unknown values are detected in {list(object_features)}. They will be treated as np.nan."
+            )
+        for feature in object_features:
+            is_nan = np.array(
+                list(map(lambda x: not x.replace(".", "").isnumeric(), df[feature]))
+            )
+            df.loc[is_nan, feature] = np.nan
+    return df
 
 
 def plot_importance(ax, features, attr, pal, clr_map, **kwargs):

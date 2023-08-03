@@ -4,15 +4,13 @@ import os.path
 import importlib.machinery
 import types
 import tabensemb
-from tabensemb.utils import pretty
+from tabensemb.utils import pretty, str_to_dataframe
 from .default import cfg as default_cfg
 import argparse
 import urllib.request
 import ssl
 import re
 import zipfile
-import pandas as pd
-from io import StringIO
 import numpy as np
 import warnings
 
@@ -255,28 +253,17 @@ class UserConfig(dict):
 
         # Load and save as .csv
         datafile = zipf.read(datafile_name + ".data")
-        df = pd.read_csv(StringIO(datafile.decode()), names=all_features, sep=sep)
-        if len(df.columns) != len(all_features) or (
-            df.dtypes[all_features[0]] == object
-            and pd.isna(df[all_features[1:]]).all().all()
-        ):
-            print(
-                f"pd.read_csv can not handle the delimiters. Consider specifying `sep`.{_saved_to_suffix}"
+        try:
+            df = str_to_dataframe(
+                datafile.decode(),
+                sep=sep,
+                names=all_features,
+                check_nan_on=cont_feature_names,
             )
+        except Exception as e:
+            print(e)
+            print(_saved_to_suffix)
             return None
-
-        # Check nan
-        is_object = df[cont_feature_names].dtypes == object
-        object_features = is_object.index[np.where(is_object)[0]]
-        if len(object_features) > 0:
-            print(
-                f"Unknown values are detected in {list(object_features)}. They will be treated as np.nan."
-            )
-        for feature in object_features:
-            is_nan = np.array(
-                list(map(lambda x: not x.replace(".", "").isnumeric(), df[feature]))
-            )
-            df.loc[is_nan, feature] = np.nan
 
         # Save csv
         csv_name = name if datafile_name is None else datafile_name
