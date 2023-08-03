@@ -728,6 +728,9 @@ def test_infer_task():
     assert datamodule.task == "regression"
     assert datamodule.loss == "mse"
 
+    datamodule = test_once({"label_name": ["target"], "task": "regression"})
+    assert datamodule.task == "regression"
+
     datamodule.scaled_df["target"] = [
         pd.Timestamp(20201010) for x in datamodule.df["target"]
     ]
@@ -746,6 +749,10 @@ def test_infer_task():
     with pytest.raises(Exception) as err:
         _ = test_once({"label_name": ["target_multi_class"], "loss": "TEST"})
     assert "is not supported" in err.value.args[0]
+
+    with pytest.raises(Exception) as err:
+        _ = test_once({"label_name": ["target_multi_class"], "task": "TEST"})
+    assert "Unsupported task" in err.value.args[0]
 
     with pytest.raises(Exception) as err:
         with pytest.warns(UserWarning):
@@ -767,6 +774,14 @@ def test_infer_task():
             )
         assert "is not consistent with" in err.value.args[0]
 
+    with pytest.warns(UserWarning):
+        _ = test_once(
+            {
+                "label_name": ["target"],
+                "task": "binary",
+            }
+        )
+
     with pytest.raises(Exception) as err:
         with pytest.warns(UserWarning):
             _ = test_once({"label_name": ["target", "target_multi_class"]})
@@ -786,3 +801,9 @@ def test_infer_loss():
         _ = datamodule._infer_loss("binary")
     assert "not supported for binary tasks" in err.value.args[0]
     assert datamodule._infer_loss("regression") == "mse"
+
+    config.merge({"loss": ["mse", "mae"]})
+    datamodule = DataModule(config=config)
+    with pytest.raises(Exception) as err:
+        _ = datamodule._infer_loss("binary")
+    assert "Multiple losses is not supported" in err.value.args[0]

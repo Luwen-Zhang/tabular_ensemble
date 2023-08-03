@@ -110,7 +110,10 @@ def test_train_binary():
         )
         assert np.all(np.mod(res, 1) == 0)
         res_prob = modelbase.predict_proba(
-            trainer.df, derived_data=trainer.derived_data, model_name=model_name
+            trainer.df,
+            derived_data=trainer.derived_data,
+            model_name=model_name,
+            proba=False,  # This will be ignored
         )
         assert np.all(np.mod(res_prob, 1) != 0)
         assert np.all(res_prob > 0) and np.all(res_prob < 1)
@@ -272,6 +275,9 @@ def test_predict_function():
         assert np.allclose(
             pred, direct_pred
         ), f"{model.__class__.__name__} does not get consistent inference results."
+        with pytest.raises(Exception) as err:
+            model.predict_proba(x_test, model_name=model_name)
+        assert "Calling predict_proba on regression models" in err.value.args[0]
 
 
 @pytest.mark.order(after="test_train_without_bayes")
