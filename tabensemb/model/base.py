@@ -233,7 +233,9 @@ class AbstractModel:
         if self.trainer.datamodule.task == "regression" or proba:
             return res
         else:
-            return convert_proba_to_target(res, self.trainer.datamodule.task)
+            return self.trainer.datamodule.label_ordinal_encoder.inverse_transform(
+                convert_proba_to_target(res, self.trainer.datamodule.task)
+            )
 
     def predict_proba(self, *args, **kwargs) -> np.ndarray:
         """

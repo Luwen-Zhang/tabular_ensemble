@@ -12,6 +12,7 @@ from sklearn.decomposition import PCA
 import sklearn.pipeline
 import sklearn.ensemble
 from collections.abc import Iterable
+from sklearn.preprocessing import OrdinalEncoder
 
 
 class DataModule:
@@ -278,7 +279,7 @@ class DataModule:
             self.cat_feature_mapping[feature] = []
         self.label_name = label_name
         self.df = df.copy()
-        if np.isnan(df[self.label_name].values).any():
+        if pd.isna(df[self.label_name]).any().any():
             raise Exception("Label missing in the input dataframe.")
 
         if all_training:
@@ -400,16 +401,20 @@ class DataModule:
             if derived_data is None
             else self.sort_derived_data(derived_data)
         )
-        self.update_dataset()
-        self.set_status(training=False)
         self.task = self._infer_task()
         self.loss = self._infer_loss(self.task)
         if self.task in ["binary", "multiclass"]:
             self.n_classes = [
                 len(np.unique(self.label_data[col])) for col in self.label_name
             ]
+            self.label_ordinal_encoder = OrdinalEncoder()
+            res = self.label_ordinal_encoder.fit_transform(self.label_data).astype(int)
+            self.df.loc[:, self.label_name] = res
+            self.scaled_df.loc[:, self.label_name] = res
         else:
             self.n_classes = [None]
+        self.update_dataset()
+        self.set_status(training=False)
 
     def _infer_task(self):
         selected_task = self.args["task"] if "task" in self.args.keys() else None
@@ -420,11 +425,14 @@ class DataModule:
         available_tasks = ["binary", "multiclass", "regression"]
 
         def infer_one_col(col, task):
-            try:
-                is_int = np.all(np.mod(col, 1) == 0)
-            except:
-                raise Exception(f"Unrecognized target type {col.values.dtype}.")
-            if is_int:
+            if col.values.dtype == object:
+                is_cat = True
+            else:
+                try:
+                    is_cat = np.all(np.mod(col, 1) == 0)
+                except:
+                    raise Exception(f"Unrecognized target type {col.values.dtype}.")
+            if is_cat:
                 n_unique = len(np.unique(col))
                 if n_unique <= 2:
                     infer_task = "binary"
