@@ -143,8 +143,8 @@ def metric_sklearn(y_true, y_pred, metric):
         "f1_score": f1_score,
         "roc_auc_score": roc_auc_score,
         "average_precision_score": average_precision_score,
-        "precision_score": precision_score,
-        "recall_score": recall_score,
+        "precision_score": partial(precision_score, zero_division=0),
+        "recall_score": partial(recall_score, zero_division=0),
         "log_loss": partial(log_loss, eps=1e-5),
         "balanced_accuracy_score": balanced_accuracy_score,
         "explained_variance_score": explained_variance_score,
@@ -155,12 +155,20 @@ def metric_sklearn(y_true, y_pred, metric):
         "hamming_loss": hamming_loss,
         "matthews_corrcoef": matthews_corrcoef,
         "zero_one_loss": zero_one_loss,
-        "precision_score_macro": partial(precision_score, average="macro"),
-        "precision_score_micro": partial(precision_score, average="micro"),
-        "precision_score_weighted": partial(precision_score, average="weighted"),
-        "recall_score_macro": partial(recall_score, average="macro"),
-        "recall_score_micro": partial(recall_score, average="micro"),
-        "recall_score_weighted": partial(recall_score, average="weighted"),
+        "precision_score_macro": partial(
+            precision_score, average="macro", zero_division=0
+        ),
+        "precision_score_micro": partial(
+            precision_score, average="micro", zero_division=0
+        ),
+        "precision_score_weighted": partial(
+            precision_score, average="weighted", zero_division=0
+        ),
+        "recall_score_macro": partial(recall_score, average="macro", zero_division=0),
+        "recall_score_micro": partial(recall_score, average="micro", zero_division=0),
+        "recall_score_weighted": partial(
+            recall_score, average="weighted", zero_division=0
+        ),
         "f1_score_macro": partial(f1_score, average="macro"),
         "f1_score_micro": partial(f1_score, average="micro"),
         "f1_score_weighted": partial(f1_score, average="weighted"),

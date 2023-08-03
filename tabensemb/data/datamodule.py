@@ -874,10 +874,10 @@ class DataModule:
         transform: bool,
     ) -> pd.DataFrame:
         X = X.copy()
-        X.columns = X.columns.astype(str)
         missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
         if len(missing_cols) > 0:
             X[missing_cols] = -1
+        X.columns = X.columns.astype(str)
         try:
             if transform:
                 X.loc[:, cat_features] = encoder.transform(X[cat_features].copy())

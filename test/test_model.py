@@ -210,10 +210,14 @@ def test_rfe():
         model_subset=["Category Embedding"],
         min_features=2,
         cross_validation=2,
+        impor_method="shap",
     )
     trainer.add_modelbases([base_model, rfe])
 
-    trainer.train()
+    with pytest.warns(
+        UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
+    ):
+        trainer.train()
     l = trainer.get_leaderboard()
 
     assert l.loc[0, "Testing RMSE"] != l.loc[1, "Testing RMSE"]
@@ -383,10 +387,7 @@ def test_abstract_model_exceptions():
 def test_count_params():
     pytest_configure_trainer()
     trainer = pytest.test_model_trainer
-    model = CatEmbed(
-        trainer,
-        model_subset=["Category Embedding"],
-    )
+    model = CatEmbed(trainer, model_subset=["Category Embedding"])
     trainer.add_modelbases([model])
     cnt_1 = model.count_params("Category Embedding")
     trainer.train()

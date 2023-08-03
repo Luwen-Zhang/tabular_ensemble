@@ -339,10 +339,16 @@ def test_base_predictor():
     pytest_configure_data()
     datamodule = pytest.datamodule
     predictor = datamodule.get_base_predictor(categorical=True, n_estimators=2)
-    predictor.fit(datamodule.df[datamodule.all_feature_names], datamodule.label_data)
+    predictor.fit(
+        datamodule.df[datamodule.all_feature_names],
+        datamodule.label_data.values.flatten(),
+    )
 
     predictor = datamodule.get_base_predictor(categorical=False, n_estimators=2)
-    predictor.fit(datamodule.df[datamodule.all_feature_names], datamodule.label_data)
+    predictor.fit(
+        datamodule.df[datamodule.all_feature_names],
+        datamodule.label_data.values.flatten(),
+    )
 
 
 def test_rfe():
