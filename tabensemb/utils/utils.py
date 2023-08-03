@@ -170,7 +170,7 @@ def convert_proba_to_target(y_pred, task):
     if task == "regression":
         raise Exception(f"Not supported for regressions tasks.")
     elif task == "multiclass":
-        return np.argmax(y_pred, axis=-1)
+        return np.argmax(y_pred, axis=-1).reshape(-1, 1)
     elif task == "binary":
         return (y_pred > 0.5).astype(int)
     else:
@@ -179,7 +179,7 @@ def convert_proba_to_target(y_pred, task):
 
 def convert_target_to_indicator(y_pred, n_classes):
     indicator = np.zeros((y_pred.shape[0], n_classes))
-    indicator[np.arange(y_pred.shape[0]), y_pred] = 1
+    indicator[np.arange(y_pred.shape[0]), y_pred.flatten()] = 1
     return indicator
 
 
