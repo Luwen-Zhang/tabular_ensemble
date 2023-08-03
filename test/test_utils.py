@@ -183,7 +183,7 @@ def test_metric_sklearn():
     y_true_indicator[np.arange(10), y_true] = 1
     assert np.allclose(convert_target_to_indicator(y_true, 4), y_true_indicator)
     y_pred_indicator = np.zeros((10, 4))
-    y_pred_indicator[np.arange(10), y_pred] = 1
+    y_pred_indicator[np.arange(10), y_pred.flatten()] = 1
     assert np.allclose(convert_target_to_indicator(y_pred, 4), y_pred_indicator)
     assert auto_metric_sklearn(
         y_true, y_pred_prob, "accuracy_score", "multiclass"
@@ -219,7 +219,7 @@ def test_metric_sklearn():
         [1 - y_pred_prob_1d_extend, y_pred_prob_1d_extend], axis=-1
     )
     y_true_indicator = np.zeros((10, 2))
-    y_true_indicator[np.arange(10), y_true] = 1
+    y_true_indicator[np.arange(10), y_true.flatten()] = 1
     assert np.allclose(convert_target_to_indicator(y_true, 2), y_true_indicator)
     assert auto_metric_sklearn(
         y_true, y_pred_prob_1d, "f1_score", "binary"

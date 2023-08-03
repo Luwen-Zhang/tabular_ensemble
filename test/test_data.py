@@ -728,7 +728,9 @@ def test_infer_task():
     assert datamodule.task == "regression"
     assert datamodule.loss == "mse"
 
-    datamodule.scaled_df["target"] = [f"test_{x}" for x in datamodule.df["target"]]
+    datamodule.scaled_df["target"] = [
+        pd.Timestamp(20201010) for x in datamodule.df["target"]
+    ]
     with pytest.raises(Exception) as err:
         datamodule._infer_task()
     assert "Unrecognized target type" in err.value.args[0]
