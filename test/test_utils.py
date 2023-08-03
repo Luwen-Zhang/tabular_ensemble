@@ -250,9 +250,6 @@ def test_metric_sklearn():
         y_true, y_pred_prob_1d, "balanced_accuracy_score", "binary"
     ) == metric_sklearn(y_true, y_pred, "balanced_accuracy_score")
     assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "top_k_accuracy_score", "binary"
-    ) == metric_sklearn(y_true, y_pred_prob_1d, "top_k_accuracy_score")
-    assert auto_metric_sklearn(
         y_true, y_pred_prob_1d, "average_precision_score", "binary"
     ) == metric_sklearn(y_true_indicator, y_pred_prob, "average_precision_score")
 

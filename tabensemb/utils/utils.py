@@ -199,7 +199,6 @@ BINARY_METRICS = (
         "roc_auc_score",
         "log_loss",
         "brier_score_loss",
-        "top_k_accuracy_score",
     ]
     + ["average_precision_score"]
 )
@@ -233,7 +232,6 @@ def auto_metric_sklearn(y_true, y_pred, metric, task):
             "roc_auc_score",
             "log_loss",
             "brier_score_loss",
-            "top_k_accuracy_score",
         ]:
             return metric_sklearn(y_true, y_pred, metric)
         elif metric in ["average_precision_score"]:
