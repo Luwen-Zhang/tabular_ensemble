@@ -231,7 +231,9 @@ class VarianceFeatureSelector(AbstractFeatureSelector):
         sel = VarianceThreshold(threshold=(thres * (1 - thres)))
         sel.fit(
             data[datamodule.all_feature_names],
-            data[datamodule.label_name].values,  # Ignored.
+            data[datamodule.label_name].values.flatten()
+            if len(datamodule.label_name) == 1
+            else data[datamodule.label_name].values,  # Ignored.
         )
         retain_features = list(sel.get_feature_names_out())
         return retain_features
@@ -269,7 +271,9 @@ class CorrFeatureSelector(AbstractFeatureSelector):
         )
         rf.fit(
             data[datamodule.all_feature_names],
-            data[datamodule.label_name].values,
+            data[datamodule.label_name].values.flatten()
+            if len(datamodule.label_name) == 1
+            else data[datamodule.label_name].values,
         )
 
         explainer = shap.Explainer(rf)

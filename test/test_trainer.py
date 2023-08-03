@@ -1,3 +1,4 @@
+import os
 from import_utils import *
 import tabensemb
 import numpy as np
@@ -157,12 +158,7 @@ def test_train_multiclass():
         PytorchTabular(trainer, model_subset=["Category Embedding"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
         AutoGluon(trainer, model_subset=["Linear Regression"]),
-        CatEmbed(
-            trainer,
-            model_subset=[
-                "Category Embedding",
-            ],
-        ),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
     ]
     trainer.add_modelbases(models)
     trainer.train()
@@ -410,107 +406,109 @@ def test_trainer_label_missing():
 
 
 def test_trainer_multitarget():
-    print(f"\n-- Loading trainer --\n")
-    configfile = "sample"
-    tabensemb.setting["debug_mode"] = True
-    trainer = Trainer(device="cpu")
-    trainer.load_config(
-        configfile,
-        manual_config={
-            "data_splitter": "RandomSplitter",
-            "label_name": ["target", "cont_0"],
-        },
-    )
-    with pytest.warns(UserWarning):
-        trainer.load_data()
-    trainer.summarize_setting()
-
-    print(f"\n-- Initialize models --\n")
-
-    with pytest.raises(Exception):
-        WideDeep(trainer, model_subset=["TabMlp"])
-
-    models = [
-        PytorchTabular(trainer, model_subset=["Category Embedding"]),
-        AutoGluon(trainer, model_subset=["Linear Regression"]),
-        CatEmbed(
-            trainer,
-            model_subset=[
-                "Category Embedding",
-            ],
-        ),
-    ]
-    trainer.add_modelbases(models)
-
-    print(f"\n-- Pickling --\n")
-    save_trainer(trainer)
-
-    print(f"\n-- Training without bayes --\n")
-    trainer.train()
-
-    print(f"\n-- Leaderboard --\n")
-    l = trainer.get_leaderboard()
-
-    print(f"\n-- Prediction consistency --\n")
-    x_test = trainer.datamodule.X_test
-    d_test = trainer.datamodule.D_test
-    for model in models:
-        model_name = model.model_subset[0]
-        pred = model.predict(x_test, model_name=model_name)
-        direct_pred = model._predict(x_test, derived_data=d_test, model_name=model_name)
-        assert np.allclose(
-            pred, direct_pred
-        ), f"{model.__class__.__name__} does not get consistent inference results."
-
-    print(f"\n-- Detach modelbase --\n")
-    model_trainer = trainer.detach_model(
-        program="CatEmbed", model_name="Category Embedding"
-    )
-    model_trainer.train()
-    direct_pred = trainer.get_modelbase("CatEmbed")._predict(
-        trainer.datamodule.X_test,
-        derived_data=trainer.datamodule.D_test,
-        model_name="Category Embedding",
-    )
-    detached_pred = model_trainer.get_modelbase("CatEmbed_Category Embedding")._predict(
-        model_trainer.datamodule.X_test,
-        derived_data=model_trainer.datamodule.D_test,
-        model_name="Category Embedding",
-    )
-    assert np.allclose(
-        detached_pred, direct_pred
-    ), f"The detached model does not get consistent results."
-
-    print(f"\n-- pytorch cuda functionality --\n")
-    if torch.cuda.is_available():
-        model_trainer.set_device("cuda")
-        model_trainer.train()
-    else:
-        print(f"Skipping cuda tests since torch.cuda.is_available() is False.")
-
-    print(
-        f"\n-- Training after set_feature_names and without categorical features --\n"
-    )
-    with pytest.warns(UserWarning):
-        model_trainer.datamodule.set_feature_names(
-            model_trainer.datamodule.cont_feature_names[:10]
+    with pytest.warns(
+        UserWarning, match=r"Multi-target task is currently experimental.*?"
+    ):
+        print(f"\n-- Loading trainer --\n")
+        configfile = "sample"
+        tabensemb.setting["debug_mode"] = True
+        trainer = Trainer(device="cpu")
+        trainer.load_config(
+            configfile,
+            manual_config={
+                "data_splitter": "RandomSplitter",
+                "label_name": ["target", "cont_0"],
+            },
         )
-    model_trainer.train()
+        with pytest.warns(UserWarning):
+            trainer.load_data()
+        trainer.summarize_setting()
 
-    print(f"\n-- Bayes optimization --\n")
-    model_trainer.args["bayes_opt"] = True
-    model_trainer.train()
+        print(f"\n-- Initialize models --\n")
 
-    print(f"\n-- Load local trainer --\n")
-    root = trainer.project_root + "_rename_test"
-    shutil.copytree(trainer.project_root, root)
-    shutil.rmtree(trainer.project_root)
-    trainer = load_trainer(os.path.join(root, "trainer.pkl"))
-    l2 = trainer.get_leaderboard()
-    cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
-    assert np.allclose(
-        l[cols].values.astype(float), l2[cols].values.astype(float)
-    ), f"Reloaded local trainer does not get consistent results."
+        with pytest.raises(Exception):
+            WideDeep(trainer, model_subset=["TabMlp"])
+
+        models = [
+            PytorchTabular(trainer, model_subset=["Category Embedding"]),
+            AutoGluon(trainer, model_subset=["Linear Regression"]),
+            CatEmbed(trainer, model_subset=["Category Embedding"]),
+        ]
+        trainer.add_modelbases(models)
+
+        print(f"\n-- Pickling --\n")
+        save_trainer(trainer)
+
+        print(f"\n-- Training without bayes --\n")
+        trainer.train()
+
+        print(f"\n-- Leaderboard --\n")
+        l = trainer.get_leaderboard()
+
+        print(f"\n-- Prediction consistency --\n")
+        x_test = trainer.datamodule.X_test
+        d_test = trainer.datamodule.D_test
+        for model in models:
+            model_name = model.model_subset[0]
+            pred = model.predict(x_test, model_name=model_name)
+            direct_pred = model._predict(
+                x_test, derived_data=d_test, model_name=model_name
+            )
+            assert np.allclose(
+                pred, direct_pred
+            ), f"{model.__class__.__name__} does not get consistent inference results."
+
+        print(f"\n-- Detach modelbase --\n")
+        model_trainer = trainer.detach_model(
+            program="CatEmbed", model_name="Category Embedding"
+        )
+        model_trainer.train()
+        direct_pred = trainer.get_modelbase("CatEmbed")._predict(
+            trainer.datamodule.X_test,
+            derived_data=trainer.datamodule.D_test,
+            model_name="Category Embedding",
+        )
+        detached_pred = model_trainer.get_modelbase(
+            "CatEmbed_Category Embedding"
+        )._predict(
+            model_trainer.datamodule.X_test,
+            derived_data=model_trainer.datamodule.D_test,
+            model_name="Category Embedding",
+        )
+        assert np.allclose(
+            detached_pred, direct_pred
+        ), f"The detached model does not get consistent results."
+
+        print(f"\n-- pytorch cuda functionality --\n")
+        if torch.cuda.is_available():
+            model_trainer.set_device("cuda")
+            model_trainer.train()
+        else:
+            print(f"Skipping cuda tests since torch.cuda.is_available() is False.")
+
+        print(
+            f"\n-- Training after set_feature_names and without categorical features --\n"
+        )
+        with pytest.warns(UserWarning):
+            model_trainer.datamodule.set_feature_names(
+                model_trainer.datamodule.cont_feature_names[:10]
+            )
+        model_trainer.train()
+
+        print(f"\n-- Bayes optimization --\n")
+        model_trainer.args["bayes_opt"] = True
+        model_trainer.train()
+
+        print(f"\n-- Load local trainer --\n")
+        root = trainer.project_root + "_rename_test"
+        shutil.copytree(trainer.project_root, root)
+        shutil.rmtree(trainer.project_root)
+        trainer = load_trainer(os.path.join(root, "trainer.pkl"))
+        l2 = trainer.get_leaderboard()
+        cols = ["Training RMSE", "Testing RMSE", "Validation RMSE"]
+        assert np.allclose(
+            l[cols].values.astype(float), l2[cols].values.astype(float)
+        ), f"Reloaded local trainer does not get consistent results."
 
 
 def test_feature_importance():
@@ -559,20 +557,26 @@ def test_feature_importance():
         program="CatEmbed", model_name="Category Embedding", method="permutation"
     )
     np.random.seed(0)
-    torchmodel_shap = trainer.cal_feature_importance(
-        program="CatEmbed", model_name="Category Embedding", method="shap"
-    )
+    with pytest.warns(
+        UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
+    ):
+        torchmodel_shap = trainer.cal_feature_importance(
+            program="CatEmbed", model_name="Category Embedding", method="shap"
+        )
     np.random.seed(0)
     torchmodel_shap_direct = trainer.cal_shap(
         program="CatEmbed", model_name="Category Embedding"
     )
 
     with pytest.raises(Exception):
-        trainer.cal_feature_importance(
-            program="CatEmbed",
-            model_name="Require Model PyTabular CatEmbed",
-            method="shap",
-        )
+        with pytest.warns(
+            UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
+        ):
+            trainer.cal_feature_importance(
+                program="CatEmbed",
+                model_name="Require Model PyTabular CatEmbed",
+                method="shap",
+            )
 
     assert len(absmodel_perm[0]) == len(absmodel_perm[1])
     assert np.all(np.abs(absmodel_perm[0]) > 1e-8)
@@ -610,15 +614,16 @@ def test_copy():
 def test_finetune():
     trainer = pytest.test_trainer_trainer
     models = trainer.modelbases
-    for model in models:
-        model.fit(
-            trainer.df,
-            trainer.cont_feature_names,
-            trainer.cat_feature_names,
-            trainer.label_name,
-            derived_data=trainer.derived_data,
-            warm_start=True,
-        )
+    with pytest.warns(UserWarning, match=r"AutoGluon does not support warm_start.*?"):
+        for model in models:
+            model.fit(
+                trainer.df,
+                trainer.cont_feature_names,
+                trainer.cat_feature_names,
+                trainer.label_name,
+                derived_data=trainer.derived_data,
+                warm_start=True,
+            )
 
 
 def test_plots():
@@ -788,3 +793,63 @@ def test_train_part_of_modelbases():
     trainer.train(programs=["PytorchTabular"])
     with pytest.warns(UserWarning):
         trainer.train(programs=[])
+
+
+def test_uci_iris_multiclass():
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    cfg = UserConfig.from_uci("Iris", datafile_name="iris")
+    trainer.load_config(cfg)
+    trainer.load_data()
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    l = trainer.get_leaderboard()
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "iris.csv"))
+
+
+def test_uci_autompg_regression():
+    tabensemb.setting["debug_mode"] = True
+    cfg = UserConfig.from_uci("Auto MPG", sep="\s+")
+    trainer = Trainer(device="cpu")
+    trainer.load_config(cfg)
+    with pytest.warns(
+        UserWarning,
+        match=r"The inferred task multiclass is not consistent with the selected task regression",
+    ):
+        trainer.load_data()
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    l = trainer.get_leaderboard()
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "auto-mpg.csv"))
+
+
+def test_uci_adult_binary():
+    tabensemb.setting["debug_mode"] = True
+    with pytest.warns(UserWarning):
+        cfg = UserConfig.from_uci("Adult", sep=", ")
+    trainer = Trainer(device="cpu")
+    trainer.load_config(cfg)
+    trainer.load_data()
+    models = [
+        PytorchTabular(trainer, model_subset=["Category Embedding"]),
+        WideDeep(trainer, model_subset=["TabMlp"]),
+        AutoGluon(trainer, model_subset=["Linear Regression"]),
+        CatEmbed(trainer, model_subset=["Category Embedding"]),
+    ]
+    trainer.add_modelbases(models)
+    trainer.train()
+    l = trainer.get_leaderboard()
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "adult.csv"))
+    os.remove(os.path.join(tabensemb.setting["default_data_path"], "Adult.zip"))

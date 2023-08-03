@@ -140,16 +140,25 @@ def test_logging_after_stream_modification():
 
 
 def test_metric_sklearn():
-    y_true = np.ones((100, 1), dtype=np.float32)
-    y_pred = np.ones((100, 1), dtype=np.float32) + np.random.randn(100, 1) / 10
+    y_true = np.random.randn(100, 1)
+    y_pred = np.random.randn(100, 1)
 
-    _ = metric_sklearn(y_true, y_pred, "mse")
-    _ = metric_sklearn(y_true, y_pred, "rmse")
-    _ = metric_sklearn(y_true, y_pred, "mae")
-    _ = metric_sklearn(y_true, y_pred, "mape")
-    _ = metric_sklearn(y_true, y_pred, "r2")
-    _ = metric_sklearn(y_true, y_pred, "rmse_conserv")
-    assert metric_sklearn(y_true, np.zeros_like(y_true), "rmse_conserv") == 0.0
+    for metric in REGRESSION_METRICS:
+        assert auto_metric_sklearn(
+            y_true.flatten(), y_pred, metric, "regression"
+        ) == auto_metric_sklearn(y_true, y_pred.flatten(), metric, "regression")
+    assert (
+        metric_sklearn(np.ones_like(y_true), np.zeros_like(y_true), "rmse_conserv")
+        == 0.0
+    )
+
+    y_true = np.random.randn(100, 2)
+    y_pred = np.random.randn(100, 2)
+    for metric in REGRESSION_METRICS:
+        _ = auto_metric_sklearn(y_true, y_pred, metric, "regression")
+
+    y_true = np.ones((100, 2), dtype=np.float32)
+    y_pred = np.ones((100, 2), dtype=np.float32) + np.random.randn(100, 1) / 10
 
     with pytest.raises(Exception):
         metric_sklearn(y_true, y_pred, "UNKNOWN_METRIC")
@@ -175,86 +184,33 @@ def test_metric_sklearn():
     assert "Unrecognized task" in err.value.args[0]
 
     y_true = np.random.randint(0, 4, (10,))
+    y_true[:4] = np.arange(4)
     y_pred_prob = np.abs(np.random.randn(10, 4))
     y_pred_prob /= np.repeat(np.sum(y_pred_prob, axis=1).reshape(-1, 1), 4, axis=1)
     y_pred = convert_proba_to_target(y_pred_prob, "multiclass")
     assert not np.any(y_pred > 3)
-    y_true_indicator = np.zeros((10, 4))
-    y_true_indicator[np.arange(10), y_true] = 1
-    assert np.allclose(convert_target_to_indicator(y_true, 4), y_true_indicator)
-    y_pred_indicator = np.zeros((10, 4))
-    y_pred_indicator[np.arange(10), y_pred.flatten()] = 1
-    assert np.allclose(convert_target_to_indicator(y_pred, 4), y_pred_indicator)
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob, "accuracy_score", "multiclass"
-    ) == metric_sklearn(y_true, y_pred, "accuracy_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob, "balanced_accuracy_score", "multiclass"
-    ) == metric_sklearn(y_true, y_pred, "balanced_accuracy_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob, "top_k_accuracy_score", "multiclass"
-    ) == metric_sklearn(y_true, y_pred_prob, "top_k_accuracy_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob, "average_precision_score", "multiclass"
-    ) == metric_sklearn(y_true_indicator, y_pred_prob, "average_precision_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob, "log_loss", "multiclass"
-    ) == metric_sklearn(y_true, y_pred_prob, "log_loss")
+    for metric in MULTICLASS_METRICS:
+        assert auto_metric_sklearn(
+            y_true.reshape(-1, 1), y_pred_prob, metric, "multiclass"
+        ) == auto_metric_sklearn(y_true, y_pred_prob, metric, "multiclass")
     with pytest.raises(Exception):
         auto_metric_sklearn(None, None, None, "TEST")
     with pytest.raises(NotImplementedError):
         auto_metric_sklearn(None, None, "TEST", "binary")
     with pytest.raises(NotImplementedError):
         auto_metric_sklearn(None, None, "TEST", "multiclass")
-    # _ = metric_sklearn(y_true_indicator, y_pred_indicator, "f1_score") Please choose another average setting, one of [None, 'micro', 'macro', 'weighted', 'samples'].
-    # _ = metric_sklearn(y_true, y_pred_prob, "roc_auc_score") multi_class must be in ('ovo', 'ovr')
 
     y_true = np.random.randint(0, 2, (10,))
     y_pred_prob_1d = np.abs(np.random.randn(10))
     y_pred_prob_1d /= np.max(y_pred_prob_1d)
     y_pred = convert_proba_to_target(y_pred_prob_1d, "binary")
     assert not np.any(y_pred > 1)
-    y_pred_prob_1d_extend = y_pred_prob_1d.reshape(-1, 1)
-    y_pred_prob = np.concatenate(
-        [1 - y_pred_prob_1d_extend, y_pred_prob_1d_extend], axis=-1
-    )
-    y_true_indicator = np.zeros((10, 2))
-    y_true_indicator[np.arange(10), y_true.flatten()] = 1
-    assert np.allclose(convert_target_to_indicator(y_true, 2), y_true_indicator)
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "f1_score", "binary"
-    ) == metric_sklearn(y_true, y_pred, "f1_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "precision_score", "binary"
-    ) == metric_sklearn(y_true, y_pred, "precision_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "recall_score", "binary"
-    ) == metric_sklearn(y_true, y_pred, "recall_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "jaccard_score", "binary"
-    ) == metric_sklearn(y_true, y_pred, "jaccard_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "roc_auc_score", "binary"
-    ) == metric_sklearn(y_true, y_pred_prob_1d, "roc_auc_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "log_loss", "binary"
-    ) == metric_sklearn(y_true, y_pred_prob_1d, "log_loss")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "brier_score_loss", "binary"
-    ) == metric_sklearn(y_true, y_pred_prob_1d, "brier_score_loss")
-
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "accuracy_score", "binary"
-    ) == metric_sklearn(y_true, y_pred, "accuracy_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "balanced_accuracy_score", "binary"
-    ) == metric_sklearn(y_true, y_pred, "balanced_accuracy_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "top_k_accuracy_score", "binary"
-    ) == metric_sklearn(y_true, y_pred_prob_1d, "top_k_accuracy_score")
-    assert auto_metric_sklearn(
-        y_true, y_pred_prob_1d, "average_precision_score", "binary"
-    ) == metric_sklearn(y_true_indicator, y_pred_prob, "average_precision_score")
+    for metric in BINARY_METRICS:
+        assert auto_metric_sklearn(
+            y_true.reshape(-1, 1), y_pred_prob_1d, metric, "binary"
+        ) == auto_metric_sklearn(
+            y_true, y_pred_prob_1d.reshape(-1, 1), metric, "binary"
+        )
 
 
 def test_get_figsize():

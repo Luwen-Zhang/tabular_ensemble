@@ -141,6 +141,26 @@ def test_prepare_new_data_randpermed():
     test_one_datamodule(pytest.datamodule)
 
 
+def test_prepare_new_data_categorical_label():
+    pytest_configure_data()
+    config = UserConfig.from_uci("Iris", datafile_name="iris")
+    datamodule = DataModule(config=config)
+    datamodule.load_data()
+    csv_path = os.path.join(
+        tabensemb.setting["default_data_path"], config["database"] + ".csv"
+    )
+    original_df = pd.read_csv(csv_path)
+    os.remove(csv_path)
+    df, derived_data = datamodule.prepare_new_data(original_df)
+    assert np.equal(
+        datamodule.df[datamodule.label_name].values, df[datamodule.label_name].values
+    ).all()
+    inv_df = datamodule.label_categories_inverse_transform(df)
+    assert np.equal(
+        original_df[datamodule.label_name].values, inv_df[datamodule.label_name].values
+    ).all()
+
+
 def test_prepare_new_data_absent():
     pytest_configure_data()
     datamodule = pytest.min_datamodule
@@ -319,10 +339,16 @@ def test_base_predictor():
     pytest_configure_data()
     datamodule = pytest.datamodule
     predictor = datamodule.get_base_predictor(categorical=True, n_estimators=2)
-    predictor.fit(datamodule.df[datamodule.all_feature_names], datamodule.label_data)
+    predictor.fit(
+        datamodule.df[datamodule.all_feature_names],
+        datamodule.label_data.values.flatten(),
+    )
 
     predictor = datamodule.get_base_predictor(categorical=False, n_estimators=2)
-    predictor.fit(datamodule.df[datamodule.all_feature_names], datamodule.label_data)
+    predictor.fit(
+        datamodule.df[datamodule.all_feature_names],
+        datamodule.label_data.values.flatten(),
+    )
 
 
 def test_rfe():

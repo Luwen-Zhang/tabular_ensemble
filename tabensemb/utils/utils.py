@@ -20,7 +20,7 @@ import torch
 import torch.optim
 from distutils.spawn import find_executable
 from importlib import import_module, reload
-from functools import partialmethod
+from functools import partialmethod, partial
 import itertools
 from copy import deepcopy as cp
 from torch.autograd.grad_mode import _DecoratorContextManager
@@ -29,6 +29,7 @@ import tabensemb
 from .collate import fix_collate_fn
 from typing import Dict
 from sklearn.metrics import *
+from io import StringIO
 
 clr = sns.color_palette("deep")
 sns.reset_defaults()
@@ -136,19 +137,53 @@ def metric_sklearn(y_true, y_pred, metric):
         "mean_squared_log_error": mean_squared_log_error,
         "mean_poisson_deviance": mean_poisson_deviance,
         "mean_gamma_deviance": mean_gamma_deviance,
+        "mean_pinball_loss": mean_pinball_loss,
         "accuracy_score": accuracy_score,
         "top_k_accuracy_score": top_k_accuracy_score,
         "f1_score": f1_score,
         "roc_auc_score": roc_auc_score,
         "average_precision_score": average_precision_score,
-        "precision_score": precision_score,
-        "recall_score": recall_score,
-        "log_loss": log_loss,
+        "precision_score": partial(precision_score, zero_division=0),
+        "recall_score": partial(recall_score, zero_division=0),
+        "log_loss": partial(log_loss, eps=1e-5),
         "balanced_accuracy_score": balanced_accuracy_score,
         "explained_variance_score": explained_variance_score,
         "brier_score_loss": brier_score_loss,
         "jaccard_score": jaccard_score,
         "mean_absolute_percentage_error": mean_absolute_percentage_error,
+        "cohen_kappa_score": cohen_kappa_score,
+        "hamming_loss": hamming_loss,
+        "matthews_corrcoef": matthews_corrcoef,
+        "zero_one_loss": zero_one_loss,
+        "precision_score_macro": partial(
+            precision_score, average="macro", zero_division=0
+        ),
+        "precision_score_micro": partial(
+            precision_score, average="micro", zero_division=0
+        ),
+        "precision_score_weighted": partial(
+            precision_score, average="weighted", zero_division=0
+        ),
+        "recall_score_macro": partial(recall_score, average="macro", zero_division=0),
+        "recall_score_micro": partial(recall_score, average="micro", zero_division=0),
+        "recall_score_weighted": partial(
+            recall_score, average="weighted", zero_division=0
+        ),
+        "f1_score_macro": partial(f1_score, average="macro"),
+        "f1_score_micro": partial(f1_score, average="micro"),
+        "f1_score_weighted": partial(f1_score, average="weighted"),
+        "jaccard_score_macro": partial(jaccard_score, average="macro"),
+        "jaccard_score_micro": partial(jaccard_score, average="micro"),
+        "jaccard_score_weighted": partial(jaccard_score, average="weighted"),
+        "roc_auc_score_ovr_macro": partial(
+            roc_auc_score, average="macro", multi_class="ovr"
+        ),
+        "roc_auc_score_ovr_weighted": partial(
+            roc_auc_score, average="weighted", multi_class="ovr"
+        ),
+        "roc_auc_score_ovo": partial(
+            roc_auc_score, average="weighted", multi_class="ovo"
+        ),
     }
     if metric in mapping.keys():
         return mapping[metric](y_true, y_pred)
@@ -183,32 +218,73 @@ def convert_target_to_indicator(y_pred, n_classes):
     return indicator
 
 
-REGRESSION_METRICS = ["rmse", "mse", "mae", "mape", "r2", "rmse_conserv"]
+REGRESSION_METRICS = [
+    "rmse",
+    "mse",
+    "mae",
+    "mape",
+    "r2",
+    # "mean_squared_log_error",
+    "median_absolute_error",
+    # "max_error",
+    "explained_variance_score",
+    # "mean_poisson_deviance",
+    # "mean_gamma_deviance",
+]
 
+_BINARY_USE_TARGET_METRICS = [
+    "f1_score",
+    "precision_score",
+    "recall_score",
+    "jaccard_score",
+    "accuracy_score",
+    "balanced_accuracy_score",
+    "cohen_kappa_score",
+    "hamming_loss",
+    "matthews_corrcoef",
+    "zero_one_loss",
+]
+_BINARY_USE_PROB_METRICS = [
+    "roc_auc_score",
+    "log_loss",
+    "brier_score_loss",
+]
+_BINARY_USE_INDICATOR_METRICS = ["average_precision_score"]
 
 BINARY_METRICS = (
-    [
-        "f1_score",
-        "precision_score",
-        "recall_score",
-        "jaccard_score",
-        "accuracy_score",
-        "balanced_accuracy_score",
-    ]
-    + [
-        "roc_auc_score",
-        "log_loss",
-        "brier_score_loss",
-        "top_k_accuracy_score",
-    ]
-    + ["average_precision_score"]
+    _BINARY_USE_TARGET_METRICS
+    + _BINARY_USE_PROB_METRICS
+    + _BINARY_USE_INDICATOR_METRICS
 )
 
-MULTICLASS_METRICS = (
-    ["accuracy_score", "balanced_accuracy_score"]
-    + ["top_k_accuracy_score", "log_loss"]
-    + ["average_precision_score"]
-)
+_MULTICLASS_USE_TARGET_METRICS = [
+    "accuracy_score",
+    "balanced_accuracy_score",
+    "cohen_kappa_score",
+    "hamming_loss",
+    "matthews_corrcoef",
+    "zero_one_loss",
+    "precision_score_macro",
+    "precision_score_micro",
+    "precision_score_weighted",
+    "recall_score_macro",
+    "recall_score_micro",
+    "recall_score_weighted",
+    "f1_score_macro",
+    "f1_score_micro",
+    "f1_score_weighted",
+    "jaccard_score_macro",
+    "jaccard_score_micro",
+    "jaccard_score_weighted",
+]
+_MULTICLASS_USE_PROB_METRICS = [
+    "top_k_accuracy_score",
+    "log_loss",
+    "roc_auc_score_ovr_macro",
+    "roc_auc_score_ovr_weighted",
+    "roc_auc_score_ovo",
+]
+MULTICLASS_METRICS = _MULTICLASS_USE_TARGET_METRICS + _MULTICLASS_USE_PROB_METRICS
 
 
 def auto_metric_sklearn(y_true, y_pred, metric, task):
@@ -218,25 +294,13 @@ def auto_metric_sklearn(y_true, y_pred, metric, task):
     if task == "regression":
         return metric_sklearn(y_true, y_pred, metric)
     elif task == "binary":
-        if metric in [
-            "f1_score",
-            "precision_score",
-            "recall_score",
-            "jaccard_score",
-            "accuracy_score",
-            "balanced_accuracy_score",
-        ]:
+        if metric in _BINARY_USE_TARGET_METRICS:
             return metric_sklearn(
                 y_true, convert_proba_to_target(y_pred, "binary"), metric
             )
-        elif metric in [
-            "roc_auc_score",
-            "log_loss",
-            "brier_score_loss",
-            "top_k_accuracy_score",
-        ]:
+        elif metric in _BINARY_USE_PROB_METRICS:
             return metric_sklearn(y_true, y_pred, metric)
-        elif metric in ["average_precision_score"]:
+        elif metric in _BINARY_USE_INDICATOR_METRICS:
             y_pred_extend = y_pred.reshape(-1, 1)
             y_pred_2d = np.concatenate([1 - y_pred_extend, y_pred_extend], axis=-1)
             n_classes = len(np.unique(y_true))
@@ -245,18 +309,39 @@ def auto_metric_sklearn(y_true, y_pred, metric, task):
         else:
             raise NotImplementedError
     elif task == "multiclass":
-        if metric in ["accuracy_score", "balanced_accuracy_score"]:
+        if metric in _MULTICLASS_USE_TARGET_METRICS:
             return metric_sklearn(
                 y_true, convert_proba_to_target(y_pred, task="multiclass"), metric
             )
-        if metric in ["top_k_accuracy_score", "log_loss"]:
+        if metric in _MULTICLASS_USE_PROB_METRICS:
             return metric_sklearn(y_true, y_pred, metric)
-        if metric in ["average_precision_score"]:
-            n_classes = len(np.unique(y_true))
-            y_true_indicator = convert_target_to_indicator(y_true, n_classes)
-            return metric_sklearn(y_true_indicator, y_pred, metric)
         else:
             raise NotImplementedError
+
+
+def str_to_dataframe(s, sep=",", names=None, check_nan_on=None) -> pd.DataFrame:
+    df = pd.read_csv(StringIO(s), names=names, sep=sep)
+    if names is not None:
+        if len(df.columns) != len(names) or (
+            df.dtypes[names[0]] == object and pd.isna(df[names[1:]]).all().all()
+        ):
+            raise Exception(
+                f"pd.read_csv can not handle the delimiters. Consider specifying `sep`."
+            )
+
+    if check_nan_on is not None:
+        is_object = df[check_nan_on].dtypes == object
+        object_features = is_object.index[np.where(is_object)[0]]
+        if len(object_features) > 0:
+            print(
+                f"Unknown values are detected in {list(object_features)}. They will be treated as np.nan."
+            )
+        for feature in object_features:
+            is_nan = np.array(
+                list(map(lambda x: not x.replace(".", "").isnumeric(), df[feature]))
+            )
+            df.loc[is_nan, feature] = np.nan
+    return df
 
 
 def plot_importance(ax, features, attr, pal, clr_map, **kwargs):

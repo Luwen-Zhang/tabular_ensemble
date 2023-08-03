@@ -1,5 +1,6 @@
 import os.path
 import numpy as np
+import pandas as pd
 import tabensemb
 from tabensemb.utils import *
 from tabensemb.config import UserConfig
@@ -412,6 +413,7 @@ class DataModule:
             self.df.loc[:, self.label_name] = res
             self.scaled_df.loc[:, self.label_name] = res
         else:
+            self.label_ordinal_encoder = None
             self.n_classes = [None]
         self.update_dataset()
         self.set_status(training=False)
@@ -554,6 +556,8 @@ class DataModule:
         derived_data = self.sort_derived_data(
             derived_data, ignore_absence=ignore_absence
         )
+        if getattr(self, "label_ordinal_encoder", None) is not None:
+            df = self.label_categories_transform(df)
         return df, derived_data
 
     @property
@@ -824,26 +828,8 @@ class DataModule:
             return X.copy()
         else:
             encoder, cat_features = encoder_features
-        missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
-        if len(missing_cols) > 0:
-            X[missing_cols] = -1
-        X.columns = X.columns.astype(str)
-        X_copy = X.copy()
-        try:
-            X_copy.loc[:, cat_features] = encoder.inverse_transform(
-                X[cat_features].copy()
-            )
-        except:
-            try:
-                encoder.transform(X[cat_features].copy())
-                return X_copy
-            except:
-                raise Exception(
-                    f"Categorical features are not compatible with the fitted OrdinalEncoder."
-                )
-        for col in missing_cols:
-            del X_copy[col]
-        return X_copy
+        X = self._ordinal_encoder_transform(encoder, X, cat_features, transform=False)
+        return X
 
     def categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -865,23 +851,53 @@ class DataModule:
             return X.copy()
         else:
             encoder, cat_features = encoder_features
+        X = self._ordinal_encoder_transform(encoder, X, cat_features, transform=True)
+        return X
+
+    def label_categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        res = self._ordinal_encoder_transform(
+            self.label_ordinal_encoder, X, self.label_name, transform=True
+        )
+        res[self.label_name] = res[self.label_name].astype(int)
+        return res
+
+    def label_categories_inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        return self._ordinal_encoder_transform(
+            self.label_ordinal_encoder, X, self.label_name, transform=False
+        )
+
+    @staticmethod
+    def _ordinal_encoder_transform(
+        encoder: OrdinalEncoder,
+        X: pd.DataFrame,
+        cat_features: List[str],
+        transform: bool,
+    ) -> pd.DataFrame:
+        X = X.copy()
         missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
         if len(missing_cols) > 0:
             X[missing_cols] = -1
         X.columns = X.columns.astype(str)
-        X_copy = X.copy()
         try:
-            X_copy.loc[:, cat_features] = encoder.transform(X[cat_features].copy())
+            if transform:
+                X.loc[:, cat_features] = encoder.transform(X[cat_features].copy())
+            else:
+                X.loc[:, cat_features] = encoder.inverse_transform(
+                    X[cat_features].copy()
+                )
         except:
             try:
-                encoder.inverse_transform(X[cat_features].copy())
+                if transform:
+                    encoder.inverse_transform(X[cat_features].copy())
+                else:
+                    encoder.transform(X[cat_features].copy())
             except:
                 raise Exception(
                     f"Categorical features are not compatible with the fitted OrdinalEncoder."
                 )
         for col in missing_cols:
-            del X_copy[col]
-        return X_copy
+            del X[col]
+        return X
 
     def save_data(self, path: str):
         """
