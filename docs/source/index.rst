@@ -13,11 +13,16 @@ Welcome to Tabular Ensemble's documentation!
    examples/get_started/run_sample
    examples/get_started/new_dataset
    examples/get_started/inference
-   examples/get_started/use_data_processing
+   examples/get_started/use_data_functionalities
 
 .. toctree::
    :maxdepth: 2
    :caption: Advanced Usage
+
+   examples/advanced_usage/customized_model_base
+   examples/advanced_usage/customized_model_base_torch
+   examples/advanced_usage/customized_data_functionalities
+   examples/advanced_usage/build_model_upon_others
 
 .. toctree::
    :maxdepth: 1
