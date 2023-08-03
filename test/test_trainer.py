@@ -123,6 +123,24 @@ def test_train_binary():
     test_one_modelbase(models[3], "Category Embedding")
     l = trainer.get_leaderboard()
 
+    df = trainer.df.copy()
+    df.loc[:, "target_binary"] = np.array([f"test_{x}" for x in df["target_binary"]])
+    trainer.clear_modelbase()
+    trainer.datamodule.set_data(
+        df,
+        cont_feature_names=trainer.cont_feature_names,
+        cat_feature_names=trainer.cat_feature_names,
+        label_name=trainer.label_name,
+    )
+    assert trainer.datamodule.task == "binary"
+    model = PytorchTabular(trainer, model_subset=["Category Embedding"])
+    trainer.add_modelbases([model])
+    trainer.train()
+    res = model.predict(
+        trainer.df, derived_data=trainer.derived_data, model_name="Category Embedding"
+    )
+    assert res.dtype == object
+
 
 def test_train_multiclass():
     tabensemb.setting["debug_mode"] = True
@@ -166,8 +184,27 @@ def test_train_multiclass():
     test_one_modelbase(models[1], "TabMlp")
     test_one_modelbase(models[2], "Linear Regression")
     test_one_modelbase(models[3], "Category Embedding")
-
     l = trainer.get_leaderboard()
+
+    df = trainer.df.copy()
+    df.loc[:, "target_multi_class"] = np.array(
+        [f"test_{x}" for x in df["target_multi_class"]]
+    )
+    trainer.clear_modelbase()
+    trainer.datamodule.set_data(
+        df,
+        cont_feature_names=trainer.cont_feature_names,
+        cat_feature_names=trainer.cat_feature_names,
+        label_name=trainer.label_name,
+    )
+    assert trainer.datamodule.task == "multiclass"
+    model = PytorchTabular(trainer, model_subset=["Category Embedding"])
+    trainer.add_modelbases([model])
+    trainer.train()
+    res = model.predict(
+        trainer.df, derived_data=trainer.derived_data, model_name="Category Embedding"
+    )
+    assert res.dtype == object
 
 
 @pytest.mark.order(after="test_train_without_bayes")
