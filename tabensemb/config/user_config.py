@@ -195,6 +195,7 @@ class UserConfig(dict):
             tabensemb.setting["default_data_path"], f"{name}.zip"
         )
         print(f"Downloading {link} to {zip_save_to}")
+        os.makedirs(tabensemb.setting["default_data_path"], exist_ok=True)
         urllib.request.urlretrieve(link, filename=zip_save_to)
 
         # Check task and tabular

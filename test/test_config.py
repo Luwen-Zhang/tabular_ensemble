@@ -89,12 +89,14 @@ def test_from_uci():
 
     # sep
     assert UserConfig.from_uci("Auto MPG", max_retries=10) is None
-    # Not supported
+    # Task Not supported
     assert UserConfig.from_uci("Wine Quality", max_retries=10) is None
     # Found multiple data files
     assert UserConfig.from_uci("Iris", max_retries=10) is None
-    # Not tabular
+    # Task not supported
     assert UserConfig.from_uci("Kinship", max_retries=10) is None
+    # Not Tabular
+    assert UserConfig.from_uci("CMU Face Images", max_retries=10) is None
     # No file with suffix `.data`
     assert UserConfig.from_uci("Sundanese Twitter Dataset", max_retries=10) is None
 
