@@ -1,5 +1,6 @@
 import os
 import pickle
+import types
 import warnings
 import numpy as np
 import pandas as pd
@@ -24,6 +25,7 @@ from collections.abc import Iterable
 from captum.attr import FeaturePermutation
 import traceback
 import math
+import inspect
 
 
 class AbstractModel:
@@ -70,7 +72,9 @@ class AbstractModel:
             True if tabensemb.setting["low_memory"] else store_in_harddisk
         )
         self.program = self._get_program_name() if program is None else program
+        self.init_params = {}
         self.model_params = {}
+        self.save_kwargs(d=self.init_params, ignore=["trainer", "self", "frame"])
         self._check_space()
         self._mkdir()
 
@@ -83,6 +87,54 @@ class AbstractModel:
         # control for this. If you want to use drop_last in your code, use the original_batch_size in kwargs passed to
         # AbstractModel methods.
         self.limit_batch_size = 6
+
+    def save_kwargs(self, d: dict = None, ignore: List[str] = None):
+        """
+        Save all args and kwargs of the caller except for those in ``ignore``. It will traceback to the top caller that
+        has the same method name and same class of ``self`` as the current frame. For example, in nested __init__ calls
+        of inherited classes, it will traceback to the first __init__ call and record kwargs layer by layer until
+        reaching the current caller.
+
+        Parameters
+        ----------
+        d
+            The dictionary to save params.
+        ignore
+            kwargs names to be ignored
+
+        Returns
+        -------
+        d
+            The dictionary with recorded kwargs
+        """
+        ignore = [] if ignore is None else ignore
+        d = {} if d is None else d
+        caller_frame = inspect.currentframe().f_back
+        caller_function = inspect.getframeinfo(caller_frame).function
+        nest_init_params = []
+        while (
+            isinstance(caller_frame, types.FrameType)
+            and "self" in caller_frame.f_locals.keys()
+            and isinstance(caller_frame.f_locals["self"], self.__class__)
+            and inspect.getframeinfo(caller_frame).function == caller_function
+        ):
+            argvalues = inspect.getargvalues(caller_frame)
+            kwargs = {
+                key: argvalues.locals[key]
+                for key in argvalues.args
+                if key not in ignore
+            }
+            nest_init_params.append(kwargs)
+            caller_frame = caller_frame.f_back
+        for params in nest_init_params[::-1]:
+            d.update(params)
+        return d
+
+    def reset(self):
+        """
+        Reset the model base by calling __init__ with recorded kwargs.
+        """
+        self.__init__(trainer=self.trainer, **self.init_params)
 
     @property
     def device(self):
