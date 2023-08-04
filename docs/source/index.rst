@@ -20,7 +20,7 @@ Welcome to Tabular Ensemble's documentation!
    :caption: Advanced Usage
 
    examples/advanced_usage/customized_model_base
-   examples/advanced_usage/customized_model_base_torch
+   examples/advanced_usage/customized_model_base_advanced
    examples/advanced_usage/customized_data_functionalities
    examples/advanced_usage/build_model_upon_others
 
