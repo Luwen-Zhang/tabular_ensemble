@@ -7,4 +7,3 @@ coverage:
     patch:
       default:
         target: 95%
-        
