@@ -21,6 +21,10 @@ from torch import nn
 
 
 class NotImplementedModel(AbstractModel):
+    def __init__(self, *args, param=1.1, **kwargs):
+        super(NotImplementedModel, self).__init__(*args, **kwargs)
+        self.param = param
+
     def _get_program_name(self) -> str:
         return "NotImplementedModel"
 
@@ -36,6 +40,11 @@ class NotImplementedModel(AbstractModel):
 
 
 class NotImplementedTorchModel(TorchModel):
+    def __init__(self, *args, param=1.2, **kwargs):
+        kwargs["model_subset"] = ["TEST"]
+        super(NotImplementedTorchModel, self).__init__(*args, **kwargs)
+        self.param = param
+
     def _get_program_name(self) -> str:
         return "NotImplementedModel"
 
@@ -320,11 +329,41 @@ def test_get_model_names():
     assert all([name in got for name in got_all])
 
 
-def test_abstract_model_exceptions():
+def test_abstract_model():
     pytest_configure_trainer()
     trainer = pytest.test_model_trainer
     abs_model = NotImplementedModel(trainer, program="TEST_PROGRAM")
-    abs_torch_model = NotImplementedTorchModel(trainer, program="TEST_TORCH_PROGRAM")
+    abs_torch_model = NotImplementedTorchModel(
+        trainer, program="TEST_TORCH_PROGRAM", param=1.3
+    )
+    # save_kwargs
+    assert (
+        "param" in abs_model.init_params.keys()
+        and abs_model.init_params["param"] == 1.1
+    )
+    assert "trainer" not in abs_model.init_params.keys()
+    assert abs_model.init_params["program"] == "TEST_PROGRAM"
+    assert (
+        "param" in abs_torch_model.init_params.keys()
+        and abs_torch_model.init_params["param"] == 1.3
+    )
+    assert abs_torch_model.init_params["program"] == "TEST_TORCH_PROGRAM"
+    assert (
+        len(abs_torch_model.init_params["model_subset"]) == 1
+        and abs_torch_model.init_params["model_subset"][0] == "TEST"
+    )
+    # reset
+    abs_torch_model.reset()
+    assert (
+        "param" in abs_torch_model.init_params.keys()
+        and abs_torch_model.init_params["param"] == 1.3
+    )
+    assert abs_torch_model.init_params["program"] == "TEST_TORCH_PROGRAM"
+    assert (
+        len(abs_torch_model.init_params["model_subset"]) == 1
+        and abs_torch_model.init_params["model_subset"][0] == "TEST"
+    )
+    # exceptions
     with pytest.raises(NotImplementedError):
         super(NotImplementedModel, abs_model)._get_model_names()
     with pytest.raises(NotImplementedError):

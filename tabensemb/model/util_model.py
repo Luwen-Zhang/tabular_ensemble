@@ -35,7 +35,9 @@ class RFE(TorchModel):
 
         for model_name in self.get_model_names():
             tmp_trainer = cp(internal_trainer)
-            modelbase = self.model_class(tmp_trainer, model_subset=[model_name])
+            init_params = modelbase.init_params.copy()
+            init_params["model_subset"] = [model_name]
+            modelbase = self.model_class(tmp_trainer, **init_params)
             tmp_trainer.add_modelbases([modelbase])
             self.model[model_name] = (tmp_trainer, modelbase)
         self.metrics = {}
