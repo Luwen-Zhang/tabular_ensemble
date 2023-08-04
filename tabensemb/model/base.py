@@ -1780,12 +1780,12 @@ class TorchModel(AbstractModel):
             sampler=torch.utils.data.RandomSampler(
                 data_source=X_train, replacement=False
             ),
-            pin_memory=True,
+            pin_memory=True and self.device != "cpu",
         )
         val_loader = Data.DataLoader(
             X_val,
             batch_size=len(X_val),
-            pin_memory=True,
+            pin_memory=True and self.device != "cpu",
         )
 
         es_callback = EarlyStopping(
@@ -1858,7 +1858,7 @@ class TorchModel(AbstractModel):
             X_test,
             batch_size=len(X_test),
             shuffle=False,
-            pin_memory=True,
+            pin_memory=True and self.device != "cpu",
         )
         model.to(self.device)
         y_test_pred, _, _ = model.test_epoch(test_loader, **kwargs)
