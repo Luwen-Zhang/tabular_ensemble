@@ -687,12 +687,10 @@ class Trainer:
                         def append_once(key):
                             current_predictions[key] = (
                                 np.append(
-                                    current_predictions[key][0],
-                                    value[key][0],
+                                    current_predictions[key][0], value[key][0], axis=0
                                 ),
                                 np.append(
-                                    current_predictions[key][1],
-                                    value[key][1],
+                                    current_predictions[key][1], value[key][1], axis=0
                                 ),
                             )
 
