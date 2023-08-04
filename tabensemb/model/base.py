@@ -2105,7 +2105,7 @@ class AbstractNN(pl.LightningModule):
         ] and not self.training else torch_with_grad():
             x = tensors[0]
             additional_tensors = tensors[1:]
-            if type(additional_tensors[0]) == dict:
+            if len(additional_tensors) > 0 and type(additional_tensors[0]) == dict:
                 derived_tensors = additional_tensors[0]
             else:
                 derived_tensors = {}
