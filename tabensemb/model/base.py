@@ -1996,7 +1996,7 @@ class AbstractNN(pl.LightningModule):
             self.n_outputs = task_outputs[self.task]
         else:
             raise Exception(f"Unsupported type of task {self.task}")
-        self.cat_num_unique = [len(x) for x in datamodule.cat_feature_mapping.values()]
+        self.cat_num_unique = datamodule.cat_num_unique
         if len(kwargs) > 0:
             self.save_hyperparameters(
                 *list(kwargs.keys()),
