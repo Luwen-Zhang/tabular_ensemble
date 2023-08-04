@@ -808,8 +808,7 @@ def test_uci_iris_multiclass():
         CatEmbed(trainer, model_subset=["Category Embedding"]),
     ]
     trainer.add_modelbases(models)
-    trainer.train()
-    l = trainer.get_leaderboard()
+    l = trainer.get_leaderboard(cross_validation=2, split_type="random")
     os.remove(os.path.join(tabensemb.setting["default_data_path"], "iris.csv"))
 
 
