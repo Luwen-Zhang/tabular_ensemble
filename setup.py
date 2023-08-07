@@ -38,6 +38,6 @@ setup(
             "sphinx_copybutton",
             "sphinx_paramlinks",
         ],
-        "notebook": ["jupyter", "notebook<7.0.0"],
+        "notebook": ["jupyter", "notebook<8.0.0"],
     },
 )
