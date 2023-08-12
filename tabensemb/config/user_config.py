@@ -224,7 +224,7 @@ class UserConfig(dict):
         test_datafiles = [name for name in files if "test" in name]
         if len(test_datafiles) > 0:
             warnings.warn(
-                f"There exists .test file(s) {test_datafiles} which should be used for final metrics. The .zip file is"
+                f"There exists .test file(s) {test_datafiles} which should be used for final metrics. The .zip file is "
                 f"left for the user to process."
             )
             save_zip = True

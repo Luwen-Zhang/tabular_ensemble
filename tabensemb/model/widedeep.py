@@ -335,7 +335,7 @@ class WideDeep(AbstractModel):
 
         optimizer = torch.optim.Adam(
             model.model.deeptabular.parameters(),
-            lr=kwargs["lr"] if not warm_start else 1e-8,
+            lr=kwargs["lr"] if not warm_start else kwargs["lr"] // 10,
             weight_decay=kwargs["weight_decay"],
         )
         model.optimizer = model._set_optimizer({"deeptabular": optimizer})

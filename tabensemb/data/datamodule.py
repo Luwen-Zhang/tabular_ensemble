@@ -418,6 +418,17 @@ class DataModule:
         self.update_dataset()
         self.set_status(training=False)
 
+    @property
+    def cat_num_unique(self) -> List[int]:
+        """
+        The number of unique values of each categorical feature.
+        """
+        return (
+            [len(x) for x in self.cat_feature_mapping.values()]
+            if hasattr(self, "cat_feature_mapping")
+            else []
+        )
+
     def _infer_task(self):
         selected_task = self.args["task"] if "task" in self.args.keys() else None
         # if isinstance(selected_task, dict):
