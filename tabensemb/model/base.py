@@ -1048,6 +1048,23 @@ class AbstractModel:
             save_trainer(self.trainer)
 
     def _default_metric_sklearn(self, y_true, y_pred):
+        """
+        Calculate MSE loss for regression tasks and log loss for classification tasks using sklearn apis.
+
+        Parameters
+        ----------
+        y_true
+            Ground truth values.
+        y_pred
+            Predicted values.
+
+        Returns
+        -------
+        metric
+            "mse" for regression tasks and "log_loss" for classification tasks.
+        loss
+            MSE loss for regression tasks and log loss for classification tasks
+        """
         task = self.trainer.datamodule.task
         if task == "regression":
             metric = "mse"
@@ -2058,7 +2075,7 @@ class AbstractNN(pl.LightningModule):
         if task == "binary":
             return torch.nn.BCEWithLogitsLoss()
         elif task == "multiclass":
-            return torch.torch.nn.CrossEntropyLoss()
+            return torch.nn.CrossEntropyLoss()
         elif task == "regression":
             mapping = {
                 "mse": torch.nn.MSELoss(),
