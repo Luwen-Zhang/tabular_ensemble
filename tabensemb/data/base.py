@@ -566,7 +566,7 @@ class AbstractFeatureSelector(AbstractProcessor):
         raise NotImplementedError
 
 
-class AbstractScaler(AbstractProcessor):
+class AbstractScaler(AbstractTransformer):
     """
     This is a marker for scaling like standard scaler or normalizer.
     """
