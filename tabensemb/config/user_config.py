@@ -245,7 +245,7 @@ class UserConfig(dict):
                     print(
                         f"{attr['name']} is Integer and will be treated as a continuous feature."
                     )
-                elif attr["type"] == "Categorical":
+                elif attr["type"] in ["Categorical", "Binary"]:
                     cat_feature_names.append(attr["name"])
             elif attr["role"] == "Target":
                 label_name.append(attr["name"])
