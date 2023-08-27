@@ -1312,7 +1312,7 @@ class DataModule:
         self.train_dataset, self.val_dataset, self.test_dataset = self.generate_subset(
             dataset
         )
-        self.tensors = (X, *D, y) if len(D) > 0 else (X, None, y)
+        self.tensors = (X, *D, y)
 
     def generate_tensors(self, scaled_df, derived_data):
         X = torch.tensor(
