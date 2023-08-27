@@ -22,6 +22,10 @@ Welcome to Tabular Ensemble's documentation!
    examples/advanced_usage/customized_model_base
    examples/advanced_usage/customized_model_base_advanced
    examples/advanced_usage/build_model_upon_others
+   examples/advanced_usage/new_data_splitters
+   examples/advanced_usage/new_data_derivers
+   examples/advanced_usage/new_data_imputers
+   examples/advanced_usage/new_data_processors
 
 .. toctree::
    :maxdepth: 1
