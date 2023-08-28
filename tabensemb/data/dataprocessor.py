@@ -304,7 +304,7 @@ class CorrFeatureSelector(AbstractFeatureSelector):
         return retain_features
 
 
-class StandardScaler(AbstractTransformer, AbstractScaler):
+class StandardScaler(AbstractScaler):
     """
     The standard scaler implemented using StandardScaler from sklearn.
     """

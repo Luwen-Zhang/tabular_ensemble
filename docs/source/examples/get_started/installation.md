@@ -27,4 +27,4 @@ pytest .
 
 ## Other OS
 
-The installation on other OS is not tested.
+The installation on other OSs is not tested.
