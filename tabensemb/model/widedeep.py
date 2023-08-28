@@ -3,6 +3,13 @@ from torch import nn
 from tabensemb.utils import *
 from tabensemb.model import AbstractModel
 from skopt.space import Integer, Categorical, Real
+from packaging import version
+
+if version.parse(torch.__version__) < version.parse("2.0.0"):
+    # From pytorch_widedeep > 1.2.2, it imports LRScheduler instead of _LRScheduler
+    from torch.optim.lr_scheduler import _LRScheduler
+
+    torch.optim.lr_scheduler.LRScheduler = _LRScheduler
 
 
 class WideDeep(AbstractModel):
