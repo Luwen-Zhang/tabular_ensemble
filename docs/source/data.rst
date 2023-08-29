@@ -7,6 +7,11 @@ tabensemb.data
 .. automodule:: tabensemb.data
 .. currentmodule:: tabensemb.data
 
+.. currentmodule:: tabensemb.data.base
+
+.. autoclass:: AbstractRequireKwargs
+    :members:
+
 .. currentmodule:: tabensemb.data.datamodule
 
 .. autoclass:: DataModule

@@ -6,6 +6,11 @@
 Welcome to Tabular Ensemble's documentation!
 ============================================
 
+Tabular Ensemble is a benchmark platform for tabular prediction tasks.
+
+Feel free to create an issue and raise questions if the documentation or the API reference is not clear or if you find
+grammar faults and typos.
+
 .. toctree::
    :caption: Get Started
 
