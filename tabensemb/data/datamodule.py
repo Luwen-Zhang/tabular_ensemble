@@ -35,8 +35,8 @@ class DataModule:
 
     def set_status(self, training: bool):
         """
-        Set the status of the datamodule. If a datamodule is not training, some data derivers will use learned characteristics
-        from training data to derive for new data.
+        Set the status of the datamodule. If a datamodule is not training, some data processing modules will use learned
+        characteristics to process new data. True when setting the dataset. False when processing an upcoming dataset.
 
         Parameters
         ----------
@@ -51,14 +51,13 @@ class DataModule:
         ratio: Union[List[float], np.ndarray] = None,
     ):
         """
-        Set the data splitter. The specified splitter should be implemented in ``data/datasplitter.py``. Also, data
-        splitter can be set directly using ``datamodule.datasplitter = YourSplitter()``
+        Set the data splitter. The specified splitter should be registered in
+        ``tabensemb.data.datasplitter.splitter_mapping``.
 
         Parameters
         ----------
         config
-            The name of a data splitter implemented in ``data/datasplitter.py`` or a tuple providing the name and kwargs
-            of the data splitter
+            The name of a data splitter or a tuple providing the name and kwargs of the data splitter.
         ratio
             The ratio of training, validation, and testing sets. For example, [0.6, 0.2, 0.2].
         """
@@ -74,14 +73,13 @@ class DataModule:
 
     def set_data_imputer(self, config):
         """
-        Set the data imputer. The specified splitter should be implemented in ``data/dataimputer.py``. Also, data
-        imputer can be set directly using ``datamodule.dataimputer = YourImputer()``
+        Set the data imputer. The specified splitter should be registered in
+        ``tabensemb.data.dataimputer.imputer_mapping``.
 
         Parameters
         ----------
         config
-            The name of a data imputer implemented in ``data/dataimputer.py`` or a tuple providing the name and kwargs
-            of the data imputer
+            The name of a data imputer or a tuple providing the name and kwargs of the data imputer.
         """
         from tabensemb.data.dataimputer import get_data_imputer
 
@@ -92,19 +90,18 @@ class DataModule:
 
     def set_data_processors(self, config: List[Tuple[str, Dict]]):
         """
-        Set a list of data processors with the name and arguments for each data processors. The processor should be
-        implemented in ``data/dataprocessor.py``. Also, data processors can be set directly using
-        ``datamodule.dataprocessors = [YourProcessor(**kwargs) for EACH DATA PROCESSOR]``
+        Set a list of data processors containing the name and arguments for each data processor. The processor should be
+        registered in ``tabensemb.data.dataprocessor.processor_mapping``.
 
         Parameters
         ----------
         config
-            A list of tuple. The tuple includes the name of the processor and a dict of kwargs for the processor.
+            A list of tuples. Each tuple includes the name of the processor and a dict of kwargs for the processor.
 
         Notes
         ----------
-        The `UnscaledDataRecorder` should be set before any scaling processor. If not found in the input, it will be
-        appended at the end.
+        Only one :class:`~tabensemb.data.base.AbstractScaler` can be used, and the
+        :class:`~tabensemb.data.base.AbstractScaler` must be the last one.
         """
         from tabensemb.data.dataprocessor import get_data_processor, AbstractScaler
 
@@ -121,16 +118,13 @@ class DataModule:
 
     def set_data_derivers(self, config: List[Tuple[str, Dict]]):
         """
-        Set a list of data derivers with the name and arguments for each data derivers. The deriver should be
-        implemented in data/dataderiver.py. Also, data derivers can be set directly using
-        ``datamodule.dataderivers = [YourDeriver(**kwargs) for EACH DATA DERIVER]``
+        Set a list of data derivers containing the name and arguments for each data deriver. The deriver should be
+        registered in ``tabensemb.data.dataderiver.deriver_mapping``.
 
         Parameters
         ----------
         config
-            A list of tuple. The tuple includes the name of the deriver and a dict of kwargs for the deriver.
-        verbose
-            Ignored.
+            A list of tuple. Each tuple includes the name of the deriver and a dict of kwargs for the deriver.
         """
         from tabensemb.data.dataderiver import get_data_deriver
 
@@ -145,16 +139,18 @@ class DataModule:
         **kwargs,
     ) -> None:
         """
-        Load tabular data. Either .csv or .xlsx is supported.
+        Load tabular data. Either a .csv or .xlsx file is supported.
 
         Parameters
         ----------
         data_path
-            Path to the tabular data. By default, the file ``data/{database}.csv/.xlsx`` is loaded.
+            Path to the tabular data. By default, the file
+            ``tabensemb.setting["default_data_path"]/{database}.csv(.xlsx)`` is loaded where "database" is given in the
+            configuration.
         save_path
             Path to save the loaded data.
         **kwargs
-            Arguments for pd.read_excel or pd.read_csv.
+            Arguments for ``pd.read_excel`` or ``pd.read_csv``.
         """
         if data_path is None:
             if self.data_path is None:
@@ -220,7 +216,7 @@ class DataModule:
         test_indices: np.ndarray = None,
     ):
         """
-        Set up the datamodule with a dataframe. Data splitting, imputation, derivation, and processing will be performed.
+        Set up the datamodule with a DataFrame. Data splitting, imputation, derivation, and processing will be performed.
 
         Parameters
         ----------
@@ -231,24 +227,25 @@ class DataModule:
         cat_feature_names
             A list of categorical features in the tabular dataset.
         label_name
-            A list of targets. Currently, only one target is supported.
+            A list of targets. Multi target tasks are experimental.
         derived_stacked_features
             A list of derived features in the tabular dataset. If not None, only these features are retained after
             derivation, and all AbstractFeatureSelectors will be skipped.
         derived_data
-            The derived data calculated using data derivers with the argument "stacked" to False, i.e. unstacked data.
+            The derived data calculated using data derivers whose argument "stacked" is set to False, i.e. unstacked
+            data. Unstacked derivations will be skipped if it is given.
         warm_start
-            Whether to use fitted data imputers and processors to process the data.
+            Whether to use fitted data processors to process the data.
         verbose
             Verbosity.
         all_training
             Whether all samples are used for training.
         train_indices
-            Manually specify the training set by indices.
+            Manually specify the training indices.
         val_indices
-            Manually specify the validation set by indices.
+            Manually specify the validation indices.
         test_indices
-            Manually specify the testing set by indices.
+            Manually specify the testing indices.
         """
         if len(label_name) > 1:
             warnings.warn(
@@ -421,7 +418,8 @@ class DataModule:
     @property
     def cat_num_unique(self) -> List[int]:
         """
-        The number of unique values of each categorical feature.
+        The number of unique values of each categorical feature. Only valid when a
+        :class:`~tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` is used.
         """
         return (
             [len(x) for x in self.cat_feature_mapping.values()]
@@ -429,7 +427,17 @@ class DataModule:
             else []
         )
 
-    def _infer_task(self):
+    def _infer_task(self) -> str:
+        """
+        Automatically infer the task type using the target values. If the inferred type is not the same as that set
+        in the configuration, the inferred type is used if the global setting
+        ``tabensemb.setting["raise_inconsistent_inferred_task"]`` is False.
+
+        Returns
+        -------
+        str
+            "binary", "multiclass", or "regression"
+        """
         selected_task = self.args["task"] if "task" in self.args.keys() else None
         # if isinstance(selected_task, dict):
         #     return selected_task
@@ -484,7 +492,20 @@ class DataModule:
             task = infer_one_col(self.label_data, selected_task)
         return task
 
-    def _infer_loss(self, task):
+    def _infer_loss(self, task: str):
+        """
+        Automatically infer the loss type using the name of the task and the loss type given in the configuration.
+
+        Parameters
+        ----------
+        task
+            "binary", "multiclass", or "regression"
+
+        Returns
+        -------
+        str
+            "mse" or "mae" for regression tasks and "cross_entropy" for classification tasks.
+        """
         selected_loss = self.args["loss"] if "loss" in self.args.keys() else None
         # if isinstance(selected_loss, dict):
         #     return selected_loss
@@ -508,29 +529,30 @@ class DataModule:
         self, df: pd.DataFrame, derived_data: dict = None, ignore_absence=False
     ) -> Tuple[pd.DataFrame, dict]:
         """
-        Prepare the new tabular dataset for predictions from AbstractModel._predict. Stacked and unstacked features
-        are derived; missing values are imputed; AbstractProcessor.transform are called. Users usually do not need to
-        call this because AbstractModel.predict does it.
+        Prepare the new tabular dataset for predictions using :meth:`~tabensemb.model.AbstractModel._predict`
+        Stacked and unstacked features are derived; missing values are imputed; The ``transform`` method of
+        :class:`~tabensemb.data.base.AbstractProcessor` is called. Users usually do not need to
+        call this because :meth:`~tabensemb.model.AbstractModel.predict` does it.
 
         Parameters
         ----------
         df:
             A new tabular dataset.
         derived_data:
-            Data derived from :func:``DataModule.derive_unstacked``. If not None, unstacked data will be re-derived.
+            Data derived from :meth:`.derive_unstacked`. If not None, unstacked data will be re-derived.
         ignore_absence:
             Whether to ignore absent keys in derived_data. Use True only when the model does not use derived_data.
 
         Returns
         -------
         df
-            The dataset after derivation, imputation, and processing. It has the same structure as self.X_train
+            The dataset after derivation, imputation, and processing. It has the same structure as ``self.X_train``
         derived_data:
-            Data derived from :func:``DataModule.derive_unstacked``. It has the same structure as self.D_train
+            Data derived from :meth:`.derive_unstacked`. It has the same structure as ``self.D_train``
 
         Notes
         -------
-        The returned df is not scaled for the sake of further treatments. To scale the df,
+        The returned ``df`` is not scaled for the sake of further treatments. To scale the df,
         run ``df = datamodule.data_transform(df, scaler_only=True)``
         """
         self.set_status(training=False)
@@ -578,7 +600,7 @@ class DataModule:
 
         Returns
         -------
-        mask
+        pd.DataFrame
             A byte mask dataframe.
         """
         return self._cont_imputed_mask[self.cont_feature_names]
@@ -590,7 +612,7 @@ class DataModule:
 
         Returns
         -------
-        mask
+        pd.DataFrame
             A byte mask dataframe.
         """
         return self._cat_imputed_mask[self.cat_feature_names]
@@ -602,7 +624,7 @@ class DataModule:
 
         Returns
         -------
-        names:
+        List
             A list of continuous features and categorical features.
         """
         return self.cont_feature_names + self.cat_feature_names
@@ -610,12 +632,12 @@ class DataModule:
     @property
     def derived_stacked_features(self) -> List[str]:
         """
-        Find derived features in ``all_feature_names`` derived by data derivers with the argument "stacked" to True,
-        i.e. stacked data.
+        Find derived features in ``all_feature_names`` derived by data derivers whose argument "stacked" is set to True,
+        i.e. the stacked data.
 
         Returns
         -------
-        names:
+        List
             A list of feature names.
         """
         return self.extract_derived_stacked_feature_names(self.all_feature_names)
@@ -627,16 +649,16 @@ class DataModule:
         Parameters
         ----------
         typ
-            One type of features in ``feature_types`` in the configuration.
+            One type of features defined in ``feature_types`` in the configuration.
 
         Returns
         -------
-        names
+        List
             A list of found features.
 
         See Also
         -------
-        ``Trainer.get_feature_idx_by_type``
+        :meth:`~.get_feature_idx_by_type``
         """
         if typ not in self.args["feature_types"]:
             raise Exception(
@@ -661,12 +683,12 @@ class DataModule:
 
         Returns
         -------
-        indices
+        np.ndarray
             A list of indices of found features.
 
         See Also
         -------
-        ``Trainer.get_feature_names_by_type``
+        :meth:`~.get_feature_names_by_type``
         """
         names = self.get_feature_names_by_type(typ=typ)
         if typ == "Categorical":
@@ -676,17 +698,17 @@ class DataModule:
 
     def extract_cont_feature_names(self, all_feature_names: List[str]) -> List[str]:
         """
-        Get original continuous features specified in the config file.
+        Get original continuous features specified in the configuration.
 
         Parameters
         ----------
         all_feature_names
-            A list of features that contains some original features in the config file.
+            A list of features that contains some original features in the configuration.
 
         Returns
         -------
-        name
-            Names of continuous original features both in the config file and the input list.
+        List
+            Names of continuous original features both in the configuration and the input list.
         """
         return [
             x
@@ -695,19 +717,19 @@ class DataModule:
             and x not in self.args["categorical_feature_names"]
         ]
 
-    def extract_cat_feature_names(self, all_feature_names):
+    def extract_cat_feature_names(self, all_feature_names: List[str]) -> List[str]:
         """
-        Get original categorical features specified in the config file.
+        Get original categorical features specified in the configuration.
 
         Parameters
         ----------
         all_feature_names
-            A list of features that contains some original features in the config file.
+            A list of features that contains some original features in the configuration.
 
         Returns
         -------
-        name
-            Names of categorical original features that are both in the config file and the input list.
+        List
+            Names of categorical original features that are both in the configuration and the input list.
         """
         return [
             str(x)
@@ -721,8 +743,8 @@ class DataModule:
         self, all_feature_names: List[str]
     ) -> List[str]:
         """
-        Find derived features in the input list derived by data derivers with the argument "stacked" to True,
-        i.e. stacked data.
+        Find derived features in the input list derived by data derivers whose argument "stacked" is set to True,
+        i.e. the stacked data.
 
         Parameters
         ----------
@@ -731,7 +753,7 @@ class DataModule:
 
         Returns
         -------
-        names
+        List
             Names of stacked features in the input list.
         """
         return [
@@ -747,7 +769,7 @@ class DataModule:
 
     def set_feature_names(self, all_feature_names: List[str]):
         """
-        Set feature names to a subset of current features (i.e. ``all_feature_names``) and reload the data.
+        Set feature names to a subset of current features (i.e. ``self.all_feature_names``) and reload the data.
 
         Parameters
         ----------
@@ -785,13 +807,13 @@ class DataModule:
         Parameters
         ----------
         derived_data
-            A dict of derived unstacked data calculated by ``Trainer.derive_unstacked()``
+            A dict of derived unstacked data calculated by :meth:`~.derive_unstacked`
         ignore_absence
-            Whether to ignore the absence of any derived unstacked data that does not exist in the input.
+            Whether to ignore absent keys in derived_data.
 
         Returns
         -------
-        derived_data
+        dict or None
             The sorted derived unstacked data.
         """
         if derived_data is None:
@@ -807,6 +829,13 @@ class DataModule:
             return tmp_derived_data
 
     def _get_categorical_ordinal_encoder(self):
+        """
+        Find and return the :class:`~tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` in data processors..
+
+        Returns
+        -------
+        CategoricalOrdinalEncoder
+        """
         from tabensemb.data.dataprocessor import CategoricalOrdinalEncoder
 
         for processor in self.dataprocessors:
@@ -821,8 +850,8 @@ class DataModule:
 
     def categories_inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
-        Inverse transformation of `data.dataprocessor.OrdinalEncoder` of categorical features (If there is one in
-        `self.dataprocessors`).
+        Inverse transformation of :class:`~tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` for categorical
+        features (If there is one in ``self.dataprocessors``).
 
         Parameters
         ----------
@@ -831,7 +860,7 @@ class DataModule:
 
         Returns
         -------
-        data
+        pd.DataFrame
             The inverse-transformed data.
         """
         encoder_features = self._get_categorical_ordinal_encoder()
@@ -844,8 +873,8 @@ class DataModule:
 
     def categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
-        Transformation of `data.dataprocessor.OrdinalEncoder` of categorical features (If there is one in
-        `self.dataprocessors`).
+        Transformation of :class:`~tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` for categorical features
+        (If there is one in ``self.dataprocessors``).
 
         Parameters
         ----------
@@ -854,7 +883,7 @@ class DataModule:
 
         Returns
         -------
-        data
+        pd.DataFrame
             The transformed data.
         """
         encoder_features = self._get_categorical_ordinal_encoder()
@@ -866,6 +895,19 @@ class DataModule:
         return X
 
     def label_categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """
+        Categorical ordinal encoding for the target.
+
+        Parameters
+        ----------
+        X
+            The data to be transformed.
+
+        Returns
+        -------
+        pd.DataFrame
+            The transformed data.
+        """
         res = self._ordinal_encoder_transform(
             self.label_ordinal_encoder, X, self.label_name, transform=True
         )
@@ -873,6 +915,19 @@ class DataModule:
         return res
 
     def label_categories_inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """
+        Inverse transformation of categorical ordinal encoding for the target.
+
+        Parameters
+        ----------
+        X
+            The data to be transformed.
+
+        Returns
+        -------
+        pd.DataFrame
+            The transformed data.
+        """
         return self._ordinal_encoder_transform(
             self.label_ordinal_encoder, X, self.label_name, transform=False
         )
@@ -884,6 +939,27 @@ class DataModule:
         cat_features: List[str],
         transform: bool,
     ) -> pd.DataFrame:
+        """
+        For :meth:`~.categories_inverse_transform`, :meth:`~.categories_transform`,
+        :meth:`~.label_categories_transform`, and :meth:`~.label_categories_inverse_transform`, make the input legal
+        including getting ready for missing columns, return the input if it is already transformed, etc.
+
+        Parameters
+        ----------
+        encoder
+            A categorical ordinal encoder that has methods ``fit_transform`` and ``transform``.
+        X
+            The data to be transformed.
+        cat_features
+            Encoded categorical features (or targets).
+        transform
+            True if doing transform and False if doing inverse transform.
+
+        Returns
+        -------
+        pd.DataFrame
+            The transformed data.
+        """
         X = X.copy()
         missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
         if len(missing_cols) > 0:
@@ -912,7 +988,7 @@ class DataModule:
 
     def save_data(self, path: str):
         """
-        Save the tabular data processed by ``set_data()``. Two files will be saved: ``data.csv`` contains all
+        Save the tabular data processed by :meth:`~.set_data`. Two files will be saved: ``data.csv`` contains all
         information from the input dataframe, and ``tabular_data.csv`` contains merely used features.
 
         Parameters
@@ -948,12 +1024,16 @@ class DataModule:
 
         Returns
         -------
-        df_tmp
+        pd.DataFrame
             The tabular dataset with derived stacked features.
-        cont_feature_names
+        List
             Continuous feature names with derived stacked features.
-        derived_data
+        dict
             The derived unstacked data.
+
+        See Also
+        ---------
+        :meth:`.derive_stacked`, :meth:`.derive_unstacked`.
         """
         df_tmp, cont_feature_names = self.derive_stacked(df)
         derived_data = self.derive_unstacked(df_tmp)
@@ -962,7 +1042,8 @@ class DataModule:
 
     def derive_stacked(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
         """
-        Derive stacked features using the input dataframe.
+        Derive stacked features using the input dataframe. Calculated using data derivers whose argument "stacked" is
+        set to True.
 
         Parameters
         ----------
@@ -971,9 +1052,9 @@ class DataModule:
 
         Returns
         -------
-        df_tmp
+        pd.DataFrame
             The tabular dataset with derived stacked features.
-        cont_feature_names
+        List
             Continuous feature names with derived stacked features.
         """
         df_tmp = df.copy()
@@ -994,18 +1075,21 @@ class DataModule:
         self, df: pd.DataFrame, categorical_only=False
     ) -> Dict[str, np.ndarray]:
         """
-        Derive unstacked features using the input dataframe.
+        Derive unstacked features using the input dataframe. Calculated using data derivers whose argument "stacked" is
+        set to False. Categorical features will be added to the returned dict with the key "categorical". Indices
+        stating which data points are augmented will be added to the returned dict with the key
+        "augmented" (1 for augmented ones).
 
         Parameters
         ----------
         df
             The tabular dataset.
         categorical_only
-            Whether to get categorical features only in the returned dict.
+            Whether to only return categorical features.
 
         Returns
         -------
-        derived_data
+        dict
             The derived unstacked data.
         """
         derived_data = {}
@@ -1032,13 +1116,14 @@ class DataModule:
         verbose: bool = True,
     ):
         """
-        Main procedure to process data after splitting and imputation. Both scaled and unscaled data will be recorded.
-        Note that processors will fit on training datasets and transform on validation and testing dataset.
+        The main procedure to process data after splitting and imputation. Both scaled and unscaled data will be recorded.
+        Note that processors will fit on training and validation datasets and transform the testing set by calling
+        :meth:`~._data_preprocess` with different arguments.
 
         Parameters
         ----------
         warm_start
-            Whether to use fitted data imputers and processors to process the data.
+            Whether to use fitted data processors to process the data.
         skip_selector
             True to skip feature selections.
         verbose
@@ -1111,60 +1196,35 @@ class DataModule:
     @property
     def unscaled_feature_data(self) -> pd.DataFrame:
         """
-        Get unscaled feature data.
-
-        Returns
-        -------
-        df
-            The unscaled feature data.
+        The unscaled feature data.
         """
         return self.df[self.cont_feature_names].copy()
 
     @property
     def unscaled_label_data(self) -> pd.DataFrame:
         """
-        Get unscaled label data.
-
-        Returns
-        -------
-        df
-            The unscaled label data.
+        The unscaled label data.
         """
         return self.df[self.label_name].copy()
 
     @property
     def categorical_data(self) -> pd.DataFrame:
         """
-        Get categorical data.
-
-        Returns
-        -------
-        df
-            The categorical data.
+        The categorical data.
         """
         return self.df[self.cat_feature_names].copy()
 
     @property
     def feature_data(self) -> pd.DataFrame:
         """
-        Get scaled feature data.
-
-        Returns
-        -------
-        df
-            The scaled feature data.
+        The scaled feature data.
         """
         return self.scaled_df[self.cont_feature_names].copy()
 
     @property
     def label_data(self) -> pd.DataFrame:
         """
-        Get scaled label data.
-
-        Returns
-        -------
-        df
-            The scaled label data.
+        The scaled label data.
         """
         return self.scaled_df[self.label_name].copy()
 
@@ -1186,42 +1246,69 @@ class DataModule:
 
     @property
     def X_train(self):
+        """
+        The unscaled training dataset.
+        """
         return self.df.loc[self.train_indices, :].copy()
 
     @property
     def X_val(self):
+        """
+        The unscaled validation dataset.
+        """
         return self.df.loc[self.val_indices, :].copy()
 
     @property
     def X_test(self):
+        """
+        The unscaled testing dataset.
+        """
         return self.df.loc[self.test_indices, :].copy()
 
     @property
     def y_train(self):
+        """
+        The target of the training dataset.
+        """
         return self.df.loc[self.train_indices, self.label_name].values
 
     @property
     def y_val(self):
+        """
+        The target of the validation dataset.
+        """
         return self.df.loc[self.val_indices, self.label_name].values
 
     @property
     def y_test(self):
+        """
+        The target of the testing dataset.
+        """
         return self.df.loc[self.test_indices, self.label_name].values
 
     @property
     def D_train(self):
+        """
+        The derived unstacked data of the training dataset.
+        """
         return self.get_derived_data_slice(
             derived_data=self.derived_data, indices=self.train_indices
         )
 
     @property
     def D_val(self):
+        """
+        The derived unstacked data of the validation dataset.
+        """
         return self.get_derived_data_slice(
             derived_data=self.derived_data, indices=self.val_indices
         )
 
     @property
     def D_test(self):
+        """
+        The derived unstacked data of the testing dataset.
+        """
         return self.get_derived_data_slice(
             derived_data=self.derived_data, indices=self.test_indices
         )
@@ -1235,7 +1322,8 @@ class DataModule:
         scaler_only: bool = False,
     ) -> pd.DataFrame:
         """
-        Call data processors to fit and/or transform the input tabular dataset.
+        Call data processors to fit and/or transform the input tabular dataset. It is automatically called by
+        :meth:`~._data_process` and :meth:`~.data_transform` with different arguments.
 
         Parameters
         ----------
@@ -1252,7 +1340,7 @@ class DataModule:
 
         Returns
         -------
-        df
+        pd.DataFrame
             The processed data.
         """
         from .base import AbstractScaler, AbstractFeatureSelector
@@ -1280,7 +1368,7 @@ class DataModule:
         scaler_only: bool = False,
     ):
         """
-        Transform the input tabular dataset using fitted data processors. Only AbstractTransformers take effects.
+        Transform the input tabular dataset using fitted data processors.
 
         Parameters
         ----------
@@ -1293,8 +1381,8 @@ class DataModule:
 
         Returns
         -------
-        df
-            Transformed tabular dataset.
+        pd.DataFrame
+            The transformed tabular dataset.
         """
         return self._data_preprocess(
             input_data.copy(),
@@ -1305,7 +1393,7 @@ class DataModule:
 
     def update_dataset(self):
         """
-        Update PyTorch tensors and datasets for the datamodule. This is called after features change.
+        Update PyTorch tensors and datasets. This is called after features change.
         """
         X, D, y = self.generate_tensors(self.scaled_df, self.derived_data)
         dataset = Data.TensorDataset(X, *D, y)
@@ -1315,6 +1403,21 @@ class DataModule:
         self.tensors = (X, *D, y)
 
     def generate_tensors(self, scaled_df, derived_data):
+        """
+        Generate PyTorch tensors.
+
+        Parameters
+        ----------
+        scaled_df
+            The scaled dataset.
+        derived_data
+            A dict of derived unstacked data calculated by :meth:`~.derive_unstacked`
+
+        Returns
+        -------
+        torch.Tensor
+            A tensor of continuous features, a list of tensors of derived_unstacked data, and a tensor of the target.
+        """
         X = torch.tensor(
             scaled_df[self.cont_feature_names].values.astype(np.float32),
             dtype=torch.float32,
@@ -1335,11 +1438,12 @@ class DataModule:
         Parameters
         ----------
         dataset
-            A torch.utils.data.Dataset instance.
+            A ``torch.utils.data.Dataset`` instance.
 
         Returns
         -------
-        Training, validation and testing subsets.
+        torch.utils.data.Subset
+            Training, validation and testing subsets.
         """
         return (
             Subset(dataset, self.train_indices),
@@ -1356,14 +1460,14 @@ class DataModule:
         Parameters
         ----------
         derived_data
-            Derived unstacked data.
+            A dict of derived unstacked data calculated by :meth:`~.derive_unstacked``
         indices
             The indices to make slice.
 
         Returns
         -------
-        derived_data
-            The sliced derived stacked data.
+        dict
+            The sliced derived unstacked data.
         """
         tmp_derived_data = {}
         for key, value in derived_data.items():
@@ -1373,7 +1477,7 @@ class DataModule:
     def get_zero_slip(self, feature_name: str) -> float:
         """
         See how data processors act on a feature if its value is zero.
-        It is a wrapper for ``Trainer.get_var_change``.
+        It is a wrapper for :meth:`~.get_var_change`.
 
         Parameters
         ----------
@@ -1382,7 +1486,7 @@ class DataModule:
 
         Returns
         -------
-        value
+        float
             The transformed value for the feature using data processors.
         """
         return self.get_var_change(feature_name=feature_name, value=0)
@@ -1422,16 +1526,16 @@ class DataModule:
 
     def describe(self, transformed=False) -> pd.DataFrame:
         """
-        Describe the dataset using pd.DataFrame.describe, skewness, gini index, mode values, etc.
+        Describe the dataset using ``pd.DataFrame.describe``, skewness, gini index, mode values, etc.
 
         Parameters
         ----------
         transformed
-            Whether to describe the transformed (scaled) data.
+            Whether to describe the scaled data.
 
         Returns
         -------
-        desc
+        pd.DataFrame
             The descriptions of the dataset.
         """
         tabular = self.get_tabular_dataset(transformed=transformed)[0]
@@ -1465,7 +1569,7 @@ class DataModule:
         Returns
         -------
         sizes
-            A list of np.ndarray.shape representing dimensions of each derived unstacked features.
+            A list of np.ndarray.shape representing dimensions of each derived unstacked feature.
         """
         return [x.shape for x in self.derived_data.values()]
 
@@ -1481,7 +1585,7 @@ class DataModule:
 
         Returns
         -------
-        gini
+        pd.DataFrame
             The gini index for each feature in the dataset.
         """
         return pd.DataFrame(
@@ -1504,8 +1608,12 @@ class DataModule:
 
         Returns
         -------
-        mode
-            The mode value for each feature in the dataset, and the number and percentage of the mode value.
+        pd.DataFrame
+            The mode value for each feature in the dataset.
+        pd.DataFrame
+            The number of the mode value for each feature.
+        pd.DataFrame
+            The percentage of the mode value for each feature.
         """
         mode = tabular.mode().loc[0, :]
         cnt_mode = pd.DataFrame(
@@ -1532,7 +1640,7 @@ class DataModule:
         self, feature_names: List[str] = None, feature_idx: List[int] = None, **kwargs
     ) -> PCA:
         """
-        Perform sklearn.decomposition.PCA
+        Perform ``sklearn.decomposition.PCA``
 
         Parameters
         -------
@@ -1543,8 +1651,8 @@ class DataModule:
 
         Returns
         -------
-        pca
-            A sklearn.decomposition.PCA instance.
+        sklearn.decomposition.PCA
+            A ``sklearn.decomposition.PCA`` instance.
         """
         pca = PCA(**kwargs)
         if feature_names is not None:
@@ -1563,7 +1671,7 @@ class DataModule:
         self, data: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        Get continuous feature data, categorical feature data, and label data respectively.
+        Get continuous feature data, categorical feature data, and label data respectively from the input DataFrame.
 
         Parameters
         ----------
@@ -1572,11 +1680,11 @@ class DataModule:
 
         Returns
         -------
-        feature_data
+        pd.DataFrame
             The continuous feature data.
-        categorical_data
+        pd.DataFrame
             The categorical feature data.
-        label_data
+        pd.DataFrame
             The label data.
         """
         feature_data = data[self.cont_feature_names]
@@ -1589,7 +1697,7 @@ class DataModule:
         self, transformed: bool = False
     ) -> Tuple[pd.DataFrame, List, List, List]:
         """
-        Get the tabular dataset loaded in the datamodule.
+        Get the tabular dataset loaded in the DataModule.
 
         Parameters
         ----------
@@ -1598,14 +1706,14 @@ class DataModule:
 
         Returns
         -------
-        tabular_dataset
+        pd.DataFrame
             The tabular dataset.
-        cont_feature_names
+        List
             The continuous feature names in the dataset.
-        cat_feature_names
+        List
             The categorical feature names in the dataset.
-        label_names
-            The target names (only one target is currently supported).
+        List
+            The target names.
         """
         if transformed:
             feature_data = self.feature_data
@@ -1626,19 +1734,19 @@ class DataModule:
         self, imputed: bool = False, features_only: bool = False
     ) -> pd.DataFrame:
         """
-        Calculate Pearson correlation among continuous features.
+        Calculate Pearson correlation coefficients among continuous features.
 
         Parameters
         ----------
         imputed
-            Whether the imputed dataset should be considered. If False, some NaN values may exit for features with
-            missing value.
+            Whether the imputed dataset should be considered. If False, some NaN values may exist for features that have
+            missing values.
         features_only
             If False, the target is also considered.
 
         Returns
         -------
-        corr
+        pd.DataFrame
             The correlation dataframe.
         """
         subset = (
@@ -1658,7 +1766,7 @@ class DataModule:
 
         Returns
         -------
-        df
+        pd.DataFrame
             The tabular dataset without imputation.
         """
         tmp_cont_df = self.df.copy().loc[:, self.cont_feature_names]
@@ -1687,9 +1795,10 @@ class DataModule:
         ----------
         partition
             "train", "val", "test", or "all"
+
         Returns
         -------
-        indices
+        np.ndarray
             The indices of the selected partition.
         """
         indices_map = {
@@ -1708,16 +1817,16 @@ class DataModule:
 
     def get_additional_tensors_slice(self, indices) -> Union[Tuple[Any], Tuple]:
         """
-        Get slices of the derived unstacked tensors.
+        Get slices of tensors of derived unstacked data.
 
         Parameters
         ----------
         indices
-            The indices to make slice.
+            The indices to make the slice.
 
         Returns
         -------
-        res
+        Tuple[torch.Tensor]
             Sliced derived unstacked tensors.
         """
         res = []
@@ -1728,17 +1837,17 @@ class DataModule:
 
     def get_first_tensor_slice(self, indices) -> torch.Tensor:
         """
-        Get slices of the continuous tensor.
+        Get a slice of the tensor of continuous features.
 
         Parameters
         ----------
         indices
-            The indices to make slice.
+            The indices to make the slice.
 
         Returns
         -------
-        res
-            The sliced continuous tensor.
+        torch.Tensor
+            The sliced tensor of continuous feature.
         """
         return self.tensors[0][indices, :]
 
@@ -1753,13 +1862,13 @@ class DataModule:
         Parameters
         ----------
         categorical
-            Whether to include OneHotEncoder for categorical features.
+            Whether to include ``OneHotEncoder`` for categorical features.
         kwargs
             Arguments for ``sklearn.ensemble.RandomForestRegressor``
 
         Returns
         -------
-        model
+        sklearn.pipeline.Pipeline or sklearn.ensemble.RandomForestRegressor
             A Pipeline if categorical is True, or a RandomForestRegressor if categorical is False.
         """
         from sklearn.impute import SimpleImputer

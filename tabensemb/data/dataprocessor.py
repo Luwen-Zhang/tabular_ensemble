@@ -38,7 +38,7 @@ class FeatureValueSelector(AbstractProcessor):
     feature: str
         The feature that will be filtered.
     value: float
-        The specified feature value.
+        The selected feature value.
     """
 
     def _required_kwargs(self):
@@ -71,7 +71,7 @@ class FeatureValueSelector(AbstractProcessor):
 
 class IQRRemover(AbstractProcessor):
     """
-    Remove outliers using IQR strategy. Outliers are those
+    Remove outliers using the IQR strategy. Outliers are those
     out of the range [25-percentile - 1.5 * IQR, 75-percentile + 1.5 * IQR], where IQR = 75-percentile - 25-percentile.
     """
 
@@ -99,7 +99,7 @@ class IQRRemover(AbstractProcessor):
 
 class StdRemover(AbstractProcessor):
     """
-    Remove outliers using standard error strategy. Outliers are those out of the range of 3sigma.
+    Remove outliers using the standard error strategy. Outliers are those out of the range of 3sigma.
     """
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
@@ -247,7 +247,7 @@ class CorrFeatureSelector(AbstractFeatureSelector):
     Parameters
     ----------
     thres:
-        The threshold of pearson correlation.
+        The threshold of the Pearson correlation coefficient.
     n_estimators:
         The number of trees used in random forests.
     """
@@ -306,7 +306,7 @@ class CorrFeatureSelector(AbstractFeatureSelector):
 
 class StandardScaler(AbstractScaler):
     """
-    The standard scaler implemented using StandardScaler from sklearn.
+    A standard scaler implemented using StandardScaler from sklearn.
     """
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
@@ -327,7 +327,7 @@ class StandardScaler(AbstractScaler):
 
 class CategoricalOrdinalEncoder(AbstractTransformer):
     """
-    The categorical feature encoder that transform string values to unique integer values, implemented using
+    A categorical feature encoder that transforms string values to unique integer values, implemented using
     OrdinalEncoder from sklearn.
     """
 

@@ -7,6 +7,13 @@ from sklearn.model_selection import train_test_split
 
 
 class AbstractRequireKwargs:
+    """
+    By inheriting this class, the input kwargs will be used to update default values defined in
+    :meth:`~AbstractRequireKwargs._defaults`. The requirements defined in
+    :meth:`~AbstractRequireKwargs._cls_required_kwargs` and :meth:`~AbstractRequireKwargs._required_kwargs` will be
+    checked. The final kwargs will be stored as ``self.kwargs``.
+    """
+
     def __init__(self, **kwargs):
         self.kwargs = self._defaults()
         self.kwargs.update(kwargs)
@@ -15,40 +22,82 @@ class AbstractRequireKwargs:
         for key in self._required_kwargs():
             self._check_arg(key)
 
-    def _defaults(self):
+    def _defaults(self) -> Dict:
+        """
+        Defaults values for arguments defined in :meth:`~AbstractRequireKwargs._cls_required_kwargs` and
+        :meth:`~AbstractRequireKwargs._required_kwargs`
+
+        Returns
+        -------
+        dict
+            A dictionary of default values.
+        """
         return {}
 
-    def _cls_required_kwargs(self):
+    def _cls_required_kwargs(self) -> List:
+        """
+        kwargs required by the class.
+
+        Returns
+        -------
+        List
+            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            in the configuration file.
+        """
         return []
 
-    def _required_kwargs(self):
+    def _required_kwargs(self) -> List:
+        """
+        kwargs required by the class. It is for a specific subclass rather than an abstract class.
+
+        Returns
+        -------
+        List
+            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            in the configuration file.
+        """
         return []
 
     def _check_arg(self, name: str):
         """
-        Check whether the required parameter or column name is specified in the configuration file or :func:`_defaults`.
+        Check whether the required parameter is specified in the configuration file or in
+        :meth:`~AbstractRequireKwargs._defaults`.
 
         Parameters
         ----------
-        name:
-            The name of argument or a column name in the input arguments.
+        name
+            The name of argument in the input arguments.
         """
         if name not in self.kwargs.keys():
             raise Exception(f"{self.__class__.__name__}: {name} should be specified.")
 
 
 class AbstractDeriver(AbstractRequireKwargs):
-    """
-    The base class for all data-derivers. Data-derivers will derive new features based on the input dataframe and return
-    the derived values.
-    """
-
     def __init__(self, **kwargs):
+        """
+        The base class for all data-derivers, which will derive new features based on the input DataFrame and return
+        the derived values, or load and return multimodal data. It is recommended to learn the derivation on the
+        training set only.
+
+        Parameters
+        ----------
+        kwargs
+            Arguments required by the deriver. It will be stored as ``self.kwargs``.
+        """
         super(AbstractDeriver, self).__init__(**kwargs)
         for arg_name in self._required_cols():
             self._check_arg(arg_name)
 
     def _cls_required_kwargs(self):
+        """
+        kwargs required by the class. "stacked", "intermediate", and "derived_name" are required for all data derivers.
+
+        Returns
+        -------
+        List
+            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            in the configuration file.
+        """
         return ["stacked", "intermediate", "derived_name"]
 
     def derive(
@@ -57,23 +106,24 @@ class AbstractDeriver(AbstractRequireKwargs):
         datamodule: DataModule,
     ) -> Tuple[np.ndarray, str, List]:
         """
-        The method automatically checks input column names and the dataframe, calls the :func:``_derive`` method, and check output
-        of the derived data.
+        The method automatically checks input column names and the DataFrame, calls the :meth:`._derive` method, and
+        checks the output of the derived data.
 
         Parameters
         ----------
         df:
             The tabular dataset.
         datamodule:
-            A DataModule instance. Data-derivers might use information in the DataModule, but would not change its contents.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance. Data-derivers might use information in the
+            DataModule, but would not change its contents.
 
         Returns
         -------
-        values:
+        np.ndarray
             A ndarray of derived data
-        derived_name:
+        str
             The name of the derived feature
-        names:
+        List
             Names of each column in the derived data.
         """
         for arg_name in self._required_cols():
@@ -100,11 +150,12 @@ class AbstractDeriver(AbstractRequireKwargs):
         df:
             The tabular dataset.
         datamodule:
-            A DataModule instance. Data-derivers might use information in the DataModule, but would not change its contents.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance. Data-derivers might use information in the DataModule, but
+            would not change its contents.
 
         Returns
         -------
-        values:
+        np.ndarray
             The derived data. If it is one-dimensional, use reshape(-1, 1) to transform it into two-dimensional.
         """
         raise NotImplementedError
@@ -115,25 +166,23 @@ class AbstractDeriver(AbstractRequireKwargs):
 
         Returns
         -------
-        names:
+        List
             A list of column names of the derived data.
         """
         raise NotImplementedError
 
     def _generate_col_names(self, length: int) -> List[str]:
         """
-        Use ``derived_name`` to generate column names for each column of the derived data.
+        Use the ``derived_name`` argument to generate column names for each column of the derived data.
 
         Parameters
         ----------
-        derived_name:
-            The name of the derived feature.
         length:
             The number of columns of the derived data.
 
         Returns
         -------
-        names:
+        List
             Automatically generated column names.
         """
         try:
@@ -150,12 +199,12 @@ class AbstractDeriver(AbstractRequireKwargs):
     def _required_cols(self) -> List[str]:
         """
         Required column names in the tabular dataset by the data-deriver. Whether these names exist in the tabular
-        dataset would be checked in :func:``derive``.
+        dataset will be checked in :meth:`~AbstractDeriver.derive`.
 
         Returns
         -------
-        names:
-            Required column names in the tabular dataset by the data-deriver.
+        List
+            Column names required by the data-deriver in the tabular dataset.
         """
         raise NotImplementedError
 
@@ -182,7 +231,7 @@ class AbstractDeriver(AbstractRequireKwargs):
         Parameters
         ----------
         values:
-            The derived data returned by :func:`_derive`.
+            The derived data returned by :meth:`~AbstractDeriver._derive`.
         """
         if len(values.shape) == 1:
             raise Exception(
@@ -193,7 +242,7 @@ class AbstractDeriver(AbstractRequireKwargs):
 
 class AbstractImputer(AbstractRequireKwargs):
     """
-    The base class for all data-imputers. Data-imputers make imputations on the input tabular dataset.
+    The base class for all data-imputers. Data-imputers replace NaNs in the input tabular dataset.
     """
 
     def __init__(self, **kwargs):
@@ -205,20 +254,20 @@ class AbstractImputer(AbstractRequireKwargs):
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
-        Record feature names in the datamodule, fit the imputer, and transform the input dataframe. This should perform
-        on the training set. Missing values in categorical features are filled by "UNK". Continuous features that are
-        totally missing will not be imputed.
+        Record feature names in the datamodule, fit the imputer and transform the input dataframe. This should be
+        performed on the training and validation sets. Missing values in categorical features are filled by "UNK".
+        Continuous features that are totally missing will not be imputed.
 
         Parameters
         ----------
         input_data:
             A tabular dataset.
         datamodule:
-            A DataModule instance that contains necessary information required by imputers.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance that contains necessary information required by imputers.
 
         Returns
         -------
-        df:
+        pd.DataFrame
             A transformed tabular dataset.
         """
         data = input_data.copy()
@@ -233,19 +282,19 @@ class AbstractImputer(AbstractRequireKwargs):
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
-        Restore feature names in datamodule using recorded features, and transform the input tabular data using the fitted
-        imputer. This should perform on the validation and testing dataset.
+        Restore feature names in the datamodule using recorded features, and transform the input tabular data using the fitted
+        imputer. This should be performed on the testing set.
 
         Parameters
         ----------
         input_data:
             A tabular dataset.
         datamodule:
-            A DataModule instance that contains necessary information required by imputers.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance that contains necessary information required by imputers.
 
         Returns
         -------
-        df:
+        pd.DataFrame
             A transformed tabular dataset.
         """
         data = input_data.copy()
@@ -261,18 +310,18 @@ class AbstractImputer(AbstractRequireKwargs):
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
-        Fit the imputer and transform the input dataframe. This should perform on the training dataset.
+        Fit the imputer and transform the input dataframe. This should be performed on the training and validation sets.
 
         Parameters
         ----------
         input_data:
             A tabular dataset.
         datamodule:
-            A DataModule instance that contains necessary information required by imputers.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance that contains necessary information required by imputers.
 
         Returns
         -------
-        df:
+        pd.DataFrame
             A transformed tabular dataset.
         """
         raise NotImplementedError
@@ -281,19 +330,18 @@ class AbstractImputer(AbstractRequireKwargs):
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
-        Transform the input tabular data using the fitted imputer. This should perform on the validation and testing
-        dataset.
+        Transform the input tabular data using the fitted imputer. This should perform on the testing dataset.
 
         Parameters
         ----------
         input_data:
             A tabular dataset.
         datamodule:
-            A DataModule instance that contains necessary information required by imputers.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance that contains necessary information required by imputers.
 
         Returns
         -------
-        df:
+        pd.DataFrame
             A transformed tabular dataset.
         """
         raise NotImplementedError
@@ -313,7 +361,7 @@ class AbstractImputer(AbstractRequireKwargs):
 
         Returns
         -------
-        names:
+        List
             Names of continuous features that can be imputed.
         """
         all_missing_idx = np.where(
@@ -328,7 +376,8 @@ class AbstractImputer(AbstractRequireKwargs):
 
 class AbstractSklearnImputer(AbstractImputer):
     """
-    A base class for sklearn-style imputers.
+    A base class for sklearn-style imputers that has ``fit_transform`` and ``transform`` methods that return
+    ``np.ndarray``.
     """
 
     def _fit_transform(
@@ -365,25 +414,28 @@ class AbstractSklearnImputer(AbstractImputer):
 
     def _new_imputer(self):
         """
-        Get a sklearn-style imputer.
+        Get a sklearn-style imputer that has ``fit_transform`` and ``transform`` methods that return
+        ``np.ndarray``.
 
         Returns
         -------
-        imputer:
-            A instance of a sklearn-style imputer. See sklearn.impute.SimpleImputer for example.
+        Any
+            A instance of a sklearn-style imputer, such as ``sklearn.impute.SimpleImputer``.
         """
         raise NotImplementedError
 
 
 class AbstractProcessor(AbstractRequireKwargs):
     """
-    The base class for data-processors that change the number of data.
+    The base class for data-processors that change the content of the tabular dataset. The class is only directly used
+    for those who reduce the number of data points.
 
     Notes
     -------
-    If any attribute of the datamodule is set by the processor in ``_fit_transform``, the processor is responsible to
-    restore the set attribute when _transform is called. For instance, we have implemented recording feature names and
-    restoring them in the wrapper methods ``fit_transform`` and ``transform``.
+    If any attribute of the datamodule is set by the processor in :meth:`~AbstractProcessor._fit_transform`, the
+    processor is responsible for restoring the set attribute when _transform is called. For instance, in the wrapper
+    methods :meth:`~AbstractProcessor.fit_transform` and :meth:`~AbstractProcessor.transform`, we have implemented
+    recording feature names and restoring them.
     """
 
     def __init__(self, **kwargs):
@@ -395,19 +447,20 @@ class AbstractProcessor(AbstractRequireKwargs):
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
-        Record feature names in the datamodule, fit the processor and transform the input data. This should perform on the
-        training set.
+        Record feature names in the datamodule, fit the processor, and call :meth:`~AbstractProcessor._fit_transform` to
+        transform the input data. This should be performed on the training set.
 
         Parameters
         ----------
         input_data:
             A tabular dataset.
         datamodule:
-            A datamodule instance that contains necessary information required by processors.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance that contains necessary information required by
+            processors.
 
         Returns
         -------
-        df:
+        pd.DataFrame
             A transformed tabular dataset.
         """
         data = input_data.copy()
@@ -420,19 +473,20 @@ class AbstractProcessor(AbstractRequireKwargs):
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
         """
-        Restore feature names in datamodule using recorded features and transform the input data. This should perform on
-        the validation and testing dataset.
+        Restore feature names in datamodule using recorded features and call :meth:`~AbstractProcessor._transform`
+        to transform the input data. This should be performed on the validation and testing sets.
 
         Parameters
         ----------
         input_data:
             A tabular dataset.
         datamodule:
-            A datamodule instance that contains necessary information required by processors.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance that contains necessary information required by
+            processors.
 
         Returns
         -------
-        df:
+        pd.DataFrame
             A transformed tabular dataset.
         """
         if not getattr(datamodule, "_force_features", False):
@@ -451,6 +505,10 @@ class AbstractProcessor(AbstractRequireKwargs):
 
 
 class AbstractAugmenter(AbstractProcessor):
+    """
+    A kind of data processor that increases the number of data points.
+    """
+
     def _fit_transform(
         self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
@@ -473,12 +531,27 @@ class AbstractAugmenter(AbstractProcessor):
     def _get_augmented(
         self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
+        """
+        Return a DataFrame that contains augmented (new) data points based on the training and validation sets.
+
+        Parameters
+        ----------
+        data
+            The combined training and validation sets.
+        datamodule
+            A :class:`~tabensemb.data.datamodule.DataModule` instance.
+
+        Returns
+        -------
+        pd.DataFrame
+            Augmented data points.
+        """
         raise NotImplementedError
 
 
 class AbstractTransformer(AbstractProcessor):
     """
-    The base class for data-processors that change the value of some features.
+    The base class for data-processors that change values of the tabular dataset.
     """
 
     def __init__(self, **kwargs):
@@ -487,7 +560,7 @@ class AbstractTransformer(AbstractProcessor):
 
     def var_slip(self, feature_name, x) -> Union[int, float, Any]:
         """
-        See how the transformer perform on a value of a feature.
+        See how the transformer performs on a value of a feature.
 
         Parameters
         ----------
@@ -498,7 +571,7 @@ class AbstractTransformer(AbstractProcessor):
 
         Returns
         -------
-        value:
+        int or float
             The transformed value of the feature value x.
         """
         zero_data = pd.DataFrame(
@@ -519,7 +592,7 @@ class AbstractTransformer(AbstractProcessor):
 
 class AbstractFeatureSelector(AbstractProcessor):
     """
-    The base class for data-processors that change the number of features.
+    The base class for data-processors that reduce the number of features.
     """
 
     def _fit_transform(
@@ -556,11 +629,12 @@ class AbstractFeatureSelector(AbstractProcessor):
         input_data:
             A tabular dataset.
         datamodule:
-            A datamodule instance that contains necessary information required by processors.
+            A :class:`~tabensemb.data.datamodule.DataModule` instance that contains necessary information required by
+            processors.
 
         Returns
         -------
-        names:
+        List
             A list of selected features.
         """
         raise NotImplementedError
@@ -568,7 +642,7 @@ class AbstractFeatureSelector(AbstractProcessor):
 
 class AbstractScaler(AbstractTransformer):
     """
-    This is a marker for scaling like standard scaler or normalizer.
+    This is a marker for scaling processors like a standard scaler or a normalizer.
     """
 
     pass
@@ -576,7 +650,7 @@ class AbstractScaler(AbstractTransformer):
 
 class AbstractSplitter:
     """
-    The base class for data-splitters that split the dataset and return training, validation and testing indices.
+    The base class for data-splitters that split the dataset and return training, validation, and testing indices.
     """
 
     def __init__(
@@ -602,7 +676,7 @@ class AbstractSplitter:
         cv: int = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Split the dataset.
+        Split the dataset. It will call :meth:`~AbstractSplitter._split` and check its results.
 
         Parameters
         ----------
@@ -615,12 +689,12 @@ class AbstractSplitter:
         label_name:
             The name of the label.
         cv:
-            Perform cross validation by calling _next_cv if _support_cv is True.
+            The total number of cross-validation runs.
 
         Returns
         -------
-        train_indices, val_indices, test_indices:
-            Indices of the training, validation, and testing dataset.
+        np.ndarray
+            Indices of the training, validation, and testing datasets.
         """
         cv = self.cv if cv is None or cv <= 1 else cv
         if cv > 1 and self.support_cv:
@@ -653,6 +727,9 @@ class AbstractSplitter:
 
     @property
     def support_cv(self):
+        """
+        Whether the :meth:`~AbstractSplitter._next_cv` is implemented.
+        """
         return False
 
     def _next_cv(
@@ -663,9 +740,49 @@ class AbstractSplitter:
         label_name: List[str],
         cv: int,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get the next fold of indices of training, validation, and testing sets.
+
+        Parameters
+        ----------
+        df:
+            The input tabular dataset.
+        cont_feature_names:
+            Names of continuous features.
+        cat_feature_names:
+            Names of categorical features.
+        label_name:
+            The name of the label.
+        cv:
+            The total number of cross-validation runs.
+
+        Returns
+        -------
+        np.ndarray
+            Indices of the training, validation, and testing dataset.
+        """
         raise NotImplementedError
 
-    def _sklearn_k_fold(self, data, cv):
+    def _sklearn_k_fold(self, data, cv) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Generate a ``sklearn.model_selection.KFold`` instance and return its ``__next__()`` result.
+
+        Notes
+        ---------
+        The returned values are fold indices of the input ``data`` argument, but not the fold.
+
+        Parameters
+        ----------
+        data
+            An Iterable whose index will be split by KFold.
+        cv
+            The total number of cross-validation runs.
+
+        Returns
+        -------
+        np.ndarray
+            Indices of the training, validation, and testing datasets of the current fold.
+        """
         if self.cv_generator is None or cv != self.cv:
             if cv != self.cv and self.cv > 1:
                 warnings.warn(
@@ -694,7 +811,7 @@ class AbstractSplitter:
     @staticmethod
     def _check_split(train_indices, val_indices, test_indices):
         """
-        Check whether split indices coincide with each other.
+        Check whether split indices overlap with each other.
 
         Parameters
         ----------

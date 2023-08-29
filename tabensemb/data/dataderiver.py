@@ -145,7 +145,7 @@ class SampleWeightDeriver(AbstractDeriver):
 
 class UnscaledDataDeriver(AbstractDeriver):
     """
-    Record unscaled data in DataModule.derived_data so that TorchModels can access it.
+    Record unscaled data in DataModule.derived_data so that :class:`~tabensemb.model.base.TorchModel` can access it.
     """
 
     def _required_cols(self):
