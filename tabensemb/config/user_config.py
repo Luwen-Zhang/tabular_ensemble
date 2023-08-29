@@ -17,6 +17,14 @@ import warnings
 
 class UserConfig(dict):
     def __init__(self, path: str = None):
+        """
+        The configuration holder for :class:`~tabensemb.data.datamodule.DataModule` and :class:`~tabensemb.trainer.Trainer`.
+
+        Parameters
+        ----------
+        path
+            Path to the configuration file. See :meth:`~.from_file`.
+        """
         super(UserConfig, self).__init__()
         self.update(default_cfg)
         self._defaults = default_cfg.copy()
@@ -26,12 +34,22 @@ class UserConfig(dict):
     def defaults(self):
         """
         The default values in ``tabensemb.config.default.py``
+
+        Returns
+        -------
+        dict
+            A dictionary of default values.
         """
         return self._defaults.copy()
 
     def merge(self, d: Dict):
         """
-        Similar to dict.update, but will ignore values that are None.
+        Similar to :meth:`dict.update`, but will ignore values that are None.
+
+        Parameters
+        ----------
+        d
+            The dictionary used to update the configuration.
         """
         d_cp = d.copy()
         for key, val in d_cp.items():
@@ -42,7 +60,12 @@ class UserConfig(dict):
     @staticmethod
     def from_parser() -> Dict:
         """
-        Try to parse the configuration from argparse and merge it into defaults.
+        Try to parse the configuration using ``argparse`` and merge it into defaults.
+
+        Returns
+        -------
+        dict
+            The parsed configuration dictionary.
         """
         base_config = UserConfig()
         parser = argparse.ArgumentParser()
@@ -72,6 +95,16 @@ class UserConfig(dict):
     def from_dict(cfg: Dict) -> "UserConfig":
         """
         Merge the input dictionary into defaults.
+
+        Parameters
+        ----------
+        cfg
+            The dictionary used to update the default configuration.
+
+        Returns
+        -------
+        UserConfig
+            The combined configuration.
         """
         tmp_cfg = UserConfig()
         tmp_cfg.merge(cfg)
@@ -81,7 +114,19 @@ class UserConfig(dict):
     def from_file(path: str) -> "UserConfig":
         """
         Merge the .py or .json file into defaults. If no suffix is given, it will search the current directory and
-        ``tabensemb.setting["default_config_path"]`` for a matched file.
+        ``tabensemb.setting["default_config_path"]`` for a matched file. In a legal .py file, there should be a
+        dictionary named "cfg".
+
+        Parameters
+        ----------
+        path
+            The path to the configuration file to update the default configuration with or without a suffix
+            (.py or .json).
+
+        Returns
+        -------
+        UserConfig
+            The combined configuration.
         """
         file_path = (
             path
@@ -137,20 +182,20 @@ class UserConfig(dict):
             The name of the dataset like "Heart Disease", "Iris", etc. The name will be searched on the website and be
             configured if there is a matched dataset.
         datafile_name
-            The name of ".data" file in the downloaded .zip file. If is None and there exist more than one files with
+            The name of ".data" file in the downloaded .zip file. If is None and there exists more than one file with
             the suffix ".data" in a single dataset, the function will print available names.
         save_zip
             Whether the downloaded .zip file should be stored.
         max_retries
-            Maximum number of tries of urlopen.
+            The maximum number of tries of ``urllib.request.urlopen``.
         timeout
-            Waiting time of urlopen.
+            Waiting time of ``urllib.request.urlopen``.
         sep
-            The delimiter of pd.read_csv
+            The delimiter of ``pd.read_csv``.
 
         Returns
         -------
-        cfg
+        UserConfig
             The configuration of the dataset. If the dataset can not be automatically configured, None will be returned
             and the reason will be printed.
         """
@@ -302,7 +347,7 @@ class UserConfig(dict):
 
     def to_file(self, path: str):
         """
-        Save the configuration to a .py or .json file.
+        Save the configuration to a ``.py`` or ``.json`` file.
 
         Parameters
         ----------
