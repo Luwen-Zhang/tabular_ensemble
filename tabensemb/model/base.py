@@ -31,6 +31,37 @@ import inspect
 class AbstractModel:
     """
     The base class for all model bases.
+
+    Attributes
+    ----------
+    exclude_models
+        The names of models that should not be trained.
+    init_params
+        Arguments passed to :meth:`__init__`. See :meth:`save_kwargs`.
+    limit_batch_size
+        If ``batch_size // len(training set) < limit_batch_size``, the ``batch_size`` is forced to be
+        ``len(training set)`` to avoid potential numerical issues. For Tabnet, this is extremely important because a
+        small batch may cause NaNs and further CUDA device-side assert in the sparsemax function. Set to -1 to turn off
+        this check (NOT RECOMMENDED!!). Note: Setting ``drop_last=True`` for ``torch.utils.data.DataLoader`` is fine,
+        but I think (i) having access to all data points in one epoch is beneficial for some models, (ii) If using a
+        large dataset and a large ``batch_size``, it is possible that the last batch is so large that contains
+        essential information, (iii) the user should have full control for this. If you want to use ``drop_last`` in
+        your code, use the ``original_batch_size`` in ``kwargs`` passed to :class:`AbstractModel` methods.
+    model
+        A dictionary of models.
+    model_params
+        Hyperparameters that contain all keys in :meth:`_initial_values` for each model. In cross validation runs, the 
+        parameters in the previous run will be loaded for the current run.
+    model_subset
+        The names of models selected to be trained in the model base.
+    program
+        The name of the model base.
+    root
+        The place where all files of the model base are stored.
+    store_in_harddisk
+        Whether to save models in the hard disk.
+    trainer
+        A :class:`tabensemb.trainer.Trainer` instance.
     """
 
     def __init__(
@@ -51,13 +82,13 @@ class AbstractModel:
         program:
             The name of the model base. If None, the name from :meth:`_get_program_name` is used.
         model_subset:
-            The names of models selected to be trained in the modelbase.
+            The names of models selected to be trained in the model base.
         exclude_models:
             The names of models that should not be trained. Only one of ``model_subset`` and ``exclude_models`` can
             be specified.
         store_in_harddisk:
             Whether to save models in the hard disk. If the global setting
-            ``tabensemb.global_setting["low_memory"]`` is True, True is used.
+            ``tabensemb.setting["low_memory"]`` is True, True is used.
         **kwargs:
             Ignored.
         """
@@ -81,15 +112,6 @@ class AbstractModel:
         self.save_kwargs(d=self.init_params, ignore=["trainer", "self", "frame"])
         self._check_space()
         self._mkdir()
-
-        # If batch_size // len(training set) < limit_batch_size, the batch_size is forced to be len(training set) to avoid
-        # potential numerical issues. For Tabnet, this is extremely important because a small batch may cause NaNs and
-        # further CUDA device-side assert in the sparsemax function. Set to -1 to turn off this check (NOT RECOMMENDED!!).
-        # Note: Setting drop_last=True for torch.utils.data.DataLoader is fine, but I think (i) having access to all data
-        # points in one epoch is beneficial for some models, (ii) If using a large dataset and a large batch_size, it is
-        # possible that the last batch is so large that contains essential information, (iii) the user should have full
-        # control for this. If you want to use drop_last in your code, use the original_batch_size in kwargs passed to
-        # AbstractModel methods.
         self.limit_batch_size = 6
 
     def save_kwargs(self, d: dict = None, ignore: List[str] = None):
@@ -1158,7 +1180,7 @@ class AbstractModel:
 
     def _check_train_status(self):
         """
-        Raise exception if _predict is called and the modelbase is not trained.
+        Raise exception if _predict is called and the model base is not trained.
         """
         if not self._trained:
             raise Exception(
@@ -1228,7 +1250,7 @@ class AbstractModel:
 
     def _mkdir(self):
         """
-        Create a directory for the modelbase under the root of the linked :class:`~tabensemb.trainer.Trainer`.
+        Create a directory for the model base under the root of the linked :class:`~tabensemb.trainer.Trainer`.
         """
         self.root = os.path.join(self.trainer.project_root, self.program)
         if not os.path.exists(self.root):
@@ -1533,7 +1555,7 @@ class TorchModel(AbstractModel):
         Parameters
         ----------
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         method
             The method to calculate importance. "permutation" or "shap".
         call_general_method
@@ -1614,13 +1636,13 @@ class TorchModel(AbstractModel):
 
     def cal_shap(self, model_name: str, call_general_method=False) -> np.ndarray:
         """
-        Calculate SHAP values using a specified model. If the modelbase is a :class:`TorchModel`, the
+        Calculate SHAP values using a specified model. If the model base is a :class:`TorchModel`, the
         ``shap.DeepExplainer`` is used.
 
         Parameters
         ----------
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         call_general_method
             Call the general shap calculation :meth:`AbstractModel.cal_shap` instead of the
             optimized procedure for deep learning models. This is useful when calculating the feature importance of

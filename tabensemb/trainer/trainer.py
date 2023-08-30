@@ -1,7 +1,3 @@
-"""
-The basic class for the project. It includes configuration, data processing, plotting,
-and comparing baseline models.
-"""
 import os.path
 import tabensemb
 from tabensemb.utils import *
@@ -24,18 +20,46 @@ set_random_seed(tabensemb.setting["random_seed"])
 
 
 class Trainer:
+    """
+    Attributes
+    ----------
+    args
+        A :class:`tabensemb.config.UserConfig` instance.
+    configfile
+        The source of the configuration. If the ``config`` argument of :meth:`load_config` is a
+        :class:`tabensemb.config.UserConfig`, it is "UserInputConfig". If the ``config`` argument is a path, it is the
+        path. If the ``config`` argument is not given, it is the "base" argument passed to python when executing the
+        script.
+    datamodule
+        A :class:`tabensemb.data.datamodule.DataModule` instance.
+    device
+        The device on which models are trained. "cpu", "cuda", or "cuda:X".
+    leaderboard
+        The ranking of all models in all model bases. Only valid after :meth:`get_leaderboard` is called.
+    modelbases
+        A list of :class:`tabensemb.model.AbstractModel`.
+    modelbases_names
+        Corresponding names (:attr:`tabensemb.model.AbstractModel.program`) of :attr:`modelbases`.
+    project
+        The name of the :class:`Trainer`.
+    project_root
+        The place where all files are stored.
+        ``tabensemb.setting["default_output_path"]`` ``/{project}/{project_root_subfolder}/{TIME}-{config}`` where ``project`` is :attr:`project`,
+        ``project_root_subfolder`` and ``config`` are arguments of :meth:`load_config`.
+    sys_summary
+        Summary of the system when :meth:`summarize_device` is called.
+    """
     def __init__(self, device: str = "cpu", project: str = None):
         """
-        The bridge of all modules. It contains all configurations and data. It can analyze the dataset (correlation,
-        description, etc.), train model-bases, and evaluate results (including feature importance, partial dependency,
-        etc.).
+        The bridge of all modules. It contains all configurations and data. It can train model bases and evaluate
+        results (including feature importance, partial dependency, etc.).
 
         Parameters
         ----------
         device:
-            Device on which models are trained. Choose from "cuda" and "cpu".
+            The device on which models are trained. Choose from "cpu", "cuda", or "cuda:X" (if available).
         project:
-            The name of the trainer.
+            The name of the :class:`Trainer`.
         """
         self.device = "cpu"
         self.project = project
@@ -45,18 +69,18 @@ class Trainer:
 
     def set_device(self, device: str):
         """
-        Set the device for model bases.
+        Set the device on which models are trained.
 
         Parameters
         ----------
         device
-            "cpu" or "cuda"
+            "cpu", "cuda", or "cuda:X" (if available)
 
         Notes
         ----------
         Multi-GPU training and training on a machine with multiple GPUs are not tested.
         """
-        if device not in ["cpu", "cuda"]:
+        if device not in ["cpu", "cuda"] and "cuda" not in device:
             raise Exception(
                 f"Device {device} is an invalid selection. Choose among {['cpu', 'cuda']}."
                 f"Note: Multi-GPU training and training on a machine with multiple GPUs are not tested."
@@ -65,63 +89,64 @@ class Trainer:
 
     def add_modelbases(self, models: List):
         """
-        Add a list of model-bases and check whether their names conflict.
+        Add a list of model bases and check whether their names conflict.
 
         Parameters
         ----------
         models:
-            A list of AbstractModels.
+            A list of :class:`tabensemb.model.AbstractModel`.
         """
         new_modelbases_names = self.modelbases_names + [x.program for x in models]
         if len(new_modelbases_names) != len(list(set(new_modelbases_names))):
-            raise Exception(f"Conflicted modelbase names: {self.modelbases_names}")
+            raise Exception(f"Conflicted model base names: {self.modelbases_names}")
         self.modelbases += models
         self.modelbases_names = new_modelbases_names
 
     def get_modelbase(self, program: str):
         """
-        Get the selected modelbase by its name.
+        Get the selected model base by its name.
 
         Parameters
         ----------
         program
-            The name of the modelbase.
+            The name of the model base.
 
         Returns
         -------
-            An instance of AbstractModel.
+        AbstractModel
+            A model base.
         """
         if program not in self.modelbases_names:
-            raise Exception(f"Program {program} not added to the trainer.")
+            raise Exception(f"Model base {program} not added to the trainer.")
         return self.modelbases[self.modelbases_names.index(program)]
 
     def clear_modelbase(self):
         """
-        Delete all model bases in the trainer.
+        Delete all model bases in the :class:`Trainer`.
         """
         self.modelbases = []
         self.modelbases_names = []
 
     def detach_modelbase(self, program: str, verbose: bool = True) -> "Trainer":
         """
-        Detach the selected modelbase to a separate trainer and save it to another directory. It is much cheaper than
-        ``Trainer.copy()`` if only one model base is needed.
+        Detach the selected model base to a separate :class:`Trainer` and save it to another directory. It is much cheaper than
+        :meth:`copy` if only one model base is needed.
 
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         verbose
             Verbosity
 
         Returns
         -------
-        trainer
-            An ``Trainer`` instance.
+        Trainer
+            A :class:`Trainer` with the selected model base.
 
         See Also
         -------
-        ``Trainer.copy``, ``Trainer.detach_model``, ``AbstractModel.detach_model``
+        :meth:`copy`, :meth:`detach_model`, :meth:`tabensemb.model.AbstractModel.detach_model`
         """
         modelbase = cp(self.get_modelbase(program=program))
         tmp_trainer = modelbase.trainer
@@ -138,12 +163,12 @@ class Trainer:
         self, program: str, model_name: str, verbose: bool = True
     ) -> "Trainer":
         """
-        Detach the selected model of the selected model base to a separate trainer and save it to another directory.
+        Detach the selected model of the selected model base to a separate :class:`Trainer` and save it to another directory.
 
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         model_name
             The selected model.
         verbose
@@ -151,8 +176,8 @@ class Trainer:
 
         Returns
         -------
-        trainer
-            An ``Trainer`` instance.
+        Trainer
+            A :class:`Trainer` with the selected model in its model base.
         """
         tmp_trainer = self.detach_modelbase(program=program, verbose=False)
         tmp_modelbase = tmp_trainer.get_modelbase(program=program)
@@ -167,17 +192,17 @@ class Trainer:
 
     def copy(self) -> "Trainer":
         """
-        Copy the trainer and save it to another directory. It might be time and space consuming because all model bases
-        are copied as well.
+        Copy the :class:`Trainer` and save it to another directory. It might be time and space-consuming because all
+        model bases are copied once.
 
         Returns
         -------
         trainer
-            A ``Trainer`` instance.
+            A :class:`Trainer` instance.
 
         See Also
         -------
-        ``Trainer.detach_modelbase``, ``Trainer.detach_model``, ``AbstractModel.detach_model``
+        :meth:`detach_modelbase`, :meth:`detach_model`, :meth:`tabensemb.model.AbstractModel.detach_model`
         """
         tmp_trainer = cp(self)
         new_path = add_postfix(self.project_root)
@@ -195,32 +220,26 @@ class Trainer:
         project_root_subfolder: str = None,
     ) -> None:
         """
-        Load a config in json format.
-        Arguments passed to python when executing the script are parsed if ``configfile_path`` is left None. All keys in
-        ``tabensemb.config.UserConfig().available_keys()`` can be parsed, for example:
+        Load the configuration using a :class:`tabensemb.config.UserConfig` or a file in .py or .json format.
+        Arguments passed to python when executing the script are parsed using ``argparse`` if ``config`` is
+        left None. All keys in :meth:`tabensemb.config.UserConfig.defaults` can be parsed, for example:
         For the loss function: ``--loss mse``,
         For the total epoch: ``--epoch 200``,
-        For the option for bayes opt: ``--bayes_opt`` to turn on bayes opt, ``--no-bayes_opt`` to turn off.
-
-        Default values can be seen in ``tabensemb.config.UserConfig().defaults()``.
-
-        The loaded configuration will be saved in the project folder.
+        For the option of bayes opt: ``--bayes_opt`` to turn on Bayesian hyperparameter optimization,
+        ``--no-bayes_opt`` to turn it off.
+        The loaded configuration will be saved as a .py file in the project folder.
 
         Parameters
         ----------
         config
-            Can be the path to the config in json or python format, or a UserConfig instance.
-            If it is a path. Arguments passed to python will be parsed; therefore, do not leave it empty when
-            ``argparse.ArgumentParser`` is used for other purposes. If the path does not contain "/" or is not a file,
-            the file configs/{config}(.json/.py) will be read. The path can end with or without .json/.py.
-        verbose
-            Verbosity.
+            It can be the path to the configuration file in json or python format, or a
+            :class:`tabensemb.config.UserConfig` instance. If it is None, arguments passed to python will be parsed.
+            If it is a path, it will be passed to :meth:`tabensemb.config.UserConfig.from_file`.
         manual_config
-            Set configurations after the config file is loaded with a dict.
-            For example: ``manual_config={"bayes_opt": True}``
+            Update the configuration with a dict. For example: ``manual_config={"bayes_opt": True}``.
         project_root_subfolder
-            The subfolder that the project will locate in. The folder name will be
-            ``{PATH OF THE MAIN SCRIPT}/output/{project}/{project_root_subfolder}/{TIME OF EXECUTION}-{configfile_path}``
+            The subfolder that the project will be locate in. The folder name will be
+            ``tabensemb.setting["default_output_path"]`` ``/{project}/{project_root_subfolder}/{TIME}-{config}``
         """
         input_config = config is not None
         if isinstance(config, str) or not input_config:
@@ -255,7 +274,10 @@ class Trainer:
         config.to_file(os.path.join(self.project_root, "args.py"))
 
     @property
-    def static_params(self):
+    def static_params(self) -> Dict:
+        """
+        The "patience" and "epoch" parameters in the configuration.
+        """
         return {
             "patience": self.args["patience"],
             "epoch": self.args["epoch"],
@@ -263,6 +285,9 @@ class Trainer:
 
     @property
     def chosen_params(self):
+        """
+        The "lr", "weight_decay", and "batch_size" parameters in the configuration.
+        """
         return {
             "lr": self.args["lr"],
             "weight_decay": self.args["weight_decay"],
@@ -271,6 +296,9 @@ class Trainer:
 
     @property
     def SPACE(self):
+        """
+        Search spaces for "lr", "weight_decay", and "batch_size" defined in the configuration.
+        """
         SPACE = []
         for var in self.args["SPACEs"].keys():
             setting = cp(self.args["SPACEs"][var])
@@ -289,17 +317,15 @@ class Trainer:
     @property
     def feature_data(self) -> pd.DataFrame:
         """
-        Get scaled feature data.
-
-        Returns
-        -------
-        df
-            The scaled feature data.
+        :meth:`tabensemb.data.datamodule.DataModule.feature_data`
         """
         return self.datamodule.feature_data if hasattr(self, "datamodule") else None
 
     @property
     def unscaled_feature_data(self):
+        """
+        :meth:`tabensemb.data.datamodule.DataModule.unscaled_feature_data`
+        """
         return (
             self.datamodule.unscaled_feature_data
             if hasattr(self, "datamodule")
@@ -308,6 +334,9 @@ class Trainer:
 
     @property
     def unscaled_label_data(self):
+        """
+        :meth:`tabensemb.data.datamodule.DataModule.unscaled_label_data`
+        """
         return (
             self.datamodule.unscaled_label_data if hasattr(self, "datamodule") else None
         )
@@ -315,69 +344,100 @@ class Trainer:
     @property
     def label_data(self) -> pd.DataFrame:
         """
-        Get scaled label data.
-
-        Returns
-        -------
-        df
-            The scaled label data.
+        :meth:`tabensemb.data.datamodule.DataModule.label_data`
         """
         return self.datamodule.label_data if hasattr(self, "datamodule") else None
 
     @property
     def derived_data(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.derived_data`
+        """
         return self.datamodule.derived_data if hasattr(self, "datamodule") else None
 
     @property
     def cont_feature_names(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.cont_feature_names`
+        """
         return (
             self.datamodule.cont_feature_names if hasattr(self, "datamodule") else None
         )
 
     @property
     def cat_feature_names(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.cat_feature_names`
+        """
         return (
             self.datamodule.cat_feature_names if hasattr(self, "datamodule") else None
         )
 
     @property
     def all_feature_names(self):
+        """
+        :meth:`tabensemb.data.datamodule.DataModule.all_feature_names`
+        """
         return (
             self.datamodule.all_feature_names if hasattr(self, "datamodule") else None
         )
 
     @property
     def label_name(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.label_name`
+        """
         return self.datamodule.label_name if hasattr(self, "datamodule") else None
 
     @property
     def train_indices(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.train_indices`
+        """
         return self.datamodule.train_indices if hasattr(self, "datamodule") else None
 
     @property
     def val_indices(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.val_indices`
+        """
         return self.datamodule.val_indices if hasattr(self, "datamodule") else None
 
     @property
     def test_indices(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.test_indices`
+        """
         return self.datamodule.test_indices if hasattr(self, "datamodule") else None
 
     @property
     def df(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.df`
+        """
         return self.datamodule.df if hasattr(self, "datamodule") else None
 
     @property
     def tensors(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.tensors`
+        """
         return self.datamodule.tensors if hasattr(self, "datamodule") else None
 
     @property
     def cat_feature_mapping(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.cat_feature_mapping`
+        """
         return (
             self.datamodule.cat_feature_mapping if hasattr(self, "datamodule") else None
         )
 
     @property
     def derived_stacked_features(self):
+        """
+        :meth:`tabensemb.data.datamodule.DataModule.derived_stacked_features`
+        """
         return (
             self.datamodule.derived_stacked_features
             if hasattr(self, "datamodule")
@@ -386,19 +446,29 @@ class Trainer:
 
     @property
     def training(self):
+        """
+        :attr:`tabensemb.data.datamodule.DataModule.training`
+        """
         return self.datamodule.training if hasattr(self, "datamodule") else None
 
     def set_status(self, training: bool):
+        """
+        A wrapper of :meth:`tabensemb.data.datamodule.DataModule.set_status`
+        """
         self.datamodule.set_status(training)
 
     def load_data(self, *args, **kwargs):
+        """
+        A wrapper of :meth:`tabensemb.data.datamodule.DataModule.load_data`. The ``save_path`` argument is set to
+        :attr:`project_root`.
+        """
         if "save_path" in kwargs.keys():
             kwargs.__delitem__("save_path")
         self.datamodule.load_data(save_path=self.project_root, *args, **kwargs)
 
     def set_path(self, path: Union[os.PathLike, str], verbose=False):
         """
-        Set the work directory of the trainer.
+        Set the work directory of the :class:`Trainer`.
 
         Parameters
         ----------
@@ -409,18 +479,18 @@ class Trainer:
         if not os.path.exists(self.project_root):
             os.mkdir(self.project_root)
         if verbose:
-            print(f"Project will be saved to {self.project_root}")
+            print(f"The project will be saved to {self.project_root}")
 
     def _create_dir(self, verbose: bool = True, project_root_subfolder: str = None):
         """
-        Create the folder for the project.
+        Create the folder for the :class:`Trainer`.
 
         Parameters
         ----------
         verbose
-            Whether to print the path to the project.
+            Whether to print the path of the :class:`Trainer`.
         project_root_subfolder
-            See ``load_config``.
+            See :meth:`load_config`.
         """
         default_path = tabensemb.setting["default_output_path"]
         if not os.path.exists(default_path):
@@ -445,6 +515,10 @@ class Trainer:
         )
 
     def summarize_setting(self):
+        """
+        Print the summary of the device, the configuration, and the global setting of the package
+        (``tabensemb.setting``).
+        """
         print("Device:")
         print(pretty(self.summarize_device()))
         print("Configurations:")
@@ -527,18 +601,18 @@ class Trainer:
         **kwargs,
     ):
         """
-        Train all added modelbases.
+        Train all model bases (:attr:`modelbases`).
 
         Parameters
         ----------
         programs
-            A selected subset of modelbases.
+            A selected subset of model bases.
         verbose
             Verbosity.
         *args
-            Arguments passed to AbstractModel.train
+            Arguments passed to :meth:`tabensemb.model.AbstractModel.train`
         **kwargs
-            Arguments passed to AbstractModel.train
+            Arguments passed to :meth:`tabensemb.model.AbstractModel.train`
         """
         if programs is None:
             modelbases_to_train = self.modelbases
@@ -564,12 +638,12 @@ class Trainer:
         **kwargs,
     ) -> Dict[str, Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray]]]]:
         """
-        Repeat loading data, training modelbases, and evaluating all models for multiple times.
+        Repeat :meth:`load_data`, train model bases, and evaluate all models for multiple times.
 
         Parameters
         ----------
         programs
-            A selected subset of modelbases.
+            A selected subset of model bases.
         n_random
             The number of repeats.
         verbose
@@ -577,19 +651,19 @@ class Trainer:
         test_data_only
             Whether to evaluate models only on testing datasets.
         split_type
-            The type of data splitting. "random" and "cv" are supported. Ignored when load_from_previous is True.
+            The type of data splitting. "random" and "cv" are supported. Ignored when ``load_from_previous`` is True.
         load_from_previous
             Load the state of a previous run (mostly because of an unexpected interruption).
         **kwargs
-            Arguments for ``AbstractModel.train``
+            Arguments for :meth:`tabensemb.model.AbstractModel.train`
 
         Notes
         -------
-        The results of a continuously run and a continued run (``load_from_previous=True``) are consistent.
+        The results of a continuous run and a continued run (``load_from_previous=True``) are consistent.
 
         Returns
         -------
-        res
+        dict
             A dict in the following format:
             {keys: programs, values: {keys: model names, values: {keys: ["Training", "Testing", "Validation"], values:
             (Predicted values, true values)}}
@@ -700,7 +774,7 @@ class Trainer:
                             append_once("Validation")
                     else:
                         programs_predictions[program][model_name] = value
-                # It is expected that only modelbases in self is changed. datamodule is not updated because the cross
+                # It is expected that only model bases in self is changed. datamodule is not updated because the cross
                 # validation status should remain before load_data() is called.
                 trainer_state.modelbases = self.modelbases
                 current_state = {
@@ -741,29 +815,30 @@ class Trainer:
         **kwargs,
     ) -> pd.DataFrame:
         """
-        Run all modelbases with/without cross validation for a leaderboard.
+        Run all model bases with/without cross validation for a leaderboard.
 
         Parameters
         ----------
         test_data_only
             Whether to evaluate models only on testing datasets.
         dump_trainer
-            Whether to save trainer.
+            Whether to save the :class:`Trainer`.
         cross_validation
-            The number of cross validation. See Trainer.cross_validation. 0 to evaluate directly on current datasets.
+            The number of cross-validation. See :meth:`cross_validation`. 0 to evaluate current trained models on the
+            current dataset.
         verbose
             Verbosity.
         load_from_previous
             Load the state of a previous run (mostly because of an unexpected interruption).
         split_type
-            The type of data splitting. "random" and "cv" are supported. Ignored when load_from_previous is True.
+            The type of data splitting. "random" and "cv" are supported. Ignored when ``load_from_previous`` is True.
         **kwargs
-            Arguments for ``AbstractModel.train``
+            Arguments for :meth:`tabensemb.model.AbstractModel.train`
 
         Returns
         -------
-        leaderboard
-            The leaderboard dataframe.
+        pd.DataFrame
+            The leaderboard.
         """
         if len(self.modelbases) == 0:
             raise Exception(
@@ -798,27 +873,27 @@ class Trainer:
         self, leaderboard: pd.DataFrame, save: bool = True
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Calculate approximate average and standard errors based on cross_validation results in the folder
-        ``{self.project_root}/cv``.
+        Calculate approximated averages and standard errors based on :meth:`cross_validation` results in the folder
+        ``self.project_root/cv``.
 
         Parameters
         -------
         leaderboard
-            A reference leaderboard to be filled by avg and std, and to sort the returned dataframe.
+            A reference leaderboard to be filled by avg and std, and to sort the returned DataFrame.
         save
             Save returned results locally with names "leaderboard_approx_mean.csv" and "leaderboard_approx_std.csv"
 
         Returns
         -------
-        leaderboard_mean
+        pd.DataFrame
             Averages in the same format as the input ``leaderboard``. There is an additional column "Rank".
-        leaderboard_std
+        pd.DataFrame
             Standard errors in the same format as the input ``leaderboard``. There is an additional column "Rank".
 
         Notes
         -------
         The returned results are approximations of the precise leaderboard from ``get_leaderboard``. Some metrics like
-        RMSE may be different because element-wise and cross-validation-wise averaging are different.
+        RMSE may be different because data-point-wise and cross-validation-wise averaging are different.
         """
         leaderboard_mean = leaderboard.copy()
         leaderboard_std = leaderboard.copy()
@@ -861,13 +936,13 @@ class Trainer:
 
     def get_modelwise_cv_metrics(self) -> Dict[str, Dict[str, pd.DataFrame]]:
         """
-        Assemble cross validation results in the folder ``{self.project_root}/cv`` for metrics of each model in each
+        Assemble cross-validation results in the folder ``self.project_root/cv`` for metrics of each model in each
         model base.
 
         Returns
         -------
-        res_cvs
-            A dict of dicts where each of them contains metrics of cross validations of one model.
+        dict
+            A dict of dicts where each of them contains metrics of cross-validation of one model.
         """
         df_cvs, programs, models, metrics = self._read_cv_leaderboards()
         res_cvs = {}
@@ -894,12 +969,18 @@ class Trainer:
         self,
     ) -> Tuple[List[pd.DataFrame], List[str], Dict[str, List[str]], List[str]]:
         """
-        Read cross validation leaderboards in the folder ``{self.project_root}/cv``.
+        Read cross-validation leaderboards in the folder ``self.project_root/cv``.
 
         Returns
         -------
-        A list of cross validation leaderboards, a list of model base names, a dict of model names in each model base,
-        and a list of metric names.
+        list
+            Cross validation leaderboards
+        list
+            Model base names
+        dict
+            Model names in each model base
+        list
+            Metric names.
         """
         if not os.path.exists(os.path.join(self.project_root, "cv")):
             raise Exception(
@@ -936,23 +1017,25 @@ class Trainer:
         save: bool = True,
     ) -> pd.DataFrame:
         """
-        Calculate the leaderboard based on results from cross_validation or AbstractModel._predict_all.
+        Calculate the leaderboard based on results from :meth:`cross_validation` or
+        :meth:`tabensemb.model.AbstractModel._predict_all`.
 
         Parameters
         ----------
         programs_predictions
-            Results from Trainer.cross_validation, or assembled results from AbstractModel._predict_all. See
-            Trainer.get_leaderboard for details.
+            Results from :meth:`cross_validation`, or assembled results from
+            :meth:`tabensemb.model.AbstractModel._predict_all`. See the source code of
+            :meth:`get_leaderboard` for details.
         metrics
-            The metrics that have been implemented in tabensemb.utils.metric_sklearn.
+            The metrics that have been implemented in :func:`tabensemb.utils.utils.metric_sklearn`.
         test_data_only
             Whether to evaluate models only on testing datasets.
         save
-            Whether to save the leaderboard locally and as an attribute in the trainer.
+            Whether to save the leaderboard locally and as an attribute in the :class:`Trainer`.
 
         Returns
         -------
-        leaderboard
+        pd.DataFrame
             The leaderboard dataframe.
         """
         if metrics is None:
@@ -987,12 +1070,12 @@ class Trainer:
 
     def plot_truth_pred(self, program: str, log_trans: bool = True, upper_lim=9):
         """
-        Comparing ground truth and prediction for all models in a modelbase.
+        Compare ground truth and prediction for all models in a model base.
 
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         log_trans
             Whether the label data is in log scale.
         upper_lim
@@ -1030,27 +1113,33 @@ class Trainer:
         self, program: str, model_name: str, method: str = "permutation", **kwargs
     ) -> Tuple[np.ndarray, List[str]]:
         """
-        Calculate feature importance with a specified model. If the modelbase is ``TorchModel``, ``captum`` and ``shap``
-        is called to make permutations. If the modelbase is only an ``AbstractModel``, calculation will be much slower.
+        Calculate feature importance using a specified model. If the model base is a
+        :class:`tabensemb.model.TorchModel`, ``captum`` or ``shap`` is called to make permutations. If the model base
+        is only a :class:`tabensemb.model.AbstractModel`, the calculation will be much slower.
 
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         method
             The method to calculate importance. "permutation" or "shap".
         kwargs
-            kwargs for ``AbstractModel.cal_feature_importance``
+            kwargs for :meth:`tabensemb.model.AbstractModel.cal_feature_importance`
 
         Returns
         ----------
         attr
             Values of feature importance.
         importance_names
-            Corresponding feature names. If the modelbase is a ``TorchModel``, all features including derived unstacked
-            features will be included. Otherwise, only ``Trainer.all_feature_names`` will be considered.
+            Corresponding feature names. If the model base is a ``TorchModel``, all features including derived unstacked
+            features will be included. Otherwise, only :meth:`all_feature_names` will be considered.
+
+        See Also
+        ----------
+        :meth:`tabensemb.model.AbstractModel.cal_feature_importance`,
+        :meth:`tabensemb.model.TorchModel.cal_feature_importance`
         """
         modelbase = self.get_modelbase(program)
         return modelbase.cal_feature_importance(
@@ -1059,25 +1148,31 @@ class Trainer:
 
     def cal_shap(self, program: str, model_name: str, **kwargs) -> np.ndarray:
         """
-        Calculate SHAP values with a specified model. If the modelbase is a ``TorchModel``, the ``shap.DeepExplainer``
-        is used. Otherwise, ``shap.KernelExplainer`` is called, which is much slower, and shap.kmeans is called to
-        summarize training data to 10 samples as the background data and 10 random samples in the testing set is
-        explained, which will bias the results.
+        Calculate SHAP values using a specified model. If the model base is a :class:`tabensemb.model.TorchModel`, the
+        ``shap.DeepExplainer`` is used. Otherwise, ``shap.KernelExplainer`` is called, which is much slower, and
+        shap.kmeans is called to summarize the training data to 10 samples as the background data and 10 random samples
+        in the testing set is explained, which will bias the results.
 
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         kwargs
-            kwargs for ``AbstractModel.cal_shap``
+            kwargs for :meth:`tabensemb.model.AbstractModel.cal_shap`
 
         Returns
         -------
         attr
-            The SHAP values. If the modelbase is a `TorchModel`, all features including derived unstacked features will
-            be included. Otherwise, only `Trainer.all_feature_names` will be considered.
+            The SHAP values. If the model base is a `TorchModel`, all features including derived unstacked features will
+            be included. Otherwise, only :meth:`all_feature_names` will be considered.
+
+        See Also
+        ---------
+        :meth:`tabensemb.model.AbstractModel.cal_shap`,
+        :meth:`tabensemb.model.TorchModel.cal_shap`
+
         """
         modelbase = self.get_modelbase(program)
         return modelbase.cal_shap(model_name=model_name, **kwargs)
@@ -1090,18 +1185,18 @@ class Trainer:
         method: str = "permutation",
     ):
         """
-        Plot feature importance of a model using ``Trainer.cal_feature_importance``.
+        Plot feature importance of a model using :meth:`cal_feature_importance`.
 
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         fig_size
             The figure size.
         method
-            The method to calculate importance. "permutation" or "shap".
+            The method to calculate feature importance. "permutation" or "shap".
         """
         attr, names = self.cal_feature_importance(
             program=program, model_name=model_name, method=method
@@ -1186,23 +1281,23 @@ class Trainer:
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         refit
-            Whether to refit models on bootstrapped datasets. See Trainer._bootstrap.
+            Whether to refit models on bootstrapped datasets. See :meth:`_bootstrap`.
         log_trans
             Whether the label data is in log scale.
         lower_lim
-            Lower limit of each pdp.
+            Lower limit of all pdp plots.
         upper_lim
-            Upper limit of each pdp.
+            Upper limit of all pdp plot.
         n_bootstrap
             The number of bootstrap evaluations. It should be greater than 0.
         grid_size
-            The grid of pdp.
+            The number of steps of all pdp plot.
         CI
-            Confidence interval of pdp results across multiple bootstrap runs.
+            The confidence interval of pdp results calculated across multiple bootstrap runs.
         verbose
             Verbosity
         """
@@ -1254,19 +1349,25 @@ class Trainer:
         self, feature_subset: List[str] = None, **kwargs
     ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         """
-        Calculate partial dependency. See ``Trainer.plot_partial_dependence`` for recommended usage.
+        Calculate partial dependency. See the source code of :meth:`plot_partial_dependence` for its usage.
 
         Parameters
         ----------
         feature_subset
-            A subset of ``Trainer.all_feature_names``.
+            A subset of :meth:`all_feature_names`.
         kwargs
-            Arguments for ``Trainer._bootstrap``.
+            Arguments for :meth:`_bootstrap`.
 
         Returns
         -------
-        res
-            Lists of x values, pdp values, lower confidence limit, and upper confidence limit for each feature.
+        list
+            x values for each feature
+        list
+            pdp values for each feature
+        list
+            lower confidence limits for each feature
+        list
+            upper confidence limits for each feature
         """
         x_values_list = []
         mean_pdp_list = []
@@ -1292,18 +1393,17 @@ class Trainer:
 
     def plot_partial_err(self, program: str, model_name: str, thres: Any = 0.8):
         """
-        Calculate prediction error on the testing dataset, and plot parallel histograms of high error samples and low
-        error samples (considering absolute error) respectively.
+        Calculate prediction absolute errors on the testing dataset, and plot histograms of high-error samples and
+        low-error samples respectively.
 
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         thres
-            The absolute error threshold to identify high error samples and low error samples.
-
+            The absolute error threshold to identify high-error samples and low-error samples.
         """
         modelbase = self.get_modelbase(program)
 
@@ -1333,17 +1433,17 @@ class Trainer:
 
     def plot_corr(self, fontsize: Any = 10, cmap="bwr", imputed=False):
         """
-        Plot Pearson correlation among features and the target.
+        Plot Pearson correlation coefficients among features and the target.
 
         Parameters
         ----------
         fontsize
-            The fontsize for matplotlib.
+            The ``fontsize`` argument for matplotlib.
         cmap
-            The colormap for matplotlib.
+            The ``colormap`` argument for matplotlib.
         imputed
-            Whether the imputed dataset should be considered. If False, some NaN values may exit for features with
-            missing value.
+            Whether the imputed dataset should be considered. If False, some NaN coefficients may exist for features
+            with missing values.
         """
         cont_feature_names = self.cont_feature_names + self.label_name
         # sns.reset_defaults()
@@ -1471,49 +1571,51 @@ class Trainer:
         Parameters
         ----------
         program
-            The selected modelbase.
+            The selected model base.
         df
             The tabular dataset.
         derived_data
-            The derived data calculated using ``Trainer.derive_unstacked``.
+            The derived data calculated using :meth:`derive_unstacked`.
         focus_feature
             The feature to assign sequential values.
         n_bootstrap
             The number of bootstrapping, fitting, and assigning runs.
         grid_size
-            The length of sequential values.
+            The number of sequential values.
         verbose
             Ignored.
         rederive
-            Ignored. If the focus_feature is a derived stacked feature, derivation will not perform on the bootstrap
-            dataset. Otherwise, stacked/unstacked features will be rederived.
+            Ignored. If the focus_feature is a derived stacked feature, derivation will not be performed on the
+            bootstrap dataset. Otherwise, stacked/unstacked features will be re-derived.
         refit
-            Whether to fit the model on the bootstrap dataset with warm_start=True.
+            Whether to fit the model on the bootstrap dataset (with warm_start=True).
         resample
-            Whether to make bootstrap resample. Only recommended to False when n_bootstrap=1.
+            Whether to do bootstrap resampling. Only recommended to False when n_bootstrap=1.
         percentile
-            The percentile of the feature to generate sequential values for the selected feature.
+            The percentile of the feature used to generate sequential values.
         x_min
             The lower limit of the generated sequential values. It will override the left percentile.
         x_max
             The upper limit of the generated sequential values. It will override the right percentile.
         CI
-            The confidence interval to evaluate bootstrapped predictions.
+            The confidence interval level to evaluate bootstrapped predictions.
         average
-            If True, CI will be calculated on results ``(grid_size, n_bootstrap)`` across multiple bootstrap runs.
-            Predictions for all samples are averaged for each bootstrap run. This case is used in `
-            `Trainer.cal_partial_dependence``
-
-            If False, CI will be calculated on results ``(grid_size, n_bootstrap*len(df))`` across multiple bootstrap
-            runs and all samples. This case is used in ``Trainer.plot_S_N``.
+            If True, CI will be calculated on results ``(grid_size, n_bootstrap)``where predictions for all samples are
+            averaged for each bootstrap run.
+            If False, CI will be calculated on results ``(grid_size, n_bootstrap*len(df))``.
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
 
         Returns
         -------
-        res
-            The generated sequential values for the feature, averaged predictions on the sequential values across
-            multiple bootstrap runs and all samples, left confidence interval, and right confidence interval.
+        np.ndarray
+            The generated sequential values for the feature.
+        np.ndarray
+            Averaged predictions on the sequential values across multiple bootstrap runs and all samples.
+        np.ndarray
+            The left confidence interval.
+        np.ndarray
+            The right confidence interval.
         """
         from .utils import NoBayesOpt
 
@@ -1604,12 +1706,12 @@ class Trainer:
 
     def load_state(self, trainer: "Trainer"):
         """
-        Restore the trainer from a deepcopied state.
+        Restore a :class:`Trainer` from a deep-copied state.
 
         Parameters
         ----------
         trainer
-            A deepcopied previous status of the trainer.
+            A deep-copied status of a :class:`Trainer`.
         """
         # https://stackoverflow.com/questions/1216356/is-it-safe-to-replace-a-self-object-by-another-object-of-the-same-type-in-a-meth
         current_root = cp(self.project_root)
@@ -1624,12 +1726,14 @@ class Trainer:
 
     def get_best_model(self) -> Tuple[str, str]:
         """
-        Get the best model in the leaderboard.
+        Get the best model from :attr:`leaderboard`.
 
         Returns
         -------
-        program and model_name
-            The name of a modelbase which the best model is located and the name of the best model.
+        str
+            The name of a model base where the best model is.
+        model_name
+            The name of the best model.
         """
         if not hasattr(self, "leaderboard"):
             self.get_leaderboard(test_data_only=True, dump_trainer=False)
@@ -1645,20 +1749,20 @@ class Trainer:
         test_data_only: bool,
     ) -> pd.DataFrame:
         """
-        Calculate metrics for predictions.
+        Calculate metrics for predictions from :meth:`tabensemb.model.AbstractModel._predict_all`.
 
         Parameters
         ----------
         predictions
-            Results from AbstractModel._predict_all.
+            Results from :meth:`tabensemb.model.AbstractModel._predict_all`.
         metrics
-            The metrics that have been implemented in tabensemb.utils.metric_sklearn.
+            The metrics that have been implemented in :func:`tabensemb.utils.utils.metric_sklearn`.
         test_data_only
             Whether to evaluate models only on testing datasets.
 
         Returns
         -------
-        df_metrics
+        pd.DataFrame
             A dataframe of metrics.
         """
         df_metrics = pd.DataFrame()
@@ -1686,14 +1790,14 @@ def save_trainer(
     trainer: Trainer, path: Union[os.PathLike, str] = None, verbose: bool = True
 ):
     """
-    Pickling the trainer instance.
+    Pickling the :class:`Trainer` instance.
 
     Parameters
     ----------
     trainer
-        The Trainer to be saved.
+        The :class:`Trainer` to be saved.
     path
-        The folder path to save the trainer.
+        The folder path to save the :class:`Trainer`.
     verbose
         Verbosity.
     """
@@ -1710,18 +1814,19 @@ def save_trainer(
 
 def load_trainer(path: Union[os.PathLike, str]) -> Trainer:
     """
-    Loading a pickled Trainer. Paths of the trainer and its model bases will be changed (i.e. ``Trainer.project_root``,
-    ``AbstractModel.root``, ``AbstractModel.model.root``, and ``AbstractModel.model.model_path.keys()``)
+    Loading a pickled :class:`Trainer`. Paths of the :class:`Trainer` and its model bases (i.e. :attr:`project_root`,
+    :attr:`tabensemb.model.AbstractModel.root`, :attr:`tabensemb.model.base.ModelDict.root`, and
+    :meth:`tabensemb.model.base.ModelDict.model_path.keys`) will be changed.
 
     Parameters
     ----------
     path
-        Path of the Trainer.
+        Path of the :class:`Trainer`.
 
     Returns
     -------
     trainer
-        The loaded Trainer.
+        The loaded :class:`Trainer`.
     """
     import pickle
 

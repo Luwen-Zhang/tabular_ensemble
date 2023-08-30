@@ -17,6 +17,68 @@ from sklearn.preprocessing import OrdinalEncoder
 
 
 class DataModule:
+    """
+    Attributes
+    ----------
+    args
+        A :class:`tabensemb.config.UserConfig` instance.
+    augmented_indices
+        Indices of data points that are augmented by :class:`tabensemb.data.AbstractAugmenter`. The first index starts
+        from the number of data points in the original dataset.
+    cat_feature_mapping
+        Original values of categorical features before ordinal encoding. The index of a value represents the encoded
+        value.
+    cat_feature_names
+        Names of categorical features.
+    cont_feature_names
+        Names of continuous features.
+    data_path
+        The path to the data file.
+    dataderivers
+        A list of :class:`tabensemb.data.AbstractDeriver`.
+    dataimputer
+        A :class:`tabensemb.data.AbstractImputer`.
+    dataprocessors
+        A list of :class:`tabensemb.data.AbstractProcessor`.
+    datasplitter
+        A :class:`tabensemb.data.AbstractSplitter`.
+    derived_data
+        The derived unstacked data calculated using :attr:`dataderivers` whose argument "stacked" is set to False.
+    df
+        The unscaled processed dataset.
+    dropped_indices
+        Indices of data points that are removed from the original dataset.
+    label_name
+        The name(s) of target(s)
+    label_ordinal_encoder
+        A ``sklearn.preprocessing.OrdinalEncoder`` that encodes the classification targets.
+    loss
+        The type of the loss function. See :meth:`_infer_loss`.
+    n_classes
+        The number of unique values for each classification target.
+    retained_indices
+        Indices of data points that are retained in the original dataset.
+    scaled_df
+        The scaled processed dataset. See also :attr:`df`.
+    task
+        The type of the task. See :meth:`_infer_task`.
+    tensors
+        :meth:`feature_data`, expanded :attr:`derived_data`, and :meth:`label_data` in the torch.Tensor form.
+    test_dataset
+        The testing set of the entire ``torch.utils.data.Dataset``.
+    test_indices
+        Indices of the testing set in the entire dataset (:attr:`df`).
+    train_dataset
+        The training set of the entire ``torch.utils.data.Dataset``.
+    train_indices
+        Indices of the training set in the entire dataset (:attr:`df`).
+    training
+        The training status of the :class:`DataModule`. See :meth:`set_status`.
+    val_dataset
+        The validation set of the entire ``torch.utils.data.Dataset``.
+    val_indices
+        Indices of the validation set in the entire dataset (:attr:`df`).
+    """
     def __init__(
         self,
         config: Union[UserConfig, Dict],
