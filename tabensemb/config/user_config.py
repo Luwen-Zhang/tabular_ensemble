@@ -23,7 +23,7 @@ class UserConfig(dict):
         Parameters
         ----------
         path
-            Path to the configuration file. See :meth:`~.from_file`.
+            Path to the configuration file. See :meth:`from_file`.
         """
         super(UserConfig, self).__init__()
         self.update(default_cfg)

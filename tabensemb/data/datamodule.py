@@ -658,7 +658,7 @@ class DataModule:
 
         See Also
         -------
-        :meth:`~.get_feature_idx_by_type``
+        :meth:`get_feature_idx_by_type``
         """
         if typ not in self.args["feature_types"]:
             raise Exception(
@@ -688,7 +688,7 @@ class DataModule:
 
         See Also
         -------
-        :meth:`~.get_feature_names_by_type``
+        :meth:`get_feature_names_by_type``
         """
         names = self.get_feature_names_by_type(typ=typ)
         if typ == "Categorical":
@@ -807,7 +807,7 @@ class DataModule:
         Parameters
         ----------
         derived_data
-            A dict of derived unstacked data calculated by :meth:`~.derive_unstacked`
+            A dict of derived unstacked data calculated by :meth:`derive_unstacked`
         ignore_absence
             Whether to ignore absent keys in derived_data.
 
@@ -940,8 +940,8 @@ class DataModule:
         transform: bool,
     ) -> pd.DataFrame:
         """
-        For :meth:`~.categories_inverse_transform`, :meth:`~.categories_transform`,
-        :meth:`~.label_categories_transform`, and :meth:`~.label_categories_inverse_transform`, make the input legal
+        For :meth:`categories_inverse_transform`, :meth:`categories_transform`,
+        :meth:`label_categories_transform`, and :meth:`label_categories_inverse_transform`, make the input legal
         including getting ready for missing columns, return the input if it is already transformed, etc.
 
         Parameters
@@ -988,7 +988,7 @@ class DataModule:
 
     def save_data(self, path: str):
         """
-        Save the tabular data processed by :meth:`~.set_data`. Two files will be saved: ``data.csv`` contains all
+        Save the tabular data processed by :meth:`set_data`. Two files will be saved: ``data.csv`` contains all
         information from the input dataframe, and ``tabular_data.csv`` contains merely used features.
 
         Parameters
@@ -1118,7 +1118,7 @@ class DataModule:
         """
         The main procedure to process data after splitting and imputation. Both scaled and unscaled data will be recorded.
         Note that processors will fit on training and validation datasets and transform the testing set by calling
-        :meth:`~._data_preprocess` with different arguments.
+        :meth:`_data_preprocess` with different arguments.
 
         Parameters
         ----------
@@ -1323,7 +1323,7 @@ class DataModule:
     ) -> pd.DataFrame:
         """
         Call data processors to fit and/or transform the input tabular dataset. It is automatically called by
-        :meth:`~._data_process` and :meth:`~.data_transform` with different arguments.
+        :meth:`_data_process` and :meth:`data_transform` with different arguments.
 
         Parameters
         ----------
@@ -1411,7 +1411,7 @@ class DataModule:
         scaled_df
             The scaled dataset.
         derived_data
-            A dict of derived unstacked data calculated by :meth:`~.derive_unstacked`
+            A dict of derived unstacked data calculated by :meth:`derive_unstacked`
 
         Returns
         -------
@@ -1460,7 +1460,7 @@ class DataModule:
         Parameters
         ----------
         derived_data
-            A dict of derived unstacked data calculated by :meth:`~.derive_unstacked``
+            A dict of derived unstacked data calculated by :meth:`derive_unstacked``
         indices
             The indices to make slice.
 
@@ -1477,7 +1477,7 @@ class DataModule:
     def get_zero_slip(self, feature_name: str) -> float:
         """
         See how data processors act on a feature if its value is zero.
-        It is a wrapper for :meth:`~.get_var_change`.
+        It is a wrapper for :meth:`get_var_change`.
 
         Parameters
         ----------
