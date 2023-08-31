@@ -711,7 +711,7 @@ def test_exceptions():
         trainer.add_modelbases(
             [PytorchTabular(trainer, model_subset=["Category Embedding"])]
         )
-    assert "Conflicted modelbase names" in err.value.args[0]
+    assert "Conflicted model base names" in err.value.args[0]
 
 
 def test_user_input_config():

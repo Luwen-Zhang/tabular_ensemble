@@ -290,6 +290,20 @@ MULTICLASS_METRICS = _MULTICLASS_USE_TARGET_METRICS + _MULTICLASS_USE_PROB_METRI
 def auto_metric_sklearn(y_true, y_pred, metric, task):
     if task not in ["binary", "multiclass", "regression"]:
         raise Exception(f"Task {task} does not support auto metrics.")
+    if task in ["multiclass", "binary"] and not (
+        len(y_true.shape) == 1 or (len(y_true.shape) == 2 and y_true.shape[1] == 1)
+    ):
+        raise Exception(
+            f"Expecting a 1d or 2d (the second dimension is 1) y_true, but got y_true with shape {y_true.shape}."
+        )
+    if task == "binary" and not (
+        len(y_pred.shape) == 1 or (len(y_pred.shape) == 2 and y_pred.shape[1] == 1)
+    ):
+        raise Exception(
+            f"Expecting the probability of the positive class, but got y_pred with shape {y_pred.shape}."
+        )
+    if task == "binary":
+        y_pred = y_pred.flatten()
     # For classification tasks, y_pred is proba, y_true is an integer array
     if task == "regression":
         return metric_sklearn(y_true, y_pred, metric)
