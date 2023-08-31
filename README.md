@@ -1,5 +1,7 @@
 # tabular_ensemble
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![codecov](https://codecov.io/gh/LuoXueling/tabular_ensemble/graph/badge.svg?token=APnN7LFtv9)](https://codecov.io/gh/LuoXueling/tabular_ensemble)
+[![Test](https://github.com/LuoXueling/tabular_ensemble/actions/workflows/python-package.yml/badge.svg)](https://github.com/LuoXueling/tabular_ensemble/actions/workflows/python-package.yml)
 
 A framework to evaluate various models for tabular regression and classification tasks. The package integrates the 
 following well-established model bases as baselines:
