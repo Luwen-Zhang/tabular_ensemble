@@ -49,6 +49,7 @@ class Trainer:
     sys_summary
         Summary of the system when :meth:`summarize_device` is called.
     """
+
     def __init__(self, device: str = "cpu", project: str = None):
         """
         The bridge of all modules. It contains all configurations and data. It can train model bases and evaluate
@@ -1068,7 +1069,16 @@ class Trainer:
                 self.get_approx_cv_leaderboard(df_leaderboard, save=True)
         return df_leaderboard
 
-    def plot_truth_pred(self, program: str, log_trans: bool = True, upper_lim=9):
+    def plot_truth_pred(
+        self,
+        program: str,
+        log_trans: bool = True,
+        upper_lim=9,
+        fontsize=14,
+        figure_kwargs: dict = None,
+        scatter_kwargs: dict = None,
+        legend_kwargs: dict = None,
+    ):
         """
         Compare ground truth and prediction for all models in a model base.
 
@@ -1080,26 +1090,43 @@ class Trainer:
             Whether the label data is in log scale.
         upper_lim
             The upper limit of x/y-axis.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        figure_kwargs
+            Arguments for ``plt.figure()``
+        scatter_kwargs
+            Arguments for ``plt.scatter()``
+        legend_kwargs
+            Arguments for ``plt.legend()``
         """
         modelbase = self.get_modelbase(program)
         model_names = modelbase.get_model_names()
         predictions = modelbase._predict_all()
 
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        legend_kwargs_ = update_defaults_by_kwargs(
+            dict(loc="upper left", markerscale=1.5, handlelength=0.2, handleheight=0.9),
+            legend_kwargs,
+        )
+
         for idx, model_name in enumerate(model_names):
             print(model_name, f"{idx + 1}/{len(model_names)}")
-            plt.figure()
-            plt.rcParams["font.size"] = 14
+            plt.figure(**figure_kwargs_)
+            plt.rcParams["font.size"] = fontsize
             ax = plt.subplot(111)
 
             plot_truth_pred(
-                predictions, ax, model_name, log_trans=log_trans, verbose=True
+                predictions,
+                ax,
+                model_name,
+                log_trans=log_trans,
+                verbose=True,
+                scatter_kwargs=scatter_kwargs,
             )
 
             set_truth_pred(ax, log_trans, upper_lim=upper_lim)
 
-            plt.legend(
-                loc="upper left", markerscale=1.5, handlelength=0.2, handleheight=0.9
-            )
+            plt.legend(**legend_kwargs_)
 
             s = model_name.replace("/", "_")
 
@@ -1181,8 +1208,10 @@ class Trainer:
         self,
         program: str,
         model_name: str,
-        fig_size: Tuple = (7, 4),
         method: str = "permutation",
+        clr=None,
+        figure_kwargs: dict = None,
+        bar_kwargs: dict = None,
     ):
         """
         Plot feature importance of a model using :meth:`cal_feature_importance`.
@@ -1197,12 +1226,22 @@ class Trainer:
             The figure size.
         method
             The method to calculate feature importance. "permutation" or "shap".
+        clr
+            A seaborn color palette. For example seaborn.color_palette("deep").
+        figure_kwargs
+            Arguments for ``plt.figure``
+        bar_kwargs
+            Arguments for ``seaborn.barplot``.
         """
         attr, names = self.cal_feature_importance(
             program=program, model_name=model_name, method=method
         )
 
-        clr = sns.color_palette("deep")
+        clr = sns.color_palette("deep") if clr is None else clr
+        bar_kwargs_ = update_defaults_by_kwargs(
+            dict(linewidth=1, edgecolor="k", orient="h"), bar_kwargs
+        )
+        figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(7, 4)), figure_kwargs)
 
         # if feature type is not assigned in config files, the feature is from dataderiver.
         pal = []
@@ -1231,17 +1270,10 @@ class Trainer:
         attr = attr[where_effective]
         pal = [pal[x] for x in np.where(where_effective)[0]]
 
-        plt.figure(figsize=fig_size)
+        plt.figure(**figure_kwargs_)
         ax = plt.subplot(111)
         plot_importance(
-            ax,
-            effective_names,
-            attr,
-            pal=pal,
-            clr_map=clr_map,
-            linewidth=1,
-            edgecolor="k",
-            orient="h",
+            ax, effective_names, attr, pal=pal, clr_map=clr_map, **bar_kwargs_
         )
         if method == "permutation":
             ax.set_xlabel("Permutation feature importance")
@@ -1255,8 +1287,7 @@ class Trainer:
             os.path.join(
                 self.project_root,
                 f"feature_importance_{program}_{model_name}_{method}.png",
-            ),
-            dpi=600,
+            )
         )
         if is_notebook():
             plt.show()
@@ -1274,6 +1305,12 @@ class Trainer:
         grid_size: int = 30,
         CI: float = 0.95,
         verbose: bool = True,
+        figure_kwargs: dict = None,
+        get_figsize_kwargs: dict = None,
+        plot_kwargs: dict = None,
+        fill_between_kwargs: dict = None,
+        bar_kwargs: dict = None,
+        hist_kwargs: dict = None,
     ):
         """
         Calculate and plot partial dependence plots with bootstrapping.
@@ -1300,6 +1337,18 @@ class Trainer:
             The confidence interval of pdp results calculated across multiple bootstrap runs.
         verbose
             Verbosity
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        plot_kwargs
+            Arguments for ``ax.plot``.
+        fill_between_kwargs
+            Arguments for ``ax.fill_between``.
+        bar_kwargs
+            Arguments for ``ax.bar``.
+        hist_kwargs
+            Arguments for ``ax.hist``.
         """
         (
             x_values_list,
@@ -1334,6 +1383,12 @@ class Trainer:
             log_trans=log_trans,
             lower_lim=lower_lim,
             upper_lim=upper_lim,
+            figure_kwargs=figure_kwargs,
+            get_figsize_kwargs=get_figsize_kwargs,
+            plot_kwargs=plot_kwargs,
+            fill_between_kwargs=fill_between_kwargs,
+            bar_kwargs=bar_kwargs,
+            hist_kwargs=hist_kwargs,
         )
 
         plt.savefig(
@@ -1391,7 +1446,16 @@ class Trainer:
 
         return x_values_list, mean_pdp_list, ci_left_list, ci_right_list
 
-    def plot_partial_err(self, program: str, model_name: str, thres: Any = 0.8):
+    def plot_partial_err(
+        self,
+        program: str,
+        model_name: str,
+        thres: Any = 0.8,
+        figure_kwargs: dict = None,
+        get_figsize_kwargs: dict = None,
+        scatter_kwargs: dict = None,
+        hist_kwargs: dict = None,
+    ):
         """
         Calculate prediction absolute errors on the testing dataset, and plot histograms of high-error samples and
         low-error samples respectively.
@@ -1404,6 +1468,14 @@ class Trainer:
             The selected model in the model base.
         thres
             The absolute error threshold to identify high-error samples and low-error samples.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        scatter_kwargs
+            Arguments for ``ax.scatter()``
+        hist_kwargs
+            Arguments for ``ax.hist()``
         """
         modelbase = self.get_modelbase(program)
 
@@ -1422,6 +1494,10 @@ class Trainer:
             truth=ground_truth,
             pred=prediction,
             thres=thres,
+            figure_kwargs=figure_kwargs,
+            get_figsize_kwargs=get_figsize_kwargs,
+            scatter_kwargs=scatter_kwargs,
+            hist_kwargs=hist_kwargs,
         )
 
         plt.savefig(
@@ -1431,7 +1507,13 @@ class Trainer:
             plt.show()
         plt.close()
 
-    def plot_corr(self, fontsize: Any = 10, cmap="bwr", imputed=False):
+    def plot_corr(
+        self,
+        fontsize: Any = 10,
+        imputed=False,
+        figure_kwargs: dict = None,
+        imshow_kwargs: dict = None,
+    ):
         """
         Plot Pearson correlation coefficients among features and the target.
 
@@ -1439,19 +1521,22 @@ class Trainer:
         ----------
         fontsize
             The ``fontsize`` argument for matplotlib.
-        cmap
-            The ``colormap`` argument for matplotlib.
         imputed
             Whether the imputed dataset should be considered. If False, some NaN coefficients may exist for features
             with missing values.
         """
+        figure_kwargs_ = update_defaults_by_kwargs(
+            dict(figsize=(10, 10)), figure_kwargs
+        )
+        imshow_kwargs_ = update_defaults_by_kwargs(dict(cmap="bwr"), imshow_kwargs)
+
         cont_feature_names = self.cont_feature_names + self.label_name
         # sns.reset_defaults()
-        fig = plt.figure(figsize=(10, 10))
+        fig = plt.figure(**figure_kwargs_)
         ax = plt.subplot(111)
         plt.box(on=True)
         corr = self.datamodule.cal_corr(imputed=imputed).values
-        im = ax.imshow(corr, cmap=cmap)
+        im = ax.imshow(corr, **imshow_kwargs_)
         ax.set_xticks(np.arange(len(cont_feature_names)))
         ax.set_yticks(np.arange(len(cont_feature_names)))
 
@@ -1481,26 +1566,35 @@ class Trainer:
             plt.show()
         plt.close()
 
-    def plot_pairplot(self, **kwargs):
+    def plot_pairplot(self, pairplot_kwargs: dict = None):
         """
         Plot ``seaborn.pairplot`` among features and label. Kernel Density Estimation plots are on the diagonal.
 
         Parameters
         ----------
-        kwargs
+        pairplot_kwargs
             Arguments for ``seaborn.pairplot``.
         """
+        pairplot_kwargs_ = update_defaults_by_kwargs(
+            dict(corner=True, diag_kind="kde"), pairplot_kwargs
+        )
+
         df_all = pd.concat(
             [self.unscaled_feature_data, self.unscaled_label_data], axis=1
         )
-        sns.pairplot(df_all, corner=True, diag_kind="kde", **kwargs)
+        sns.pairplot(df_all, **pairplot_kwargs_)
         plt.tight_layout()
         plt.savefig(os.path.join(self.project_root, "pair.jpg"))
         if is_notebook():
             plt.show()
         plt.close()
 
-    def plot_feature_box(self, imputed: bool = False):
+    def plot_feature_box(
+        self,
+        imputed: bool = False,
+        figure_kwargs: dict = None,
+        boxplot_kwargs: dict = None,
+    ):
         """
         Plot boxplot of the tabular data.
 
@@ -1508,18 +1602,26 @@ class Trainer:
         ----------
         imputed
             Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``
+        boxplot_kwargs
+            Arguments for ``seaborn.boxplot``
         """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(6, 6)), figure_kwargs)
+        boxplot_kwargs_ = update_defaults_by_kwargs(
+            dict(orient="h", linewidth=1, fliersize=4, flierprops={"marker": "o"}),
+            boxplot_kwargs,
+        )
+
         # sns.reset_defaults()
-        plt.figure(figsize=(6, 6))
+        plt.figure(**figure_kwargs_)
         ax = plt.subplot(111)
         bp = sns.boxplot(
             data=self.feature_data
             if imputed
             else self.datamodule.get_not_imputed_df()[self.cont_feature_names],
-            orient="h",
-            linewidth=1,
-            fliersize=4,
-            flierprops={"marker": "o"},
+            ax=ax,
+            **boxplot_kwargs_,
         )
 
         boxes = []

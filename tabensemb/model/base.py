@@ -50,7 +50,7 @@ class AbstractModel:
     model
         A dictionary of models.
     model_params
-        Hyperparameters that contain all keys in :meth:`_initial_values` for each model. In cross validation runs, the 
+        Hyperparameters that contain all keys in :meth:`_initial_values` for each model. In cross validation runs, the
         parameters in the previous run will be loaded for the current run.
     model_subset
         The names of models selected to be trained in the model base.

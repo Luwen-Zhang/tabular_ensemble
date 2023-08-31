@@ -574,19 +574,44 @@ def plot_pdp(
     log_trans=True,
     lower_lim=2,
     upper_lim=7,
+    figure_kwargs: dict = None,
+    get_figsize_kwargs: dict = None,
+    plot_kwargs: dict = None,
+    fill_between_kwargs: dict = None,
+    bar_kwargs: dict = None,
+    hist_kwargs: dict = None,
 ):
     """
     A utility of :meth:`tabensemb.trainer.Trainer.plot_partial_dependence`.
     """
-    figsize, width, height = get_figsize(
-        n=len(feature_names),
-        max_col=4,
-        width_per_item=3,
-        height_per_item=3,
-        max_width=14,
+
+    get_figsize_kwargs_ = update_defaults_by_kwargs(
+        dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
+        get_figsize_kwargs,
+    )
+    figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+    plot_kwargs_ = update_defaults_by_kwargs(
+        dict(color="k", linewidth=0.7), plot_kwargs
+    )
+    fill_between_kwargs_ = update_defaults_by_kwargs(
+        dict(alpha=0.4, color="k", edgecolor=None), fill_between_kwargs
+    )
+    bar_kwargs_ = update_defaults_by_kwargs(
+        dict(
+            capsize=5,
+            color=[0.5, 0.5, 0.5],
+            edgecolor=None,
+            error_kw={"elinewidth": 0.2, "capthick": 0.2},
+        ),
+        bar_kwargs,
+    )
+    hist_kwargs_ = update_defaults_by_kwargs(
+        dict(density=True, color="k", alpha=0.2, rwidth=0.8), hist_kwargs
     )
 
-    fig = plt.figure(figsize=figsize)
+    figsize, width, height = get_figsize(n=len(feature_names), **get_figsize_kwargs_)
+
+    fig = plt.figure(figsize=figsize, **figure_kwargs_)
 
     def transform(value):
         if log_trans:
@@ -598,20 +623,13 @@ def plot_pdp(
         ax = plt.subplot(height, width, idx + 1)
         # ax.plot(x_values_list[idx], mean_pdp_list[idx], color = clr_map[focus_feature], linewidth = 0.5)
         if focus_feature not in cat_feature_names:
-            ax.plot(
-                x_values_list[idx],
-                transform(mean_pdp_list[idx]),
-                color="k",
-                linewidth=0.7,
-            )
+            ax.plot(x_values_list[idx], transform(mean_pdp_list[idx]), **plot_kwargs_)
 
             ax.fill_between(
                 x_values_list[idx],
                 transform(ci_left_list[idx]),
                 transform(ci_right_list[idx]),
-                alpha=0.4,
-                color="k",
-                edgecolor=None,
+                **fill_between_kwargs_,
             )
         else:
             yerr = (
@@ -628,13 +646,10 @@ def plot_pdp(
                 x_values_list[idx],
                 transform(mean_pdp_list[idx]),
                 yerr=yerr,
-                capsize=5,
-                color=[0.5, 0.5, 0.5],
-                edgecolor=None,
-                error_kw={"elinewidth": 0.2, "capthick": 0.2},
                 tick_label=[
                     cat_feature_mapping[focus_feature][x] for x in x_values_list[idx]
                 ],
+                **bar_kwargs_,
             )
 
         ax.set_title(focus_feature, {"fontsize": 12})
@@ -655,12 +670,7 @@ def plot_pdp(
                 ax2 = ax.twinx()
 
                 ax2.hist(
-                    hist_data[focus_feature],
-                    bins=x_values_list[idx],
-                    density=True,
-                    color="k",
-                    alpha=0.2,
-                    rwidth=0.8,
+                    hist_data[focus_feature], bins=x_values_list[idx], **hist_kwargs_
                 )
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
@@ -682,28 +692,42 @@ def plot_pdp(
         left=False,
         right=False,
     )
-    plt.ylabel("Predicted fatigue life")
-    plt.xlabel("Value of predictors (standard scaled, $10\%$-$90\%$ percentile)")
+    plt.ylabel("Predicted target")
+    plt.xlabel("Value of predictors ($10\%$-$90\%$ percentile)")
 
     return fig
 
 
 def plot_partial_err(
-    feature_data, cat_feature_names, cat_feature_mapping, truth, pred, thres=0.8
+    feature_data,
+    cat_feature_names,
+    cat_feature_mapping,
+    truth,
+    pred,
+    thres=0.8,
+    figure_kwargs: dict = None,
+    get_figsize_kwargs: dict = None,
+    scatter_kwargs: dict = None,
+    hist_kwargs: dict = None,
 ):
     """
     A utility of :meth:`tabensemb.trainer.Trainer.plot_partial_err`.
     """
-    feature_names = list(feature_data.columns)
-    figsize, width, height = get_figsize(
-        n=len(feature_names),
-        max_col=4,
-        width_per_item=3,
-        height_per_item=3,
-        max_width=14,
+
+    figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+    get_figsize_kwargs_ = update_defaults_by_kwargs(
+        dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
+        get_figsize_kwargs,
+    )
+    scatter_kwargs_ = update_defaults_by_kwargs(dict(s=1), scatter_kwargs)
+    hist_kwargs_ = update_defaults_by_kwargs(
+        dict(density=True, alpha=0.2, rwidth=0.8), hist_kwargs
     )
 
-    fig = plt.figure(figsize=figsize)
+    feature_names = list(feature_data.columns)
+    figsize, width, height = get_figsize(n=len(feature_names), **get_figsize_kwargs_)
+
+    fig = plt.figure(figsize=figsize, **figure_kwargs_)
 
     err = np.abs(truth - pred)
     high_err_data = feature_data.loc[np.where(err > thres)[0], :]
@@ -714,10 +738,18 @@ def plot_partial_err(
         ax = plt.subplot(height, width, idx + 1)
         # ax.plot(x_values_list[idx], mean_pdp_list[idx], color = clr_map[focus_feature], linewidth = 0.5)
         ax.scatter(
-            high_err_data[focus_feature].values, high_err, s=1, color=clr[0], marker="s"
+            high_err_data[focus_feature].values,
+            high_err,
+            color=clr[0],
+            marker="s",
+            **scatter_kwargs_,
         )
         ax.scatter(
-            low_err_data[focus_feature].values, low_err, s=1, color=clr[1], marker="^"
+            low_err_data[focus_feature].values,
+            low_err,
+            color=clr[1],
+            marker="^",
+            **scatter_kwargs_,
         )
 
         ax.set_title(focus_feature, {"fontsize": 12})
@@ -732,10 +764,8 @@ def plot_partial_err(
                 np.max(feature_data[focus_feature].values),
                 20,
             ),
-            density=True,
             color=clr[:2],
-            alpha=0.2,
-            rwidth=0.8,
+            **hist_kwargs_,
         )
         if focus_feature in cat_feature_names:
             ticks = np.sort(np.unique(feature_data[focus_feature].values)).astype(int)
@@ -771,6 +801,7 @@ def plot_truth_pred(
     model_name,
     log_trans=True,
     verbose=True,
+    scatter_kwargs: dict = None,
 ):
     """
     A utility of :meth:`tabensemb.trainer.Trainer.plot_truth_pred`.
@@ -782,15 +813,21 @@ def plot_truth_pred(
         loss = metric_sklearn(y, pred_y, "mse")
         if verbose:
             print(f"{name} MSE Loss: {loss:.4f}, R2: {r2:.4f}")
+        scatter_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                s=20,
+                color=color,
+                marker=marker,
+                label=f"{name} dataset ($R^2$={r2:.3f})",
+                linewidth=0.4,
+                edgecolors="k",
+            ),
+            scatter_kwargs,
+        )
         ax.scatter(
             10**y if log_trans else y,
             10**pred_y if log_trans else pred_y,
-            s=20,
-            color=color,
-            marker=marker,
-            label=f"{name} dataset ($R^2$={r2:.3f})",
-            linewidth=0.4,
-            edgecolors="k",
+            **scatter_kwargs_,
         )
 
     plot_one("Training", clr[0], "o")
@@ -1105,6 +1142,12 @@ def pretty(value, htchar="\t", lfchar="\n", indent=0):
         return "(%s)" % (",".join(items) + lfchar + htchar * indent)
     else:
         return repr(value)
+
+
+def update_defaults_by_kwargs(defaults: dict = None, kwargs: dict = None):
+    defaults = defaults if defaults is not None else {}
+    defaults.update({} if kwargs is None else kwargs)
+    return defaults
 
 
 class Logger:
