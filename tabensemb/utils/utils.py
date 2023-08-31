@@ -59,6 +59,14 @@ global_palette = [
 
 
 def is_notebook() -> bool:
+    """
+    Check whether the current environment is a notebook.
+
+    Returns
+    -------
+    bool
+        True if in a notebook.
+    """
     try:
         from IPython import get_ipython
 
@@ -74,18 +82,32 @@ def is_notebook() -> bool:
 
 
 def set_random_seed(seed=0):
+    """
+    Set random seeds of pytorch (including cuda and dataloaders), numpy, and random.
+
+    Parameters
+    ----------
+    seed
+        The random seed.
+    """
     set_torch(seed)
     np.random.seed(seed)
     random.seed(seed)
 
 
 def seed_worker(worker_id):
+    """
+    For the argument ``worker_init_fn`` of ``torch.utils.data.DataLoader``.
+    """
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
 
 def set_torch(seed=0):
+    """
+    Set the random seed of pytorch, CUDA, and ``torch.utils.data.DataLoader``.
+    """
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -103,7 +125,32 @@ def set_torch(seed=0):
     torch.utils.data._utils.collate.default_collate = fix_collate_fn
 
 
-def metric_sklearn(y_true, y_pred, metric):
+def metric_sklearn(y_true: np.ndarray, y_pred: np.ndarray, metric: str) -> float:
+    """
+    Calculate metrics using ``sklearn`` APIs. The format of ``y_true`` and ``y_pred`` should follow the requirement of
+    ``metric`` (See https://scikit-learn.org/stable/modules/model_evaluation.html), so we recommend using
+    :func:`auto_metric_sklearn` to automatically deal with different metrics.
+
+    Parameters
+    ----------
+    y_true
+        An array of ground truth values.
+    y_pred
+        An array of predictions.
+    metric
+        Use ``tabensemb.utils.utils.REGRESSION_METRICS``, ``tabensemb.utils.utils.BINARY_METRICS``, and
+        ``tabensemb.utils.utils.MULTICLASS_METRICS`` to check all available metrics for regression, binary, and
+        multiclass tasks respectively.
+
+    Returns
+    -------
+    float
+        The metric.
+
+    See Also
+    --------
+    :func:`auto_metric_sklearn`
+    """
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
     if len(y_true.shape) == 2 and y_true.shape[-1] == 1:
@@ -201,7 +248,23 @@ def metric_sklearn(y_true, y_pred, metric):
         raise Exception(f"Metric {metric} not implemented.")
 
 
-def convert_proba_to_target(y_pred, task):
+def convert_proba_to_target(y_pred: np.ndarray, task) -> np.ndarray:
+    """
+    Convert probabilities of classes to the class of each sample.
+
+    Parameters
+    ----------
+    y_pred
+        An array of predicted probabilities. For binary, it should be the probability of the positive class.
+    task
+        "multiclass" or "binary".
+
+    Returns
+    -------
+    np.ndarray
+        The class of each sample. 2d array (the second dimension is 1) for multiclass tasks. 0-1 array (1d or 2d
+        depending on the input ``y_pred``) for binary tasks.
+    """
     if task == "regression":
         raise Exception(f"Not supported for regressions tasks.")
     elif task == "multiclass":
@@ -212,7 +275,23 @@ def convert_proba_to_target(y_pred, task):
         raise Exception(f"Unrecognized task {task}.")
 
 
-def convert_target_to_indicator(y_pred, n_classes):
+def convert_target_to_indicator(y_pred: np.ndarray, n_classes: int) -> np.ndarray:
+    """
+    Convert the class of each sample to class indicator.
+
+    Parameters
+    ----------
+    y_pred
+        The class of each sample (not probabilities). It should be a 1d array or a 2d array whose second dimension
+        is 1.
+    n_classes
+        The number of classes.
+
+    Returns
+    -------
+    np.ndarray
+        An array of (n_samples, n_classes) where, at each entry, 1 indicates that the sample belongs to this class.
+    """
     indicator = np.zeros((y_pred.shape[0], n_classes))
     indicator[np.arange(y_pred.shape[0]), y_pred.flatten()] = 1
     return indicator
@@ -287,9 +366,49 @@ _MULTICLASS_USE_PROB_METRICS = [
 MULTICLASS_METRICS = _MULTICLASS_USE_TARGET_METRICS + _MULTICLASS_USE_PROB_METRICS
 
 
-def auto_metric_sklearn(y_true, y_pred, metric, task):
+def auto_metric_sklearn(
+    y_true: np.ndarray, y_pred: np.ndarray, metric: str, task: str
+) -> float:
+    """
+    Calculate metrics using ``sklearn`` APIs. It automatically deals with different requirements of input shapes for
+    different metrics.
+
+    Parameters
+    ----------
+    y_true
+        An array of ground truth values. For classification, it should be the class of each sample. It can be 1d or 2d
+        (the second dimension is 1) for classification tasks.
+    y_pred
+        An array of predictions. For classification, it should be the probabilities of classes. It can be 1d or 2d
+        (the second dimension is 1) for binary classification tasks.
+    metric
+        Use ``tabensemb.utils.utils.REGRESSION_METRICS``, ``tabensemb.utils.utils.BINARY_METRICS``, and
+        ``tabensemb.utils.utils.MULTICLASS_METRICS`` to check all available metrics for regression, binary, and
+        multiclass tasks respectively.
+    task
+        "regression", "multiclass", or "binary".
+
+    Returns
+    -------
+    float
+        The metric.
+    """
     if task not in ["binary", "multiclass", "regression"]:
         raise Exception(f"Task {task} does not support auto metrics.")
+    if task in ["multiclass", "binary"] and not (
+        len(y_true.shape) == 1 or (len(y_true.shape) == 2 and y_true.shape[1] == 1)
+    ):
+        raise Exception(
+            f"Expecting a 1d or 2d (the second dimension is 1) y_true, but got y_true with shape {y_true.shape}."
+        )
+    if task == "binary" and not (
+        len(y_pred.shape) == 1 or (len(y_pred.shape) == 2 and y_pred.shape[1] == 1)
+    ):
+        raise Exception(
+            f"Expecting the probability of the positive class, but got y_pred with shape {y_pred.shape}."
+        )
+    if task == "binary":
+        y_pred = y_pred.flatten()
     # For classification tasks, y_pred is proba, y_true is an integer array
     if task == "regression":
         return metric_sklearn(y_true, y_pred, metric)
@@ -320,6 +439,25 @@ def auto_metric_sklearn(y_true, y_pred, metric, task):
 
 
 def str_to_dataframe(s, sep=",", names=None, check_nan_on=None) -> pd.DataFrame:
+    """
+    Convert a .csv type of string to a dataframe.
+
+    Parameters
+    ----------
+    s
+        A .csv type of string.
+    sep
+        The delimiter.
+    names
+        Column labels.
+    check_nan_on
+        Numerical column labels to detect invalid values and replace them with ``np.nan``.
+
+    Returns
+    -------
+    pd.DataFrame
+        The converted dataframe.
+    """
     df = pd.read_csv(StringIO(s), names=names, sep=sep)
     if names is not None:
         if len(df.columns) != len(names) or (
@@ -345,6 +483,9 @@ def str_to_dataframe(s, sep=",", names=None, check_nan_on=None) -> pd.DataFrame:
 
 
 def plot_importance(ax, features, attr, pal, clr_map, **kwargs):
+    """
+    A utility of :meth:`tabensemb.trainer.Trainer.plot_feature_importance`.
+    """
     df = pd.DataFrame(columns=["feature", "attr", "clr"])
     df["feature"] = features
     df["attr"] = np.abs(attr) / np.sum(np.abs(attr))
@@ -382,6 +523,31 @@ def plot_importance(ax, features, attr, pal, clr_map, **kwargs):
 
 
 def get_figsize(n, max_col, width_per_item, height_per_item, max_width):
+    """
+    Calculate the ``figsize`` argument of ``matplotlib`` for a figure with subplots.
+
+    Parameters
+    ----------
+    n
+        The number of subplots.
+    max_col
+        The maximum number of columns.
+    width_per_item
+        The width of each column if only one row is needed.
+    height_per_item
+        The height of each row.
+    max_width
+        The width of the figure if multiple rows are needed.
+
+    Returns
+    -------
+    tuple
+        The ``figsize`` argument of ``matplotlib``
+    float
+        The width of the figure
+    float
+        The height of the figure
+    """
     if n > max_col:
         width = max_col
         if n % max_col == 0:
@@ -408,16 +574,44 @@ def plot_pdp(
     log_trans=True,
     lower_lim=2,
     upper_lim=7,
+    figure_kwargs: dict = None,
+    get_figsize_kwargs: dict = None,
+    plot_kwargs: dict = None,
+    fill_between_kwargs: dict = None,
+    bar_kwargs: dict = None,
+    hist_kwargs: dict = None,
 ):
-    figsize, width, height = get_figsize(
-        n=len(feature_names),
-        max_col=4,
-        width_per_item=3,
-        height_per_item=3,
-        max_width=14,
+    """
+    A utility of :meth:`tabensemb.trainer.Trainer.plot_partial_dependence`.
+    """
+
+    get_figsize_kwargs_ = update_defaults_by_kwargs(
+        dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
+        get_figsize_kwargs,
+    )
+    figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+    plot_kwargs_ = update_defaults_by_kwargs(
+        dict(color="k", linewidth=0.7), plot_kwargs
+    )
+    fill_between_kwargs_ = update_defaults_by_kwargs(
+        dict(alpha=0.4, color="k", edgecolor=None), fill_between_kwargs
+    )
+    bar_kwargs_ = update_defaults_by_kwargs(
+        dict(
+            capsize=5,
+            color=[0.5, 0.5, 0.5],
+            edgecolor=None,
+            error_kw={"elinewidth": 0.2, "capthick": 0.2},
+        ),
+        bar_kwargs,
+    )
+    hist_kwargs_ = update_defaults_by_kwargs(
+        dict(density=True, color="k", alpha=0.2, rwidth=0.8), hist_kwargs
     )
 
-    fig = plt.figure(figsize=figsize)
+    figsize, width, height = get_figsize(n=len(feature_names), **get_figsize_kwargs_)
+
+    fig = plt.figure(figsize=figsize, **figure_kwargs_)
 
     def transform(value):
         if log_trans:
@@ -429,20 +623,13 @@ def plot_pdp(
         ax = plt.subplot(height, width, idx + 1)
         # ax.plot(x_values_list[idx], mean_pdp_list[idx], color = clr_map[focus_feature], linewidth = 0.5)
         if focus_feature not in cat_feature_names:
-            ax.plot(
-                x_values_list[idx],
-                transform(mean_pdp_list[idx]),
-                color="k",
-                linewidth=0.7,
-            )
+            ax.plot(x_values_list[idx], transform(mean_pdp_list[idx]), **plot_kwargs_)
 
             ax.fill_between(
                 x_values_list[idx],
                 transform(ci_left_list[idx]),
                 transform(ci_right_list[idx]),
-                alpha=0.4,
-                color="k",
-                edgecolor=None,
+                **fill_between_kwargs_,
             )
         else:
             yerr = (
@@ -459,13 +646,10 @@ def plot_pdp(
                 x_values_list[idx],
                 transform(mean_pdp_list[idx]),
                 yerr=yerr,
-                capsize=5,
-                color=[0.5, 0.5, 0.5],
-                edgecolor=None,
-                error_kw={"elinewidth": 0.2, "capthick": 0.2},
                 tick_label=[
                     cat_feature_mapping[focus_feature][x] for x in x_values_list[idx]
                 ],
+                **bar_kwargs_,
             )
 
         ax.set_title(focus_feature, {"fontsize": 12})
@@ -486,12 +670,7 @@ def plot_pdp(
                 ax2 = ax.twinx()
 
                 ax2.hist(
-                    hist_data[focus_feature],
-                    bins=x_values_list[idx],
-                    density=True,
-                    color="k",
-                    alpha=0.2,
-                    rwidth=0.8,
+                    hist_data[focus_feature], bins=x_values_list[idx], **hist_kwargs_
                 )
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
@@ -513,25 +692,42 @@ def plot_pdp(
         left=False,
         right=False,
     )
-    plt.ylabel("Predicted fatigue life")
-    plt.xlabel("Value of predictors (standard scaled, $10\%$-$90\%$ percentile)")
+    plt.ylabel("Predicted target")
+    plt.xlabel("Value of predictors ($10\%$-$90\%$ percentile)")
 
     return fig
 
 
 def plot_partial_err(
-    feature_data, cat_feature_names, cat_feature_mapping, truth, pred, thres=0.8
+    feature_data,
+    cat_feature_names,
+    cat_feature_mapping,
+    truth,
+    pred,
+    thres=0.8,
+    figure_kwargs: dict = None,
+    get_figsize_kwargs: dict = None,
+    scatter_kwargs: dict = None,
+    hist_kwargs: dict = None,
 ):
-    feature_names = list(feature_data.columns)
-    figsize, width, height = get_figsize(
-        n=len(feature_names),
-        max_col=4,
-        width_per_item=3,
-        height_per_item=3,
-        max_width=14,
+    """
+    A utility of :meth:`tabensemb.trainer.Trainer.plot_partial_err`.
+    """
+
+    figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+    get_figsize_kwargs_ = update_defaults_by_kwargs(
+        dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
+        get_figsize_kwargs,
+    )
+    scatter_kwargs_ = update_defaults_by_kwargs(dict(s=1), scatter_kwargs)
+    hist_kwargs_ = update_defaults_by_kwargs(
+        dict(density=True, alpha=0.2, rwidth=0.8), hist_kwargs
     )
 
-    fig = plt.figure(figsize=figsize)
+    feature_names = list(feature_data.columns)
+    figsize, width, height = get_figsize(n=len(feature_names), **get_figsize_kwargs_)
+
+    fig = plt.figure(figsize=figsize, **figure_kwargs_)
 
     err = np.abs(truth - pred)
     high_err_data = feature_data.loc[np.where(err > thres)[0], :]
@@ -542,10 +738,18 @@ def plot_partial_err(
         ax = plt.subplot(height, width, idx + 1)
         # ax.plot(x_values_list[idx], mean_pdp_list[idx], color = clr_map[focus_feature], linewidth = 0.5)
         ax.scatter(
-            high_err_data[focus_feature].values, high_err, s=1, color=clr[0], marker="s"
+            high_err_data[focus_feature].values,
+            high_err,
+            color=clr[0],
+            marker="s",
+            **scatter_kwargs_,
         )
         ax.scatter(
-            low_err_data[focus_feature].values, low_err, s=1, color=clr[1], marker="^"
+            low_err_data[focus_feature].values,
+            low_err,
+            color=clr[1],
+            marker="^",
+            **scatter_kwargs_,
         )
 
         ax.set_title(focus_feature, {"fontsize": 12})
@@ -560,10 +764,8 @@ def plot_partial_err(
                 np.max(feature_data[focus_feature].values),
                 20,
             ),
-            density=True,
             color=clr[:2],
-            alpha=0.2,
-            rwidth=0.8,
+            **hist_kwargs_,
         )
         if focus_feature in cat_feature_names:
             ticks = np.sort(np.unique(feature_data[focus_feature].values)).astype(int)
@@ -599,22 +801,33 @@ def plot_truth_pred(
     model_name,
     log_trans=True,
     verbose=True,
+    scatter_kwargs: dict = None,
 ):
+    """
+    A utility of :meth:`tabensemb.trainer.Trainer.plot_truth_pred`.
+    """
+
     def plot_one(name, color, marker):
         pred_y, y = predictions[model_name][name]
         r2 = metric_sklearn(y, pred_y, "r2")
         loss = metric_sklearn(y, pred_y, "mse")
         if verbose:
             print(f"{name} MSE Loss: {loss:.4f}, R2: {r2:.4f}")
+        scatter_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                s=20,
+                color=color,
+                marker=marker,
+                label=f"{name} dataset ($R^2$={r2:.3f})",
+                linewidth=0.4,
+                edgecolors="k",
+            ),
+            scatter_kwargs,
+        )
         ax.scatter(
             10**y if log_trans else y,
             10**pred_y if log_trans else pred_y,
-            s=20,
-            color=color,
-            marker=marker,
-            label=f"{name} dataset ($R^2$={r2:.3f})",
-            linewidth=0.4,
-            edgecolors="k",
+            **scatter_kwargs_,
         )
 
     plot_one("Training", clr[0], "o")
@@ -625,6 +838,9 @@ def plot_truth_pred(
 
 
 def set_truth_pred(ax, log_trans=True, upper_lim=9):
+    """
+    A utility of :meth:`tabensemb.trainer.Trainer.plot_truth_pred`.
+    """
     if log_trans:
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -678,6 +894,9 @@ def set_truth_pred(ax, log_trans=True, upper_lim=9):
 
 
 def check_stream():
+    """
+    A utility of :func:`HiddenPrints`.
+    """
     if not isinstance(sys.stdout, tabensemb.Stream) or not isinstance(
         sys.stderr, tabensemb.Stream
     ):
@@ -686,7 +905,20 @@ def check_stream():
 
 
 class HiddenPrints:
-    def __init__(self, disable_logging=True, disable_std=True):
+    """
+    A context manager that can temporarily hide all ``sys.stdout`` outputs and ``logging`` outputs.
+    It works better when ``sys.stdout`` is not changed after ``tabensemb`` is imported.
+    """
+
+    def __init__(self, disable_logging: bool = True, disable_std: bool = True):
+        """
+        Parameters
+        ----------
+        disable_logging
+            Hide ``logging`` outputs
+        disable_std
+            Hide ``sys.stdout`` outputs
+        """
         self.disable_logging = disable_logging
         self.disable_std = disable_std
 
@@ -719,6 +951,11 @@ class HiddenPrints:
 
 
 class PlainText:
+    """
+    A context manager that can temporarily redirect all ``sys.stderr`` outputs to ``sys.stdout``.
+    It works better when ``sys.stdout`` and ``sys.stderr`` are not changed after ``tabensemb`` is imported.
+    """
+
     def __init__(self, disable=False):
         self.disable = disable
 
@@ -740,6 +977,10 @@ class PlainText:
 
 
 class global_setting:
+    """
+    A context manager that temporarily changes the global setting ``tabensemb.setting``.
+    """
+
     def __init__(self, setting: Dict):
         self.setting = setting
         self.original = None
@@ -753,6 +994,10 @@ class global_setting:
 
 
 class HiddenPltShow:
+    """
+    A context manager that temporarily hide all ``matplotlib.pyplot.show()``.
+    """
+
     def __init__(self):
         pass
 
@@ -768,6 +1013,14 @@ class HiddenPltShow:
 
 
 def reload_module(name):
+    """
+    Re-import the module.
+
+    Parameters
+    ----------
+    name
+        The name of the module
+    """
     if name not in sys.modules:
         mod = import_module(name)
     else:
@@ -776,6 +1029,10 @@ def reload_module(name):
 
 
 class TqdmController:
+    """
+    A controller of ``tqdm`` progress bars, including ``tqdm.tqdm``, ``tqdm.notebook.tqdm``, and ``tqdm.auto.tqdm``.
+    """
+
     def __init__(self):
         self.original_init = {}
         self.disabled = False
@@ -804,13 +1061,29 @@ class TqdmController:
 
 
 def debugger_is_active() -> bool:
-    """Return if the debugger is currently active"""
+    """
+    Return True if the debugger is currently active
+    """
     return hasattr(sys, "gettrace") and sys.gettrace() is not None
 
 
-def gini(x, w=None):
-    # https://stackoverflow.com/questions/48999542/more-efficient-weighted-gini-coefficient-in-python
-    # The rest of the code requires numpy arrays.
+def gini(x: np.ndarray, w: np.ndarray = None) -> float:
+    """
+    Calculate the gini index of a feature.
+    https://stackoverflow.com/questions/48999542/more-efficient-weighted-gini-coefficient-in-python
+
+    Parameters
+    ----------
+    x
+        The values of a feature.
+    w
+        The weights of samples.
+
+    Returns
+    -------
+    float
+        The gini index of the feature.
+    """
     x = np.asarray(x)
     if len(np.unique(x)) == 1:
         return np.nan
@@ -834,7 +1107,26 @@ def gini(x, w=None):
 
 
 def pretty(value, htchar="\t", lfchar="\n", indent=0):
-    # https://stackoverflow.com/questions/3229419/how-to-pretty-print-nested-dictionaries
+    """
+    Represent a dictionary, a list, or a tuple by a string.
+    https://stackoverflow.com/questions/3229419/how-to-pretty-print-nested-dictionaries
+
+    Parameters
+    ----------
+    value
+        A dictionary, a list, or a tuple to be formatted.
+    htchar
+        The string for indents.
+    lfchar
+        The string between two lines.
+    indent
+        The number of indents.
+
+    Returns
+    -------
+    str
+        The formatted representation of ``value``.
+    """
     nlch = lfchar + htchar * (indent + 1)
     if isinstance(value, dict):
         items = [
@@ -852,9 +1144,18 @@ def pretty(value, htchar="\t", lfchar="\n", indent=0):
         return repr(value)
 
 
-# https://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
-# capture all outputs to a log file while still printing it
+def update_defaults_by_kwargs(defaults: dict = None, kwargs: dict = None):
+    defaults = defaults if defaults is not None else {}
+    defaults.update({} if kwargs is None else kwargs)
+    return defaults
+
+
 class Logger:
+    """
+    Capture all outputs to a log file while still printing it. It works as a utility of :class:`Logging`.
+    https://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
+    """
+
     def __init__(self, path, stream):
         self.terminal = stream
         self.path = path
@@ -869,6 +1170,10 @@ class Logger:
 
 
 class Logging:
+    """
+    Capture all outputs to a log file while still printing it.
+    """
+
     def enter(self, path):
         if check_stream():
             tabensemb.stdout_stream.set_path(path)
@@ -891,6 +1196,19 @@ class Logging:
 
 
 def add_postfix(path):
+    """
+    If the input path exists, add a postfix ``f"-I{n}"`` to it, where ``n`` increases if ``path`` ends with ``f"-I{n}"``.
+
+    Parameters
+    ----------
+    path
+        A path to a folder or a file that will be created.
+
+    Returns
+    -------
+    str
+        A path that can be created without conflict.
+    """
     postfix_iter = itertools.count()
     s = cp(path)
     root, ext = os.path.splitext(s)
@@ -914,7 +1232,7 @@ def add_postfix(path):
 
 class torch_with_grad(_DecoratorContextManager):
     """
-    Context-manager that enabled gradient calculation. This is an inverse version of torch.no_grad
+    A context manager that enabled gradient calculation. This is an inverse version of torch.no_grad
     """
 
     def __init__(self) -> None:
@@ -931,6 +1249,10 @@ class torch_with_grad(_DecoratorContextManager):
 
 
 class PickleAbleGenerator:
+    """
+    Turn a generator (not pickle-able) into a pickle-able object by extracting all items in the generator to a list.
+    """
+
     def __init__(self, generator, max_generate=10000, inf=False):
         self.ls = []
         self.state = 0

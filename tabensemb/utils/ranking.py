@@ -4,6 +4,19 @@ from typing import List, Union
 
 
 def read_lbs(paths: List[Union[os.PathLike, str]]) -> List[pd.DataFrame]:
+    """
+    Read a list of .csv files.
+
+    Parameters
+    ----------
+    paths
+        A list of paths to .csv files
+
+    Returns
+    -------
+    list
+        A list of pd.DataFrame.
+    """
     dfs = []
     for path in paths:
         df = pd.read_csv(path, index_col=0)
@@ -12,6 +25,9 @@ def read_lbs(paths: List[Union[os.PathLike, str]]) -> List[pd.DataFrame]:
 
 
 def merge_leaderboards(dfs: List[pd.DataFrame]):
+    """
+    Concatenate multiple leaderboards.
+    """
     df = pd.concat(dfs, ignore_index=True)
     metrics = list(df.columns)[2:]
     first_metric = metrics[0].split(" ")[-1]
@@ -27,6 +43,19 @@ def merge_leaderboards(dfs: List[pd.DataFrame]):
 
 
 def avg_rank(dfs: List[pd.DataFrame]):
+    """
+    Calculate average rankings for all models in all model bases based on leaderboards from multiple executions.
+
+    Parameters
+    ----------
+    dfs
+        A list of leaderboards from multiple executions.
+
+    Returns
+    -------
+    pd.DataFrame
+        A leaderboard of average ranking of multiple executions.
+    """
     all_program_models = []
     each_program_models = []
     for df in dfs:
@@ -57,6 +86,23 @@ def merge_to_excel(
     sheet_names: List[str] = None,
     **kwargs,
 ):
+    """
+    Write leaderboards from multiple executions and the leaderboard of average ranking of multiple executions to a
+    .xlsx file.
+
+    Parameters
+    ----------
+    path
+        The path to write the .xlsx file.
+    dfs
+        Leaderboards from multiple executions.
+    avg_df
+        The leaderboard of average ranking of multiple executions. See :func:`avg_rank`.
+    sheet_names
+        Names of ``dfs`` and ``avg_df``.
+    kwargs
+        Arguments for ``pd.DataFrame.to_excel``.
+    """
     avg_sheet_name = "Average"
     if sheet_names is None:
         sheet_names = [f"Mode {x}" for x in range(len(dfs))]

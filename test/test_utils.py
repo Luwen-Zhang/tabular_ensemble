@@ -177,10 +177,10 @@ def test_metric_sklearn():
     assert "NaNs exist in the tested prediction" in err.value.args[0]
 
     with pytest.raises(Exception) as err:
-        convert_proba_to_target(None, "regression")
+        convert_proba_to_target(y_pred, "regression")
     assert "Not supported for regressions tasks" in err.value.args[0]
     with pytest.raises(Exception) as err:
-        convert_proba_to_target(None, "TEST")
+        convert_proba_to_target(y_pred, "TEST")
     assert "Unrecognized task" in err.value.args[0]
 
     y_true = np.random.randint(0, 4, (10,))
@@ -193,12 +193,16 @@ def test_metric_sklearn():
         assert auto_metric_sklearn(
             y_true.reshape(-1, 1), y_pred_prob, metric, "multiclass"
         ) == auto_metric_sklearn(y_true, y_pred_prob, metric, "multiclass")
-    with pytest.raises(Exception):
-        auto_metric_sklearn(None, None, None, "TEST")
+    with pytest.raises(Exception) as err:
+        auto_metric_sklearn(y_true, y_pred_prob, "TEST", "TEST")
+    assert "does not support auto metrics" in err.value.args[0]
     with pytest.raises(NotImplementedError):
-        auto_metric_sklearn(None, None, "TEST", "binary")
-    with pytest.raises(NotImplementedError):
-        auto_metric_sklearn(None, None, "TEST", "multiclass")
+        auto_metric_sklearn(y_true, y_pred_prob, "TEST", "multiclass")
+    with pytest.raises(Exception) as err:
+        auto_metric_sklearn(
+            y_true.reshape(-1, 1).repeat(2, axis=1), y_pred_prob, "TEST", "multiclass"
+        )
+    assert "Expecting a 1d or 2d" in err.value.args[0]
 
     y_true = np.random.randint(0, 2, (10,))
     y_pred_prob_1d = np.abs(np.random.randn(10))
@@ -211,6 +215,18 @@ def test_metric_sklearn():
         ) == auto_metric_sklearn(
             y_true, y_pred_prob_1d.reshape(-1, 1), metric, "binary"
         )
+    with pytest.raises(NotImplementedError):
+        auto_metric_sklearn(y_true, y_pred_prob_1d, "TEST", "binary")
+    with pytest.raises(Exception) as err:
+        auto_metric_sklearn(
+            y_true.reshape(-1, 1).repeat(2, axis=1), y_pred_prob_1d, "TEST", "binary"
+        )
+    assert "Expecting a 1d or 2d" in err.value.args[0]
+    with pytest.raises(Exception) as err:
+        auto_metric_sklearn(
+            y_true, y_pred_prob_1d.reshape(-1, 1).repeat(2, axis=1), "TEST", "binary"
+        )
+    assert "Expecting the probability of the positive class" in err.value.args[0]
 
 
 def test_get_figsize():

@@ -115,7 +115,7 @@ class GainImputer(AbstractSklearnImputer):
     Parameters
     ----------
     **kwargs
-        Arguments for ``tabensemb.utils.imputers.gain.GainImputation``
+        Arguments for :class:`~tabensemb.utils.imputers.gain.GainImputation`
     """
 
     def _new_imputer(self):

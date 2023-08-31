@@ -29,6 +29,41 @@ import inspect
 
 
 class AbstractModel:
+    """
+    The base class for all model bases.
+
+    Attributes
+    ----------
+    exclude_models
+        The names of models that should not be trained.
+    init_params
+        Arguments passed to :meth:`__init__`. See :meth:`save_kwargs`.
+    limit_batch_size
+        If ``batch_size // len(training set) < limit_batch_size``, the ``batch_size`` is forced to be
+        ``len(training set)`` to avoid potential numerical issues. For Tabnet, this is extremely important because a
+        small batch may cause NaNs and further CUDA device-side assert in the sparsemax function. Set to -1 to turn off
+        this check (NOT RECOMMENDED!!). Note: Setting ``drop_last=True`` for ``torch.utils.data.DataLoader`` is fine,
+        but I think (i) having access to all data points in one epoch is beneficial for some models, (ii) If using a
+        large dataset and a large ``batch_size``, it is possible that the last batch is so large that contains
+        essential information, (iii) the user should have full control for this. If you want to use ``drop_last`` in
+        your code, use the ``original_batch_size`` in ``kwargs`` passed to :class:`AbstractModel` methods.
+    model
+        A dictionary of models.
+    model_params
+        Hyperparameters that contain all keys in :meth:`_initial_values` for each model. In cross validation runs, the
+        parameters in the previous run will be loaded for the current run.
+    model_subset
+        The names of models selected to be trained in the model base.
+    program
+        The name of the model base.
+    root
+        The place where all files of the model base are stored.
+    store_in_harddisk
+        Whether to save models in the hard disk.
+    trainer
+        A :class:`tabensemb.trainer.Trainer` instance.
+    """
+
     def __init__(
         self,
         trainer: Trainer,
@@ -39,21 +74,21 @@ class AbstractModel:
         **kwargs,
     ):
         """
-        The base class for all model-bases.
-
         Parameters
         ----------
         trainer:
-            A trainer instance that contains all information and datasets. The trainer has loaded configs and data.
+            A :class:`~tabensemb.trainer.Trainer` instance that contains all information and datasets and will be
+            linked to the model base. The trainer has loaded configs and data.
         program:
-            The name of the modelbase. If None, the name from :func:``_get_program_name`` is used.
+            The name of the model base. If None, the name from :meth:`_get_program_name` is used.
         model_subset:
-            The names of specific models selected to be trained in the modelbase.
+            The names of models selected to be trained in the model base.
         exclude_models:
-            The names of specific models that should not be trained. Only one of ``model_subset`` and ``exclude_models`` can
+            The names of models that should not be trained. Only one of ``model_subset`` and ``exclude_models`` can
             be specified.
         store_in_harddisk:
-            Whether to save sub-models in the hard disk. If the global setting ``low_memory`` is True, True is used.
+            Whether to save models in the hard disk. If the global setting
+            ``tabensemb.setting["low_memory"]`` is True, True is used.
         **kwargs:
             Ignored.
         """
@@ -77,23 +112,18 @@ class AbstractModel:
         self.save_kwargs(d=self.init_params, ignore=["trainer", "self", "frame"])
         self._check_space()
         self._mkdir()
-
-        # If batch_size // len(training set) < limit_batch_size, the batch_size is forced to be len(training set) to avoid
-        # potential numerical issue. For Tabnet, this is extremely important because a small batch may cause NaNs and
-        # further CUDA device-side assert in the sparsemax function. Set to -1 to turn off this check (NOT RECOMMENDED!!).
-        # Note: Setting drop_last=True for torch.utils.data.DataLoader is fine, but I think (i) having access to all data
-        # points in one epoch is beneficial for some models, (ii) If using a large dataset and a large batch_size, it is
-        # possible that the last batch is so large that contains essential information, (iii) the user should have full
-        # control for this. If you want to use drop_last in your code, use the original_batch_size in kwargs passed to
-        # AbstractModel methods.
         self.limit_batch_size = 6
 
     def save_kwargs(self, d: dict = None, ignore: List[str] = None):
         """
-        Save all args and kwargs of the caller except for those in ``ignore``. It will traceback to the top caller that
-        has the same method name and same class of ``self`` as the current frame. For example, in nested __init__ calls
-        of inherited classes, it will traceback to the first __init__ call and record kwargs layer by layer until
-        reaching the current caller.
+        Save all args and kwargs of the caller except for those in ``ignore``. It will trace back to the top caller that
+        has the same method name and the same class of ``self`` as that of the current frame. For example, in nested
+        __init__ calls of inherited classes, it will trace back to the first __init__ call and record kwargs layer by
+        layer until it reaches the current caller.
+
+        Notes
+        -------
+        It will be automatically called in :meth:`__init__`.
 
         Parameters
         ----------
@@ -104,8 +134,8 @@ class AbstractModel:
 
         Returns
         -------
-        d
-            The dictionary with recorded kwargs
+        dict
+            The dictionary with the recorded kwargs
         """
         ignore = [] if ignore is None else ignore
         d = {} if d is None else d
@@ -132,12 +162,20 @@ class AbstractModel:
 
     def reset(self):
         """
-        Reset the model base by calling __init__ with recorded kwargs.
+        Reset the model base by calling __init__ with the recorded kwargs from :meth:`save_kwargs`.
         """
         self.__init__(trainer=self.trainer, **self.init_params)
 
     @property
     def device(self):
+        """
+        The device set in the linked :class:`~tabensemb.trainer.Trainer`.
+
+        Returns
+        -------
+        str
+            "cpu" or "cuda"
+        """
         return self.trainer.device
 
     def fit(
@@ -153,7 +191,11 @@ class AbstractModel:
         bayes_opt: bool = False,
     ):
         """
-        Fit models using a tabular dataset. Data of the trainer will be changed.
+        Fit all models using a tabular dataset.
+
+        Notes
+        ------
+        The loaded dataset in the linked :class:`~tabensemb.trainer.Trainer` will be replaced.
 
         Parameters
         ----------
@@ -164,16 +206,17 @@ class AbstractModel:
         cat_feature_names:
             The names of categorical features.
         label_name:
-            The name of the target.
+            The names of targets.
         model_subset:
-            The names of a subset of all available models (in :func:``get_model_names``). Only these models will be
+            The names of a subset of all available models (in :meth:`get_model_names`). Only these models will be
             trained.
         derived_data:
-            Data derived from :func:``DataModule.derive_unstacked``. If not None, unstacked data will be re-derived.
+            Unstacked data derived from :meth:`tabensemb.data.datamodule.DataModule.derive_unstacked`. If None,
+            unstacked data will be re-derived.
         verbose:
             Verbosity.
         warm_start:
-            Whether to train models based on previous trained models.
+            Finetune models based on previous trained models.
         bayes_opt:
             Whether to perform Gaussian-process-based Bayesian Hyperparameter Optimization for each model.
         """
@@ -206,17 +249,16 @@ class AbstractModel:
 
     def train(self, *args, stderr_to_stdout=False, **kwargs):
         """
-        Training the model using data in the trainer directly.
-        The method can be rewritten to implement other training strategies.
+        Train the model base using the dataset in the linked :class:`~tabensemb.trainer.Trainer` directly.
 
         Parameters
         ----------
         *args:
-            Arguments of :func:``_train`` for models.
+            Arguments of :meth:`_train`.
         stderr_to_stdout:
             Redirect stderr to stdout. Useful for notebooks.
         **kwargs:
-            Arguments of :func:``_train`` for models.
+            Arguments of :meth:`_train`.
         """
         self.trainer.set_status(training=True)
         verbose = "verbose" not in kwargs.keys() or kwargs["verbose"]
@@ -241,7 +283,7 @@ class AbstractModel:
         **kwargs,
     ) -> np.ndarray:
         """
-        Predict a new dataset using the selected model.
+        Make inferences on a new dataset using the selected model.
 
         Parameters
         ----------
@@ -250,19 +292,20 @@ class AbstractModel:
         model_name:
             A selected name of a model, which is already trained.
         model:
-            The `model_name` model. If None, the model will be loaded from self.model.
+            The model returned by :meth:`_new_model`. If None, the model will be loaded from ``self.model``.
         derived_data:
-            Data derived from :func:``DataModule.derive_unstacked``. If not None, unstacked data will be re-derived.
+            Unstacked data derived from :meth:`tabensemb.data.datamodule.DataModule.derive_unstacked`. If None,
+            unstacked data will be re-derived.
         ignore_absence:
-            Whether to ignore absent keys in derived_data. Use True only when the model does not use derived_data.
+            Whether to ignore absent keys in ``derived_data``. Use True only when the model does not use derived_data.
         proba:
-            Return probabilities instead of targets for classification models.
+            Return probabilities instead of predicted classes for classification models.
         **kwargs:
-            Arguments of :func:``_predict`` for models.
+            Arguments of :meth:`_predict`.
 
         Returns
         -------
-        prediction:
+        np.ndarray
             Predicted target. Always 2d np.ndarray.
         """
         self.trainer.set_status(training=False)
@@ -296,13 +339,13 @@ class AbstractModel:
         Parameters
         ----------
         args
-            Positional arguments of ``predict``.
+            Positional arguments of :meth:`predict`.
         kwargs
-            Arguments of ``predict``, except for ``proba``.
+            Arguments of :meth:`predict`, except for ``proba``.
 
         Returns
         -------
-        res
+        np.ndarray
             For binary tasks, a (n_samples, 1) np.ndarray is returned as the probability of positive. For multiclass
             tasks, a (n_samples, n_classes) np.ndarray is returned.
         """
@@ -314,19 +357,19 @@ class AbstractModel:
 
     def detach_model(self, model_name: str, program: str = None) -> "AbstractModel":
         """
-        Detach the chosen sub-model to a separate AbstractModel with the same trainer.
+        Detach the chosen model to a separate model base with the same linked :class:`~tabensemb.trainer.Trainer`.
 
         Parameters
         ----------
         model_name:
-            The name of the sub-model to be detached.
+            The name of the model to be detached.
         program:
-            The new name of the detached database. If the name is the same as the original one, the detached model is
+            The new name of the detached model base. If the name is the same as the original one, the detached model is
             stored in memory to avoid overwriting the original model.
 
         Returns
         -------
-        model:
+        AbstractModel
             An AbstractModel containing the chosen model.
         """
         if not isinstance(self.model, dict) and not isinstance(self.model, ModelDict):
@@ -349,8 +392,8 @@ class AbstractModel:
 
     def set_path(self, path: Union[os.PathLike, str]):
         """
-        Set the path of the model base (usually a trained one), including paths of its models. It is used when migrating
-        models to another directory.
+        Set the path of the model base (usually a trained one), including the paths of its models. It is used when
+        migrating models to another directory.
 
         Parameters
         ----------
@@ -376,13 +419,17 @@ class AbstractModel:
         verbose:
             Verbosity.
         **kwargs:
-            Parameters to generate the model. It should contain all arguments in :func:``_initial_values``.
+            Parameters to generate the model. It contains all arguments in :meth:`_initial_values`.
 
         Returns
         -------
-        model:
-            A new model (without any restriction to its type). It will be passed to :func:``_train_single_model`` and
-            :func:``_pred_single_model``.
+        Any
+            A new model (without any restriction to its type). It will be passed to :meth:`_train_single_model` and
+            :meth:`_pred_single_model`.
+
+        See Also
+        --------
+        :meth:`_new_model`
         """
         set_random_seed(tabensemb.setting["random_seed"])
         required_models = self._get_required_models(model_name=model_name)
@@ -394,23 +441,23 @@ class AbstractModel:
         self, model_name, method, **kwargs
     ) -> Tuple[np.ndarray, List[str]]:
         """
-        Calculate feature importance with a specified model.
+        Calculate feature importance using a specified model.
 
         Parameters
         ----------
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         method
             The method to calculate importance. "permutation" or "shap".
         kwargs
-            Ignored for the compatibility of TorchModel.
+            Ignored.
 
         Returns
         ----------
-        attr
+        np.ndarray
             Values of feature importance.
-        importance_names
-            Corresponding feature names. ``Trainer.all_feature_names`` will be considered.
+        list
+            Corresponding feature names.
         """
         datamodule = self.trainer.datamodule
         all_feature_names = self.trainer.all_feature_names
@@ -450,21 +497,21 @@ class AbstractModel:
 
     def cal_shap(self, model_name: str, **kwargs) -> np.ndarray:
         """
-        Calculate SHAP values with a specified model. ``shap.KernelExplainer`` is called, and shap.kmeans is called to
-        summarize training data to 10 samples as the background data and 10 random samples in the testing set are
-        explained, which will bias the results.
+        Calculate SHAP values using a specified model. ``shap.KernelExplainer`` is called, and ``shap.kmeans`` is
+        called to summarize the training data to 10 samples as the background data and 10 random samples in the testing
+        set are explained, which will bias the results.
 
         Parameters
         ----------
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         kwargs
             Ignored for the compatibility of TorchModel.
 
         Returns
         -------
         attr
-            The SHAP values. `Trainer.all_feature_names` will be considered.
+            The SHAP values.
         """
         import shap
 
@@ -513,11 +560,11 @@ class AbstractModel:
         model_name
             The name of a selected model.
         kwargs
-            Parameters to generate the model. It should contain all arguments in :func:``_initial_values``.
+            Parameters to generate the model. It contains all arguments in :meth:`_initial_values`.
 
         Returns
         -------
-        kwargs
+        dict
             The checked kwargs.
         """
         if "batch_size" in kwargs.keys():
@@ -561,7 +608,20 @@ class AbstractModel:
             kwargs["batch_size"] = new_batch_size
         return kwargs
 
-    def _get_required_models(self, model_name):
+    def _get_required_models(self, model_name) -> Union[Dict, None]:
+        """
+        Extract models specified in :meth:`required_models`.
+
+        Parameters
+        ----------
+        model_name
+            The name of the model.
+
+        Returns
+        -------
+        dict or None
+            A dictionary of extracted models required by the model.
+        """
         required_model_names = self.required_models(model_name)
         if required_model_names is not None:
             required_models = {}
@@ -632,15 +692,16 @@ class AbstractModel:
 
     def required_models(self, model_name: str) -> Union[List[str], None]:
         """
-        The name of the model required by the requested model. If not None and the required model is
-        trained, the required model is passed to `_new_model`.
-        If models from other model bases are required, the return name should be
+        The names of models required by the requested model. If not None and the required model is
+        trained, the required model will be passed to :meth:`_new_model`.
+        If models from other model bases are required, the name should be
         ``EXTERN_{Name of the model base}_{Name of the model}``
 
         Notes
         -------
-        For TorchModel, if the required model is in the TorchModel itself, the AbstractNN is passed to ``_new_model``;
-        if the required model is in another model base, the AbstractModel is passed.
+        For :class:`TorchModel`, if the required model is in the :class:`TorchModel` itself, the
+        :class:`.AbstractNN` is passed to :meth:`_new_model`; if the required model is in another model base, the
+        :class:`.AbstractModel` is passed.
         """
         return None
 
@@ -653,28 +714,29 @@ class AbstractModel:
         to_numpy=True,
     ) -> Dict[str, Any]:
         """
-        Get attributes of the model after evaluating the model on training, validation, and testing respectively.
-        If ``df`` is given, values after evaluating on the given set is returned.
+        Get attributes of the model after evaluating the model on training, validation, and testing sets respectively.
+        If ``df`` is given, values after evaluating the given set are returned.
 
         Parameters
         ----------
         model_name
             The name of the inspected model.
         attributes
-            The requested attributes. If not hasattr, None is returned.
+            The requested attributes. If the model does not have the attribute, None is returned.
         df
             The tabular dataset.
         derived_data:
-            Data derived from :func:``DataModule.derive_unstacked``. If not None, unstacked data will be re-derived.
+            Unstacked data derived from :meth:`tabensemb.data.datamodule.DataModule.derive_unstacked`. If None,
+            unstacked data will be re-derived.
         to_numpy
-            If True, call numpy() if the attribute is a torch.Tensor.
+            If True, call ``numpy()`` if the attribute is a torch.Tensor.
 
         Returns
         -------
-        inspect_dict
-            A dict with keys `train`, `val`, and `test` if ``df`` is not given, and each of the values contains the
-            attributes requested. If ``df`` is given, a dict with a single key `USER_INPUT` and the corresponding value
-            contains the attributes. The prediction is also included with the key `prediction`.
+        dict
+            A dict with keys ``train``, ``val``, and ``test`` if ``df`` is not given, and each value contains
+            the attributes requested. If ``df`` is given, a dict with a single key ``USER_INPUT`` and the corresponding
+            value contains the attributes. The prediction is also included with the key ``prediction``.
         """
 
         def to_cpu(attr):
@@ -717,18 +779,18 @@ class AbstractModel:
         self, verbose: bool = True, test_data_only: bool = False
     ) -> Dict[str, Dict]:
         """
-        Predict training/validation/testing datasets to evaluate the performance of all models.
+        Make inferences on training/validation/testing datasets to evaluate the performance of all models.
 
         Parameters
         ----------
         verbose:
             Verbosity.
         test_data_only:
-            Whether to predict only testing datasets. If True, the whole dataset will be evaluated.
+            Whether to predict only the testing set. If True, the whole dataset will be evaluated.
 
         Returns
         -------
-        predictions:
+        dict
             A dict of results. Its keys are "Training", "Testing", and "Validation". Its values are tuples containing
             predicted values and ground truth values
         """
@@ -786,20 +848,21 @@ class AbstractModel:
         Parameters
         ----------
         df:
-            A new tabular dataset that has the same structure as self.trainer.datamodule.X_test.
+            A new tabular dataset that has the same structure as ``self.trainer.datamodule.X_test``.
         model_name:
             A name of a selected model, which is already trained. It is used to process the input data if any specific
-            routine is defined for this model.
+            routine is defined for this model in :meth:`~AbstractModel._data_preprocess`.
         derived_data:
-            Data derived from datamodule.derive that has the same structure as self.trainer.datamodule.D_test.
+            Unstacked data derived from :meth:`tabensemb.data.datamodule.DataModule.derive_unstacked` that has the
+            same structure as ``self.trainer.datamodule.D_test``.
         model:
-            The `model_name` model. If None, the model will be loaded from self.model.
+            The model returned by :meth:`_new_model`. If None, the model will be loaded from ``self.model``.
         **kwargs:
             Ignored.
 
         Returns
         -------
-        pred:
+        np.ndarray
             Prediction of the target.
         """
         self.trainer.set_status(training=False)
@@ -812,18 +875,18 @@ class AbstractModel:
 
     def _custom_training_params(self, model_name) -> Dict:
         """
-        Customized training settings to override settings in the configuration file. Functional keys are `epoch`,
-        `patience`, and `bayes_calls`.
+        Customized training settings to override settings in the configuration. Functional keys are ``epoch``,
+        ``patience``, and ``bayes_calls``.
 
         Parameters
         ----------
         model_name
-            A name of a selected model
+            The name of a selected model
 
         Returns
         -------
-        params
-            A dict of training params.
+        dict
+            A dict of training parameters.
         """
         return {}
 
@@ -837,19 +900,19 @@ class AbstractModel:
     ):
         """
         The basic framework of training models, including processing the dataset, training each model (with/without
-        bayesian hyperparameter optimization), and make simple predictions.
+        bayesian hyperparameter optimization), and evaluating them on the dataset.
 
         Parameters
         ----------
         model_subset:
-            The names of a subset of all available models (in :func:``get_model_names`). Only these models will be
+            The names of a subset of all available models (in :func:`get_model_names`). Only these models will be
             trained.
         dump_trainer:
             Whether to save the trainer after models are trained.
         verbose:
             Verbosity.
         warm_start:
-            Whether to train models based on previous trained models.
+            Finetune models based on previous trained models.
         **kwargs:
             Ignored.
         """
@@ -1049,7 +1112,7 @@ class AbstractModel:
 
     def _default_metric_sklearn(self, y_true, y_pred):
         """
-        Calculate MSE loss for regression tasks and log loss for classification tasks using sklearn apis.
+        Calculate MSE loss for regression tasks and log loss for classification tasks using sklearn APIs.
 
         Parameters
         ----------
@@ -1060,9 +1123,9 @@ class AbstractModel:
 
         Returns
         -------
-        metric
+        str
             "mse" for regression tasks and "log_loss" for classification tasks.
-        loss
+        float
             MSE loss for regression tasks and log loss for classification tasks
         """
         task = self.trainer.datamodule.task
@@ -1088,12 +1151,26 @@ class AbstractModel:
         y_val,
     ):
         """
-        Evaluating the model for bayesian optimization iterations. The validation error is returned directly.
+        Evaluate the model for Bayesian optimization iterations. The larger one of the training loss and the validation
+        loss is returned by default.
+
+        Parameters
+        ----------
+        model
+            The model returned by :meth:`_new_model`.
+        X_train
+            The training data from :meth:`_train_data_preprocess`.
+        y_train
+            The target of the training data from :meth:`_train_data_preprocess`.
+        X_val
+            The validation data from :meth:`_train_data_preprocess`.
+        y_val
+            The target of the validation data from :meth:`_train_data_preprocess`.
 
         Returns
         -------
-        result
-            The evaluation of bayesian hyperparameter optimization.
+        float
+            The metric of the Bayesian hyperparameter optimization iteration.
         """
         y_val_pred = self._pred_single_model(model, X_val, verbose=False)
         _, val_loss = self._default_metric_sklearn(y_val, y_val_pred)
@@ -1103,7 +1180,7 @@ class AbstractModel:
 
     def _check_train_status(self):
         """
-        Raise exception if _predict is called and the modelbase is not trained.
+        Raise exception if _predict is called and the model base is not trained.
         """
         if not self._trained:
             raise Exception(
@@ -1112,7 +1189,7 @@ class AbstractModel:
 
     def _get_params(self, model_name: str, verbose=True) -> Dict[str, Any]:
         """
-        Load default parameters or optimized parameters of the selected model.
+        Load default parameters or optimized parameters (if Bayesian optimization is performed) of the selected model.
 
         Parameters
         ----------
@@ -1123,8 +1200,8 @@ class AbstractModel:
 
         Returns
         -------
-        params:
-            A dict of parameters
+        dict
+            A dict of parameters that contains all keys in :meth:`_initial_values`.
         """
         if model_name not in self.model_params.keys():
             return self._initial_values(model_name=model_name)
@@ -1135,6 +1212,9 @@ class AbstractModel:
 
     @property
     def _trained(self) -> bool:
+        """
+        True if :meth:`train` has been called, otherwise False.
+        """
         if self.model is None:
             return False
         else:
@@ -1142,9 +1222,16 @@ class AbstractModel:
 
     @property
     def _support_warm_start(self) -> bool:
+        """
+        If the model base cannot finetune a model, this is set to False.
+        """
         return True
 
     def _check_space(self):
+        """
+        Check if all parameters defined in :meth:`_initial_values` have corresponding search spaces defined in
+        :meth:`_space`.
+        """
         any_mismatch = False
         for model_name in self.get_model_names():
             tmp_params = self._get_params(model_name, verbose=False)
@@ -1163,7 +1250,7 @@ class AbstractModel:
 
     def _mkdir(self):
         """
-        Create a directory for the modelbase under the root of the trainer.
+        Create a directory for the model base under the root of the linked :class:`~tabensemb.trainer.Trainer`.
         """
         self.root = os.path.join(self.trainer.project_root, self.program)
         if not os.path.exists(self.root):
@@ -1171,11 +1258,12 @@ class AbstractModel:
 
     def get_model_names(self) -> List[str]:
         """
-        Get names of available models. It can be selected when initializing the modelbase.
+        Get names of available models based on :meth:`_get_model_names` and the arguments ``model_subset`` or
+        ``exclude_models`` of :meth:`__init__`.
 
         Returns
         -------
-        names:
+        list
             Names of available models.
         """
         if self.model_subset is not None:
@@ -1195,28 +1283,28 @@ class AbstractModel:
     @staticmethod
     def _get_model_names() -> List[str]:
         """
-        Get all available models implemented in the modelbase.
+        Get names of all available models implemented in the model base.
 
         Returns
         -------
-        names:
+        list
             Names of available models.
         """
         raise NotImplementedError
 
     def _get_program_name(self) -> str:
         """
-        Get the default name of the modelbase.
+        Get the default name of the model base.
 
         Returns
         -------
-        name:
-            The default name of the modelbase.
+        str
+            The default name of the model base.
         """
         raise NotImplementedError
 
-    # Following methods are for the default _train and _predict methods. If users directly overload _train and _predict,
-    # following methods are not required to be implemented.
+    # The following methods are for the default _train and _predict methods. If users directly overload _train and
+    # _predict, the following methods are not required to be implemented.
     def _new_model(self, model_name: str, verbose: bool, **kwargs):
         """
         Generate a new selected model based on kwargs.
@@ -1228,19 +1316,25 @@ class AbstractModel:
         verbose:
             Verbosity.
         **kwargs:
-            Parameters to generate the model. It contains all arguments in :func:`_initial_values`.
+            Parameters to generate the model returned by :meth:`_get_params`. It contains all arguments in
+            :meth:`_initial_values`. If any model is required, which is defined in :meth:`required_models`, there will
+            be a named argument "required_models" containing required models extracted by :meth:`_get_required_models`.
 
         Returns
         -------
         model:
-            A new model (without any restriction to its type). It will be passed to :func:`_train_single_model` and
-            :func:`_pred_single_model`.
+            A new model (without any restriction to its type). It will be passed to :meth:`_train_single_model` and
+            :meth:`_pred_single_model`.
+
+        See Also
+        --------
+        :meth:`new_model`
         """
         raise NotImplementedError
 
     def _train_data_preprocess(self, model_name) -> Union[DataModule, dict]:
         """
-        Processing the data from self.trainer.datamodule for training.
+        Processing the data from ``self.trainer.datamodule`` for training.
 
         Parameters
         -------
@@ -1249,15 +1343,14 @@ class AbstractModel:
 
         Returns
         -------
-        data
-            The returned value should be a ``Dict`` that has the following keys:
-            X_train, y_train, X_val, y_val, X_test, y_test.
-            Those with postfixes ``_train`` or ``_val`` will be passed to `_train_single_model` and ``_bayes_eval`.
-            All of them will be passed to ``_pred_single_model``.
+        dict
+            A dictionary that has the following keys: X_train, y_train, X_val, y_val, X_test, y_test.
+            Those with postfixes ``_train`` or ``_val`` will be passed to :meth:`_train_single_model` and
+            :meth:`_bayes_eval`. All of them will be passed to :meth:`_pred_single_model` for evaluation.
 
         Notes
         -------
-        self.trainer.datamodule.X_train/val/test are not scaled for the sake of further treatments. To scale the df,
+        ``self.trainer.datamodule.X_train/val/test`` are not scaled. To scale the df,
         run ``df = datamodule.data_transform(df, scaler_only=True)``
         """
         raise NotImplementedError
@@ -1266,26 +1359,26 @@ class AbstractModel:
         self, df: pd.DataFrame, derived_data: Dict[str, np.ndarray], model_name: str
     ) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
         """
-        Perform the same preprocessing as :func:`_train_data_preprocess` on a new dataset.
+        Perform the same preprocessing as in :meth:`_train_data_preprocess` on a new dataset.
 
         Parameters
         ----------
         df:
-            The new tabular dataset that has the same structure as self.trainer.datamodule.X_test
+            The new tabular dataset that has the same structure as ``self.trainer.datamodule.X_test``
         derived_data:
-            Data derived from datamodule.derive that has the same structure as self.trainer.datamodule.D_test.
+            Unstacked data derived from :meth:`tabensemb.data.datamodule.DataModule.derive_unstacked`. If None,
+            unstacked data will be re-derived.
         model_name:
             The name of a selected model.
 
         Returns
         -------
-        data:
-            The processed data (X_test).
+        Any
+            The processed data that has the same structure as X_test from :meth:`_train_data_preprocess`.
 
         Notes
         -------
-        The input df is not scaled for the sake of further treatments. To scale the df,
-        run ``df = datamodule.data_transform(df, scaler_only=True)``
+        The input df is not scaled. To scale the df, run ``df = datamodule.data_transform(df, scaler_only=True)``
         """
         raise NotImplementedError
 
@@ -1303,12 +1396,12 @@ class AbstractModel:
         **kwargs,
     ):
         """
-        Training the model (initialized in :func:`_new_model`).
+        Training the model (initialized in :meth:`_new_model`).
 
         Parameters
         ----------
         model:
-            The model initialized in :func:`_new_model`.
+            The model returned by :meth:`_new_model`.
         epoch:
             Total epochs to train the model.
         X_train:
@@ -1322,11 +1415,12 @@ class AbstractModel:
         verbose:
             Verbosity.
         warm_start:
-            Whether to train models based on previous trained models.
+            Finetune models based on previous trained models.
         in_bayes_opt:
-            Whether is in bayes optimization loop.
+            Whether is in a Bayesian optimization loop.
         **kwargs:
-            Parameters to train the model. It contains all arguments in :func:`_initial_values`.
+            Parameters to train the model returned by :meth:`_get_params`. It contains all arguments in
+            :meth:`_initial_values`.
         """
         raise NotImplementedError
 
@@ -1334,45 +1428,47 @@ class AbstractModel:
         self, model: Any, X_test: Any, verbose: bool, **kwargs
     ) -> np.ndarray:
         """
-        Predict with the model trained in :func:`_train_single_model`.
+        Predict using the model trained in :meth:`_train_single_model`.
 
         Parameters
         ----------
         model:
-            The model trained in :func:`_train_single_model`.
+            The model returned by :meth:`_new_model` and trained in :meth:`_train_single_model`.
         X_test:
-            The testing data from :func:`_data_preprocess`.
+            The data from :meth:`_data_preprocess` or :meth:`_train_data_preprocess`.
         verbose:
             Verbosity.
         **kwargs:
-            Parameters to train the model. It contains all arguments in :func:`_initial_values`.
+            Parameters to train the model returned by :meth:`_get_params`. It contains all arguments in
+            :meth:`_initial_values`.
 
         Returns
         -------
-        pred:
+        np.ndarray
             Prediction of the target.
 
         Notes
         -------
-        For deep learning models with mini-batch training (dataloaders), if an AbstractWrapper will be used for the model
-        base, the ``batch_size`` when inferring should be the length of the dataset. See ``PytorchTabular._pred_single_model``
-        and ``WideDeep._pred_single_model``.
+        For deep learning models with mini-batch training (dataloaders), if an :class:`AbstractWrapper` will be used to extract
+        hidden representations, the ``batch_size`` when inferring should be the length of the dataset. See
+        :meth:`tabensemb.model.PytorchTabular._pred_single_model` and :meth:`tabensemb.model.WideDeep._pred_single_model`.
         """
         raise NotImplementedError
 
     def _space(self, model_name: str) -> List[Union[Integer, Real, Categorical]]:
         """
-        A list of scikit-optimize search space for the selected model.
+        A list of ``scikit-optimize`` search spaces for the selected model. It should contain all parameters
+        defined in :meth:`_initial_values`.
 
         Parameters
         ----------
         model_name:
-            The name of a selected model that is currently going through bayes optimization.
+            The name of a selected model that is currently going through Bayesian optimization.
 
         Returns
         -------
-        space:
-            A list of skopt.space.
+        list
+            A list of ``skopt.space``.
         """
         raise NotImplementedError
 
@@ -1387,7 +1483,7 @@ class AbstractModel:
 
         Returns
         -------
-        params:
+        dict
             A dict of initial hyperparameters.
         """
         raise NotImplementedError
@@ -1399,18 +1495,19 @@ class AbstractModel:
         Parameters
         ----------
         model_name:
-            The name of a model in _get_model_names().
+            The name of a model in :meth:`_get_model_names`.
 
         Returns
         -------
-            Whether the model is valid for training under certain settings.
+        bool
+            Whether the model can be trained under certain settings.
         """
         return True
 
 
 class BayesCallback:
     """
-    Print information when performing bayes optimization.
+    Print information when performing Bayesian optimization.
     """
 
     def __init__(self, total):
@@ -1448,22 +1545,23 @@ class BayesCallback:
 
 class TorchModel(AbstractModel):
     """
-    The specific class for PyTorch-like models. Some abstract methods in AbstractModel are implemented.
+    The class for PyTorch-like models. Some abstract methods in :class:`AbstractModel` are implemented.
     """
 
     def cal_feature_importance(self, model_name, method, call_general_method=False):
         """
-        Calculate feature importance with a specified model. ``captum`` and ``shap`` is called.
+        Calculate feature importance using a specified model. ``captum`` or ``shap`` is called.
 
         Parameters
         ----------
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         method
             The method to calculate importance. "permutation" or "shap".
         call_general_method
-            Call the general feature importance calculation from ``AbstractModel`` instead of the optimized procedure
-            for deep learning models. This is useful when calculating importance for models that require other models.
+            Call the general feature importance calculation :meth:`AbstractModel.cal_feature_importance` instead of the
+            optimized procedure for deep learning models. This is useful when calculating the feature importance of
+            models that require other models.
 
         Returns
         ----------
@@ -1538,16 +1636,17 @@ class TorchModel(AbstractModel):
 
     def cal_shap(self, model_name: str, call_general_method=False) -> np.ndarray:
         """
-        Calculate SHAP values with a specified model. If the modelbase is a ``TorchModel``, the ``shap.DeepExplainer``
-        is used.
+        Calculate SHAP values using a specified model. If the model base is a :class:`TorchModel`, the
+        ``shap.DeepExplainer`` is used.
 
         Parameters
         ----------
-        program
-            The selected modelbase.
         model_name
-            The selected model in the modelbase.
+            The selected model in the model base.
         call_general_method
+            Call the general shap calculation :meth:`AbstractModel.cal_shap` instead of the
+            optimized procedure for deep learning models. This is useful when calculating the feature importance of
+            models that require other models.
 
         Returns
         -------
@@ -1626,13 +1725,35 @@ class TorchModel(AbstractModel):
             "y_test": datamodule.y_test,
         }
 
-    def _prepare_custom_datamodule(self, model_name) -> DataModule:
+    def _prepare_custom_datamodule(self, model_name: str) -> DataModule:
         """
-        Change this method if a customized preprocessing stage is needed. See ``sample.py`` for example.
+        Change this method if a customized preprocessing stage is needed. See :class:`tabensemb.model.CatEmbed` for example.
+
+        See Also
+        --------
+        :meth:`_run_custom_data_module`
         """
         return self.trainer.datamodule
 
-    def _generate_dataset(self, datamodule, model_name):
+    def _generate_dataset(self, datamodule: DataModule, model_name: str):
+        """
+        Generate ``torch.utils.data.Dataset`` for training.
+
+        Parameters
+        ----------
+        datamodule
+            The :class:`tabensemb.data.datamodule.DataModule` returned by :meth:`_prepare_custom_datamodule`.
+        model_name
+            The name of the selected model.
+
+        Returns
+        -------
+        torch.utils.data.Dataset
+
+        See Also
+        ---------
+        :meth:`_generate_dataset_from_tensors`
+        """
         required_models = self._get_required_models(model_name)
         if required_models is None:
             train_dataset, val_dataset, test_dataset = (
@@ -1655,19 +1776,21 @@ class TorchModel(AbstractModel):
     @staticmethod
     def get_full_name_from_required_model(required_model, model_name=None):
         """
-        Get the name of a required_model to access data in derived_tensors.
+        Get the name of a required model to store or access data in ``derived_tensors`` passed to
+        :meth:`AbstractNN._forward`.
 
         Parameters
         ----------
         required_model
-            A required model specified in ``required_models()``.
+            A required model specified in :meth:`AbstractModel.required_models` and extracted by
+            :meth:`AbstractModel._get_required_models`.
         model_name
             The name of the required model. It is necessary if the model comes from the same model base.
 
         Returns
         -------
-        full_name
-            The name of a required_model
+        str
+            The name of a required model
         """
         if isinstance(required_model, AbstractWrapper) or isinstance(
             required_model, AbstractModel
@@ -1691,6 +1814,27 @@ class TorchModel(AbstractModel):
     def _generate_dataset_for_required_models(
         self, df, derived_data, tensors, required_models
     ):
+        """
+        Call :meth:`AbstractModel._data_preprocess` to generate the dataset, output, and hidden representations for the
+        required model
+
+        Parameters
+        ----------
+        df
+            The new tabular dataset that has the same structure as ``self.trainer.datamodule.X_test``
+        derived_data
+            Unstacked data derived from :meth:`tabensemb.data.datamodule.DataModule.derive_unstacked`.
+        tensors
+            Tensors stored in a :class:`tabensemb.data.datamodule.DataModule` and obtained by
+            :meth:`tabensemb.data.datamodule.DataModule.update_dataset`
+        required_models
+            Required models specified in :meth:`AbstractModel.required_models` and extracted by
+            :meth:`AbstractModel._get_required_models`.
+
+        Returns
+        -------
+        torch.utils.data.Dataset
+        """
         full_data_required_models = {}
         for name, mod in required_models.items():
             full_name = TorchModel.get_full_name_from_required_model(
@@ -1729,12 +1873,45 @@ class TorchModel(AbstractModel):
 
     def _run_custom_data_module(self, df, derived_data, model_name):
         """
-        Change this method if a customized preprocessing stage is implemented in ``_prepare_custom_datamodule``.
-        See ``sample.py`` for example.
+        Change this method if a customized preprocessing stage is implemented in :meth:`_prepare_custom_datamodule`.
+        See :class:`tabensemb.model.CatEmbed` for example.
+
+        See Also
+        ---------
+        :meth:`_prepare_custom_datamodule`
         """
         return df, derived_data, self.trainer.datamodule
 
     def _prepare_tensors(self, df, derived_data, model_name):
+        """
+        Transform the upcoming dataset into Tensors that has the same structures as those stored in a
+        :class:`tabensemb.data.datamodule.DataModule` and obtained by
+        :meth:`tabensemb.data.datamodule.DataModule.update_dataset`.
+
+        Parameters
+        ----------
+        df
+            The new tabular dataset that has the same structure as ``self.trainer.datamodule.X_test``
+        derived_data
+            Unstacked data derived from :meth:`tabensemb.data.datamodule.DataModule.derive_unstacked`.
+        model_name
+            The name of the selected model.
+
+        Returns
+        -------
+        A tuple of torch.Tensor
+            Transformed tensors.
+        pd.DataFrame
+            The transformed dataset after running :meth:`_run_custom_data_module`.
+        dict
+            The derived unstacked data after running :meth:`_run_custom_data_module`
+        DataModule
+            The :class:`tabensemb.data.datamodule.DataModule` returned by :meth:`_prepare_custom_data_module`
+
+        See Also
+        --------
+        :meth:`tabensemb.data.datamodule.DataModule.update_dataset`
+        """
         df, derived_data, datamodule = self._run_custom_data_module(
             df, derived_data, model_name
         )
@@ -1744,6 +1921,29 @@ class TorchModel(AbstractModel):
         return tensors, df, derived_data, datamodule
 
     def _generate_dataset_from_tensors(self, tensors, df, derived_data, model_name):
+        """
+        Perform the same preprocessing as in :meth:`_generate_dataset` on a new dataset.
+
+        Parameters
+        ----------
+        tensors
+            Tensors that has the same structures as those stored in a :class:`tabensemb.data.datamodule.DataModule` and
+            obtained by :meth:`tabensemb.data.datamodule.DataModule.update_dataset`.
+        df
+            The transformed dataset after running :meth:`_run_custom_data_module`.
+        derived_data
+            The derived unstacked data after running :meth:`_run_custom_data_module`
+        model_name
+            The name of the selected model.
+
+        Returns
+        -------
+        torch.utils.data.Dataset
+
+        See Also
+        ---------
+        :meth:`_generate_dataset`
+        """
         required_models = self._get_required_models(model_name)
         if required_models is None:
             dataset = Data.TensorDataset(*tensors)
@@ -1757,6 +1957,12 @@ class TorchModel(AbstractModel):
         return dataset
 
     def _data_preprocess(self, df, derived_data, model_name):
+        # In _train_data_preprocess:
+        # 1. prepare_custom_datamodule + DataModule.update_dataset
+        # 2. _generate_dataset using tensors in DataModule
+        # In _data_preprocess
+        # 1. _prepare_tensors = _run_custom_data_module + update_dataset
+        # 2. _generate_dataset_from_tensors is very similar to _generate_dataset, but does not split it into three parts.
         tensors, df, derived_data, _ = self._prepare_tensors(
             df, derived_data, model_name
         )
@@ -1778,6 +1984,13 @@ class TorchModel(AbstractModel):
         in_bayes_opt,
         **kwargs,
     ):
+        """
+        ``pytorch_lightning`` implementation of training a pytorch model.
+
+        See Also
+        --------
+        :meth:`AbstractModel._train_single_model`
+        """
         if not isinstance(model, AbstractNN):
             raise Exception(
                 f"_new_model must return an AbstractNN instance, but got {model}."
@@ -1890,6 +2103,21 @@ class TorchModel(AbstractModel):
         return self.trainer.chosen_params
 
     def count_params(self, model_name, trainable_only=False):
+        """
+        Count the number of parameters in a ``torch.nn.Module``
+
+        Parameters
+        ----------
+        model_name
+            The name of the selected model
+        trainable_only
+            Only count trainable (requires_grad=True) parameters.
+
+        Returns
+        -------
+        float
+            The number of parameters
+        """
         if self.model is not None and model_name in self.model.keys():
             model = self.model[model_name]
         else:
@@ -1906,8 +2134,8 @@ class TorchModel(AbstractModel):
 
 class AbstractWrapper:
     """
-    For those deep learning models required by TorchModel, this is a wrapper to make them have hidden information like
-    ``hidden_representation`` or something else from the forward process.
+    For those required deep learning models, this is a wrapper to make them have hidden information like
+    ``hidden_representation`` or something else extracted from the forward process.
     """
 
     def __init__(self, model: AbstractModel):
@@ -1938,17 +2166,30 @@ class AbstractWrapper:
         return AbstractNN.call_required_model(self.wrapped_model, x, derived_tensors)
 
     def wrap_forward(self):
+        """
+        Override the forward method of a torch.nn.Module to record hidden representations.
+        """
         raise NotImplementedError
 
     def reset_forward(self):
+        """
+        Reset the overridden forward method of the torch.nn.Module to ensure pickling compatibility.
+        """
         raise NotImplementedError
 
     @property
     def hidden_rep_dim(self):
+        """
+        The dimension of :meth:`hidden_representation`.
+        """
         raise NotImplementedError
 
     @property
     def hidden_representation(self):
+        """
+        The extracted information of a deep learning model when forward-passing a batch. It is usually the input of the
+        last output layer (usually a linear layer or an MLP).
+        """
         raise NotImplementedError
 
     def __getstate__(self):
@@ -1980,14 +2221,51 @@ class TorchModelWrapper(AbstractWrapper):
 
 
 class AbstractNN(pl.LightningModule):
+    """
+    A subclass of ``pytorch_lightning.LightningModule`` that is compatible with :class:`TorchModel` and has implemented
+    training and inferencing steps.
+    """
+
     def __init__(self, datamodule: DataModule, **kwargs):
         """
-        PyTorch model that contains derived data names and dimensions from the trainer.
+        Record useful information for initializing and training models.
 
         Parameters
         ----------
         datamodule:
-            A DataModule instance.
+            A :class:`tabensemb.data.datamodule.DataModule` instance.
+
+        Attributes
+        ----------
+        default_loss_fn
+            The name of the default loss function returned by :meth:`get_loss_fn`
+        default_output_norm
+            The name of the default output normalization returned by :meth:`get_output_norm`
+        cont_feature_names
+            The names of continuous features
+        cat_feature_names
+            The names of categorical features
+        n_cont
+            The number of continuous features
+        n_cat
+            The number of categorical features
+        derived_feature_names
+            The keys of derived unstacked features.
+        derived_feature_dims
+            The dimensions of derived unstacked features
+        task
+            "regression", "binary", or "multiclass"
+        n_outputs
+            The number of outputs. Note that for classification tasks, logits are returned instead of probabilities.
+            For binary classification, the logit for the positive class is returned.
+        cat_num_unique
+            The number of unique values for each categorical feature.
+        hidden_representation
+            The extracted information of a deep learning model when forward-passing a batch.
+            It is usually the input of the last output layer (usually a linear layer or an MLP). It should be manually
+            recorded in :meth:`_forward`.
+        hidden_rep_dim
+            The dimension of :attr:`hidden_representation`. It should be manually set in :meth:`__init__`.
         """
         super(AbstractNN, self).__init__()
         self.default_loss_fn = self.get_loss_fn(datamodule.loss, datamodule.task)
@@ -2028,7 +2306,7 @@ class AbstractNN(pl.LightningModule):
     @staticmethod
     def get_output_norm(task) -> torch.nn.Module:
         """
-        The operation on the output of ``forward`` in training/validation/testing step. This will not affect the input
+        The operation on the output of ``forward`` in training/validation/testing steps. This will not affect the input
         of loss functions.
 
         Parameters
@@ -2038,7 +2316,7 @@ class AbstractNN(pl.LightningModule):
 
         Returns
         -------
-        nm
+        nn.Module
             The operation on the output.
         """
         task_norm = {
@@ -2065,7 +2343,7 @@ class AbstractNN(pl.LightningModule):
 
         Returns
         -------
-        loss_fn
+        nn.Module
             The loss function.
         """
         if task in ["binary", "multiclass"] and loss != "cross_entropy":
@@ -2087,6 +2365,9 @@ class AbstractNN(pl.LightningModule):
 
     @property
     def device(self):
+        """
+        The device where the model is.
+        """
         return self._device_var.device
 
     def forward(
@@ -2095,27 +2376,21 @@ class AbstractNN(pl.LightningModule):
         data_required_models: Dict[str, pd.DataFrame] = None,
     ) -> torch.Tensor:
         """
-        A wrapper of the original forward of nn.Module. Input data are tensors with no names, but their names are
-        obtained during initialization, so that a dict of derived data with names is generated and passed to
-        :func:`_forward`.
+        A wrapper of the original forward of ``nn.Module`` for compatibility concerns.
 
         Parameters
         ----------
         tensors:
-            Input tensors to the torch model.
+            Input tensors to the torch model. They have the same structures as the ``tensors`` stored in
+            :meth:`tabensemb.data.datamodule.DataModule`
         data_required_models:
-            The corresponding data processed by the required models (see ``AbstractModel.required_models`` and
-            ``AbstractModel._data_preprocess``).
+            The datasets for required models processed by their own :meth:`AbstractModel._train_data_preprocess` or
+            :meth:`AbstractModel._data_preprocess` methods. See :meth:`TorchModel._generate_dataset_for_required_models`
 
         Returns
         -------
-        result:
-            The obtained tensor.
-
-        Notes
-        -------
-        For classification tasks, DO NOT turn logits into probabilities in ``forward`` because we have already
-        implemented this later. See also ``get_output_norm``.
+        torch.Tensor
+            The output from :meth:`_forward`.
         """
         with torch.no_grad() if tabensemb.setting[
             "test_with_no_grad"
@@ -2142,6 +2417,29 @@ class AbstractNN(pl.LightningModule):
     def _forward(
         self, x: torch.Tensor, derived_tensors: Dict[str, torch.Tensor]
     ) -> torch.Tensor:
+        """
+        The real forward method.
+
+        Parameters
+        ----------
+        x
+            A tensor that contains continuous features.
+        derived_tensors
+            It mostly has the same structure as the derived unstacked data ``derived_data`` stored in a
+            :class:`tabensemb.data.datamodule.DataModule`. If some models are required (defined in
+            :meth:`AbstractModel.required_models`), there will be a key named "data_required_models" containing the
+            data batch, the output, and possibly the hidden representation of the required models.
+
+        Returns
+        -------
+        torch.Tensor
+            The output of the model.
+
+        Notes
+        -------
+        For classification tasks, DO NOT turn logits into probabilities here because we have already
+        implemented this later. See also :meth:`output_norm`.
+        """
         raise NotImplementedError
 
     def training_step(self, batch: Any, batch_idx: Any):
@@ -2210,14 +2508,19 @@ class AbstractNN(pl.LightningModule):
         Parameters
         ----------
         test_loader:
-            The DataLoader of the testing dataset.
+            The ``DataLoader`` of the testing dataset.
         **kwargs:
-            Parameters to train the model. It contains all arguments in :func:`_initial_values`.
+            Parameters to train the model returned by :meth:`AbstractModel._get_params`. It contains all arguments in
+            :meth:`AbstractModel._initial_values`.
 
         Returns
         -------
-        results:
-            The prediction, ground truth, and loss of the model on the testing dataset.
+        np.ndarray
+            The prediction. Always a 2d ``torch.Tensor``.
+        np.ndarray
+            The ground truth. Always a 2d ``torch.Tensor``.
+        float
+            The default loss :meth:`get_loss_fn` of the model on the testing dataset.
         """
         self.eval()
         pred = []
@@ -2257,6 +2560,23 @@ class AbstractNN(pl.LightningModule):
         return all_pred, all_truth, avg_loss
 
     def before_loss_fn(self, y, yhat):
+        """
+        Treatments on the prediction and the ground truth before passing them to :meth:`loss_fn`.
+
+        Parameters
+        ----------
+        y
+            The prediction from :meth:`forward`.
+        yhat
+            The ground truth.
+
+        Returns
+        -------
+        torch.Tensor
+            The processed prediction
+        torch.Tensor
+            The processed ground truth
+        """
         if self.task == "binary":
             y = torch.flatten(y)
             yhat = torch.flatten(yhat)
@@ -2271,40 +2591,45 @@ class AbstractNN(pl.LightningModule):
         Parameters
         ----------
         y_true:
-            Ground truth value.
+            The ground truth.
         y_pred:
-            Predicted value by the model.
+            The predictions from the model (from :meth:`forward` and after :meth:`before_loss_fn`).
         *data:
-            Tensors of continuous data and derived data.
+            Tensors of continuous data and derived unstacked data.
         **kwargs:
-            Parameters to train the model. It contains all arguments in :func:`_initial_values`.
+            Parameters to train the model returned by :meth:`AbstractModel._get_params`. It contains all arguments in
+            :meth:`AbstractModel._initial_values`.
 
         Returns
         -------
-        loss:
+        torch.Tensor
             A torch-like loss.
+
+        Notes
+        -------
+        Other attributes in ``self`` can also be used to calculate loss values.
         """
         return self.default_loss_fn(y_pred, y_true)
 
     def output_norm(self, y_pred):
         """
-        User defined operation before output. This is not related to the input of ``loss_fn``.
+        User defined operation before output. This is not related to the input of :meth:`loss_fn`.
 
         Parameters
         ----------
         y_pred
-            Predicted value by the model.
+            The prediction from the model (from :meth:`forward` and after :meth:`before_loss_fn`).
 
         Returns
         -------
-        y_pred
-            The modified value.
+        torch.Tensor
+            The modified prediction.
         """
         return self.default_output_norm(y_pred)
 
     def cal_zero_grad(self):
         """
-        Call optimizer.zero_grad() of the optimizer initialized in `init_optimizer`.
+        Call zero_grad of optimizers initialized in :meth:`configure_optimizers`.
         """
         opt = self.optimizers()
         if isinstance(opt, list):
@@ -2315,12 +2640,16 @@ class AbstractNN(pl.LightningModule):
 
     def cal_backward_step(self, loss):
         """
-        Call loss.backward() and optimizer.step().
+        Perform the backward propagation and optimization steps.
 
         Parameters
         ----------
         loss
-            The loss returned by `loss_fn`.
+            The loss returned by :meth:`loss_fn`.
+
+        Notes
+        --------
+        Other attributes recorded in :meth:`loss_fn` can be also used.
         """
         self.manual_backward(loss)
         opt = self.optimizers()
@@ -2329,6 +2658,24 @@ class AbstractNN(pl.LightningModule):
     def set_requires_grad(
         self, model: nn.Module, requires_grad: bool = None, state=None
     ):
+        """
+        Set or reset requires_grad states of a ``nn.Module``.
+
+        Parameters
+        ----------
+        model
+            A ``nn.Module`` model.
+        requires_grad
+            The requires_grad state for all parameters in the model.
+        state
+            The recorded state when calling this method with the argument ``required_grad`` given.
+
+        Returns
+        -------
+        list
+            The recorded state that can be used as the argument "state" to restore requires_grad states of the same
+            model. Returned when the argument ``requires_grad`` is given.
+        """
         if (requires_grad is None and state is None) or (
             requires_grad is not None and state is not None
         ):
@@ -2356,13 +2703,13 @@ class AbstractNN(pl.LightningModule):
         Parameters
         ----------
         train_loss
-            Training loss at the epoch.
+            The training loss from :attr:`default_loss_fn` of the epoch.
         val_loss
-            Validation loss at the epoch.
+            The validation loss from :attr:`default_loss_fn` of the epoch.
 
         Returns
         -------
-        result
+        float
             The early stopping evaluation.
         """
         return val_loss + 0.0 * train_loss
@@ -2373,20 +2720,28 @@ class AbstractNN(pl.LightningModule):
         required_model: Union[AbstractModel, "AbstractNN", AbstractWrapper],
     ) -> Tuple[bool, int]:
         """
-        Test whether a required model has attribute ``hidden_rep_dim`` and find its value.
+        Test whether a required model has the attribute ``hidden_rep_dim`` and find its value.
 
         Parameters
         ----------
         n_inputs
-            The dimension of input features (i.e. x of _forward)
+            The dimension of the input (i.e. the ``x`` of :meth:`_forward`)
         required_model
-            A required model specified in ``required_models()``.
+            A required model specified in :meth:`AbstractModel.required_models` and extracted by
+            :meth:`AbstractModel._get_required_models`.
 
         Returns
         -------
-        use_hidden_rep, hidden_rep_dim
-            Whether the required model has ``hidden_rep_dim`` and its value. If the required model does not have `
-            `hidden_rep_dim``, 1+``n_inputs`` is returned.
+        bool
+            Whether the required model has the attribute ``hidden_rep_dim``
+        int
+             The dimension of the hidden representation. If the required model does not have the attribute
+             ``hidden_rep_dim``, ``1+n_inputs`` is returned.
+
+        Notes
+        -------
+        For an ``AbstractNN``, whether the hidden representation (:attr:`hidden_representation`) is recorded is not
+        guaranteed.
         """
         if isinstance(required_model, AbstractWrapper):
             hidden_rep_dim = getattr(required_model, "hidden_rep_dim")
@@ -2420,25 +2775,30 @@ class AbstractNN(pl.LightningModule):
         required_model, x, derived_tensors, model_name=None
     ) -> torch.Tensor:
         """
-        Call a required model and return its result. Predictions and hidden representation are already generated
-        before training. If you want to run the required model and further train it, pass a copied derived_tensors
-        leaving its ``data_required_models`` item as an empty dict.
+        Call a required model and return its result. Predictions and hidden representations are generated before
+        training using this method.
 
         Parameters
         ----------
         required_model
-            A required model specified in ``required_models()``.
+            A required model specified in :meth:`AbstractModel.required_models` and extracted by
+            :meth:`AbstractModel._get_required_models`.
         x
-            See AbstractNN._forward.
+            See :meth:`_forward`.
         derived_tensors
-            See AbstractNN._forward.
+            See :meth:`_forward`.
         model_name
             The name of the required model. It is necessary if the model comes from the same model base.
 
         Returns
         -------
-        dl_pred
+        torch.Tensor
             The result of the required model.
+
+        Notes
+        -------
+        If you want to run the required model and further train it, pass a copied
+        ``derived_tensors`` after removing the ``{MODEL_NAME}_pred`` item in its ``data_required_models`` item.
         """
         device = x.device if x is not None else "cpu"
         full_name = TorchModel.get_full_name_from_required_model(
@@ -2477,24 +2837,26 @@ class AbstractNN(pl.LightningModule):
         required_model, x, derived_tensors, model_name=None
     ) -> Union[torch.Tensor, None]:
         """
-        The output of the last hidden layer of a deep learning model, i.e. the hidden representation, whose dimension is
-        (batch_size, required_model.hidden_rep_dim).
+        The input of the last layer of a deep learning model, i.e. the hidden representation, whose dimension is
+        (batch_size, required_model.hidden_rep_dim). The definition can be different for different models, depending on
+        the different implementations of :class:`AbstractWrapper` for different model bases.
 
         Parameters
         ----------
         required_model
-            A required model specified in ``required_models()``.
+            A required model specified in :meth:`AbstractModel.required_models` and extracted by
+            :meth:`AbstractModel._get_required_models`.
         x
-            See AbstractNN._forward.
+            See :meth:`_forward`.
         derived_tensors
-            See AbstractNN._forward.
+            See :meth:`_forward`.
         model_name
             The name of the required model. It is necessary if the model comes from the same model base.
 
         Returns
         -------
-        hidden
-            The output of the last hidden layer of a deep learning model.
+        torch.Tensor
+            The input of the last layer of a deep learning model.
         """
         device = x.device if x is not None else "cpu"
         full_name = TorchModel.get_full_name_from_required_model(

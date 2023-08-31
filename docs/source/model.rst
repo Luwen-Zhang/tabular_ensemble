@@ -19,7 +19,7 @@ Adaptation for PyTorch
 .. autoclass:: AbstractNN
     :members:
 
-For Merged Model Bases
+For Supported Model Bases
 -----------------------------
 
 .. autoclass:: AutoGluon
@@ -31,13 +31,13 @@ For Merged Model Bases
 .. autoclass:: PytorchTabular
     :members:
 
-An Example for TorchModel
+An Example of TorchModel
 -----------------------------
 
 .. autoclass:: CatEmbed
     :members:
 
-Get Hidden Representations from Other Models
+Get Hidden Representations from Models
 --------------------------------------------
 
 .. autoclass:: AbstractWrapper

@@ -52,7 +52,7 @@ autodoc_default_options = {
     "special-members": True,
     "undoc-members": False,
     "exclude-members": "__weakref__, __dict__,__module__",
-    "private-members": False,
+    "private-members": True,
 }
 
 templates_path = ["_templates"]
@@ -64,3 +64,10 @@ exclude_patterns = []
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+
+html_context = {
+    "display_github": True,
+    "github_user": "LuoXueling",
+    "github_repo": "tabular_ensemble",
+    "github_version": "main/docs/source/",
+}
