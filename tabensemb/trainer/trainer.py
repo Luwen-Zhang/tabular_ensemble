@@ -1795,9 +1795,7 @@ class Trainer:
         for col_idx in range(expected_value_bootstrap_replications.shape[1]):
             y_pred = expected_value_bootstrap_replications[:, col_idx]
             if len(y_pred) != 1 and len(np.unique(y_pred)) != 1:
-                ci_int = st.norm.interval(
-                    alpha=CI, loc=np.mean(y_pred), scale=np.std(y_pred)
-                )
+                ci_int = st.norm.interval(CI, loc=np.mean(y_pred), scale=np.std(y_pred))
             else:
                 ci_int = (np.nan, np.nan)
             ci_left.append(ci_int[0])

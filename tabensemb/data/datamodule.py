@@ -79,6 +79,7 @@ class DataModule:
     val_indices
         Indices of the validation set in the entire dataset (:attr:`df`).
     """
+
     def __init__(
         self,
         config: Union[UserConfig, Dict],
