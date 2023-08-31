@@ -19,6 +19,7 @@ grammar faults and typos.
    examples/get_started/new_dataset
    examples/get_started/inference
    examples/get_started/use_data_functionalities
+   examples/get_started/plotting
 
 .. toctree::
    :maxdepth: 2
