@@ -311,17 +311,19 @@ class StandardScaler(AbstractScaler):
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         scaler = skStandardScaler()
-        data.loc[:, datamodule.cont_feature_names] = scaler.fit_transform(
-            data.loc[:, datamodule.cont_feature_names]
-        ).astype(np.float32)
+        if len(datamodule.cont_feature_names) > 0:
+            data.loc[:, datamodule.cont_feature_names] = scaler.fit_transform(
+                data.loc[:, datamodule.cont_feature_names]
+            ).astype(np.float32)
 
         self.transformer = scaler
         return data
 
     def _transform(self, data: pd.DataFrame, datamodule: DataModule):
-        data.loc[:, datamodule.cont_feature_names] = self.transformer.transform(
-            data.loc[:, datamodule.cont_feature_names]
-        ).astype(np.float32)
+        if len(datamodule.cont_feature_names) > 0:
+            data.loc[:, datamodule.cont_feature_names] = self.transformer.transform(
+                data.loc[:, datamodule.cont_feature_names]
+            ).astype(np.float32)
         return data
 
 

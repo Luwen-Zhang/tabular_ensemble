@@ -276,7 +276,11 @@ class AbstractImputer(AbstractRequireKwargs):
         data.loc[:, self.record_cat_features] = data[self.record_cat_features].fillna(
             "UNK"
         )
-        return self._fit_transform(data, datamodule)
+        return (
+            self._fit_transform(data, datamodule)
+            if len(self.record_cont_features) > 0
+            else data
+        )
 
     def transform(
         self, input_data: pd.DataFrame, datamodule: DataModule
@@ -304,7 +308,11 @@ class AbstractImputer(AbstractRequireKwargs):
         data.loc[:, datamodule.cat_feature_names] = data[
             datamodule.cat_feature_names
         ].fillna("UNK")
-        return self._transform(data, datamodule)
+        return (
+            self._transform(data, datamodule)
+            if len(self.record_cont_features) > 0
+            else data
+        )
 
     def _fit_transform(
         self, input_data: pd.DataFrame, datamodule: DataModule
@@ -598,21 +606,22 @@ class AbstractFeatureSelector(AbstractProcessor):
     def _fit_transform(
         self, data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
-        retain_features = list(self._get_feature_names_out(data, datamodule))
-        removed_features = list(
-            np.setdiff1d(datamodule.all_feature_names, retain_features)
-        )
-        if len(removed_features) > 0:
-            datamodule.cont_feature_names = [
-                x for x in datamodule.cont_feature_names if x in retain_features
-            ]
-            datamodule.cat_feature_names = [
-                x for x in datamodule.cat_feature_names if x in retain_features
-            ]
-            print(
-                f"{len(removed_features)} features removed: {removed_features}. {len(retain_features)} features "
-                f"retained: {retain_features}."
+        if len(datamodule.all_feature_names) > 0:
+            retain_features = list(self._get_feature_names_out(data, datamodule))
+            removed_features = list(
+                np.setdiff1d(datamodule.all_feature_names, retain_features)
             )
+            if len(removed_features) > 0:
+                datamodule.cont_feature_names = [
+                    x for x in datamodule.cont_feature_names if x in retain_features
+                ]
+                datamodule.cat_feature_names = [
+                    x for x in datamodule.cat_feature_names if x in retain_features
+                ]
+                print(
+                    f"{len(removed_features)} features removed: {removed_features}. {len(retain_features)} features "
+                    f"retained: {retain_features}."
+                )
         return data
 
     def _transform(self, data: pd.DataFrame, datamodule: DataModule) -> pd.DataFrame:

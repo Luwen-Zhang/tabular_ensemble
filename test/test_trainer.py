@@ -80,6 +80,17 @@ def test_init_models():
     pytest.models = models
 
 
+def test_init_trainer_without_feature():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(
+        configfile,
+        manual_config={"feature_names_type": {}},
+    )
+    trainer.load_data()
+
+
 def test_save_trainer():
     save_trainer(pytest.test_trainer_trainer)
 

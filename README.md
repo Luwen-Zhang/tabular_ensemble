@@ -31,7 +31,7 @@ Supported features for all model bases:
   * etc.
 * Multi-modal data
 * Loading [UCI datasets](https://archive.ics.uci.edu/datasets)
-* Data/result analyzing
+* Data/result analysis
   * Leaderboard
   * Box plot
   * Pair plot
@@ -45,7 +45,7 @@ Supported features for all model bases:
 * Cross-validation (including continuing from a cross-validation checkpoint)
 * Saving, loading, and migrating models
 
-The package stands on the shoulder of giants:
+The package stands on the shoulder of the giants:
 
 * [scikit-learn](https://scikit-learn.org/)
 * [PyTorch](https://pytorch.org/)
@@ -59,7 +59,7 @@ See the documentation pages.
 
 ## Contribution
 
-Feel free to create issues if you implement new features, propose a new model, find mistakes, or have any question.
+Feel free to create issues if you implement new features, propose a new model, find mistakes, or have any questions.
 
 ## Citation
 
