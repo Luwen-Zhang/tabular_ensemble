@@ -32,6 +32,7 @@ grammar faults and typos.
    examples/advanced_usage/new_data_derivers
    examples/advanced_usage/new_data_imputers
    examples/advanced_usage/new_data_processors
+   examples/advanced_usage/image_classification
 
 .. toctree::
    :maxdepth: 1
