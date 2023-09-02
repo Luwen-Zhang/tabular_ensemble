@@ -439,7 +439,7 @@ class AbstractProcessor(AbstractRequireKwargs):
     for those who reduce the number of data points.
 
     Notes
-    -------
+    -----
     If any attribute of the datamodule is set by the processor in :meth:`~AbstractProcessor._fit_transform`, the
     processor is responsible for restoring the set attribute when _transform is called. For instance, in the wrapper
     methods :meth:`~AbstractProcessor.fit_transform` and :meth:`~AbstractProcessor.transform`, we have implemented
@@ -777,7 +777,7 @@ class AbstractSplitter:
         Generate a ``sklearn.model_selection.KFold`` instance and return its ``__next__()`` result.
 
         Notes
-        ---------
+        -----
         The returned values are fold indices of the input ``data`` argument, but not the fold.
 
         Parameters

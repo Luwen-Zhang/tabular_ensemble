@@ -162,7 +162,7 @@ class DataModule:
             A list of tuples. Each tuple includes the name of the processor and a dict of kwargs for the processor.
 
         Notes
-        ----------
+        -----
         Only one :class:`~tabensemb.data.base.AbstractScaler` can be used, and the
         :class:`~tabensemb.data.base.AbstractScaler` must be the last one.
         """
@@ -614,7 +614,7 @@ class DataModule:
             Data derived from :meth:`.derive_unstacked`. It has the same structure as ``self.D_train``
 
         Notes
-        -------
+        -----
         The returned ``df`` is not scaled for the sake of further treatments. To scale the df,
         run ``df = datamodule.data_transform(df, scaler_only=True)``
         """
@@ -720,8 +720,8 @@ class DataModule:
             A list of found features.
 
         See Also
-        -------
-        :meth:`get_feature_idx_by_type``
+        --------
+        :meth:`get_feature_idx_by_type`
         """
         if typ not in self.args["feature_types"]:
             raise Exception(
@@ -750,8 +750,8 @@ class DataModule:
             A list of indices of found features.
 
         See Also
-        -------
-        :meth:`get_feature_names_by_type``
+        --------
+        :meth:`get_feature_names_by_type`
         """
         names = self.get_feature_names_by_type(typ=typ)
         if typ == "Categorical":
@@ -1095,7 +1095,7 @@ class DataModule:
             The derived unstacked data.
 
         See Also
-        ---------
+        --------
         :meth:`.derive_stacked`, :meth:`.derive_unstacked`.
         """
         df_tmp, cont_feature_names = self.derive_stacked(df)
@@ -1706,7 +1706,7 @@ class DataModule:
         Perform ``sklearn.decomposition.PCA``
 
         Parameters
-        -------
+        ----------
         feature_names
             A list of names of continuous features.
         **kwargs
