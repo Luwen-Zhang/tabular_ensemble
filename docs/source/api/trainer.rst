@@ -7,9 +7,9 @@ tabensemb.trainer
 .. automodule:: tabensemb.trainer
 .. currentmodule:: tabensemb.trainer
 
-.. autoclass:: Trainer
-    :members:
+.. autosummary::
+    :toctree: generated/
 
-.. autofunction:: load_trainer
-
-.. autofunction:: save_trainer
+    Trainer
+    load_trainer
+    save_trainer

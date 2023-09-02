@@ -7,5 +7,8 @@ tabensemb.config
 .. automodule:: tabensemb.config
 .. currentmodule:: tabensemb.config
 
-.. autoclass:: UserConfig
-    :members:
+.. autosummary::
+    :toctree: generated/
+
+    UserConfig
+

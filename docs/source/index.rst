@@ -12,37 +12,11 @@ Feel free to create an issue and raise questions if the documentation or the API
 grammar faults and typos.
 
 .. toctree::
-   :caption: Get Started
-
-   examples/get_started/installation
-   examples/get_started/run_sample
-   examples/get_started/new_dataset
-   examples/get_started/inference
-   examples/get_started/use_data_functionalities
-   examples/get_started/plotting
-
-.. toctree::
    :maxdepth: 2
-   :caption: Advanced Usage
 
-   examples/advanced_usage/customized_model_base
-   examples/advanced_usage/customized_model_base_advanced
-   examples/advanced_usage/build_model_upon_others
-   examples/advanced_usage/new_data_splitters
-   examples/advanced_usage/new_data_derivers
-   examples/advanced_usage/new_data_imputers
-   examples/advanced_usage/new_data_processors
-   examples/advanced_usage/image_classification
-
-.. toctree::
-   :maxdepth: 1
-   :caption: API References
-
-   trainer
-   model
-   data
-   config
-   utility
+   Get Started <examples/get_started>
+   Advanced Usage <examples/advanced_usage>
+   API References <api/api>
 
 
 Indices and tables
