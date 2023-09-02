@@ -18,6 +18,8 @@ from sklearn.preprocessing import OrdinalEncoder
 
 class DataModule:
     """
+    The dataset manager that provides loading, processing, and analyzing utilities.
+
     Attributes
     ----------
     args

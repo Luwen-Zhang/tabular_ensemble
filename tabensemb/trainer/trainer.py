@@ -21,6 +21,8 @@ set_random_seed(tabensemb.setting["random_seed"])
 
 class Trainer:
     """
+    The model manager that provides saving, loading, ranking, and analyzing utilities.
+
     Attributes
     ----------
     args
