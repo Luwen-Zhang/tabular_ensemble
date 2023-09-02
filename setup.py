@@ -37,6 +37,7 @@ setup(
             "myst-parser",
             "sphinx_copybutton",
             "sphinx_paramlinks",
+            "numpydoc",
         ],
         "notebook": ["jupyter", "notebook<7.0.0"],
     },
