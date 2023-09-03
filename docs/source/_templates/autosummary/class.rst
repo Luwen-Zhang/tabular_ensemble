@@ -3,7 +3,7 @@
 .. currentmodule:: {{ module }}
 
 .. autoclass:: {{ objname }}
-
+   :show-inheritance:
    {% block methods %}
    .. rubric:: {{ _('Methods') }}
    .. automethod:: __init__
@@ -11,12 +11,12 @@
    {% if methods %}
    .. autosummary::
    {% for item in all_methods %}
-      {%- if not item.startswith('_')%}
+      {%- if not item.startswith('_') and not item in inherited_members%}
       ~{{ name }}.{{ item }}
       {%- endif %}
    {%- endfor %}
    {% for item in all_methods %}
-      {%- if item.startswith('_') and not item.startswith('__')%}
+      {%- if item.startswith('_') and not item.startswith('__') and not item in inherited_members%}
       ~{{ name }}.{{ item }}
       {%- endif %}
    {%- endfor %}
@@ -30,7 +30,9 @@
 
    .. autosummary::
    {% for item in attributes %}
+      {%- if not item in inherited_members%}
       ~{{ name }}.{{ item }}
+      {%- endif %}
    {%- endfor %}
    {% endif %}
    {% endblock %}
