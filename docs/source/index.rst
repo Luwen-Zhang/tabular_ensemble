@@ -17,12 +17,3 @@ grammar faults and typos.
    Get Started <examples/get_started>
    Advanced Usage <examples/advanced_usage>
    API References <api/api>
-
-
-Indices and tables
-==================
-
-* :ref:`modindex`
-* :ref:`search`
-
-
