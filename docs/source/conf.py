@@ -10,6 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath("../"))
+sys.path.append(os.path.abspath("_ext"))
 
 project = "Tabular Ensemble"
 copyright = "2023, Tabular Ensemble developers"
@@ -35,6 +36,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
     "sphinx_paramlinks",
+    "sphinx-zeta-suppress",
 ]
 
 source_suffix = {
@@ -49,6 +51,11 @@ myst_enable_extensions = [
     "dollarmath",
 ]
 
+templates_path = ["_templates"]
+exclude_patterns = []
+
+# -- Options for autodoc ---------------------------------------------------
+
 autodoc_default_options = {
     "member-order": "bysource",
     "special-members": True,
@@ -57,8 +64,18 @@ autodoc_default_options = {
     "private-members": True,
 }
 
-templates_path = ["_templates"]
-exclude_patterns = []
+
+def skip_member(app, what, name, obj, skip, options):
+    # These members trigger warnings that cannot be suppressed by sphinx-zeta-suppress when "reading sources".
+    if what == "property":
+        if any(
+            [
+                meth in obj.fget.__str__()
+                for meth in ["_DeviceDtypeModuleMixin.dtype", "LightningModule.trainer"]
+            ]
+        ):
+            return True
+
 
 # -- Options for numpydoc -------------------------------------------------
 
@@ -70,6 +87,13 @@ numpydoc_show_inherited_class_members = False
 # -- Options for autosummary -------------------------------------------------
 
 autosummary_generate = True
+
+# -- Options for zeta suppress -------------------------------------------------
+
+zeta_suppress_records = [
+    # r"Explicit markup ends without a blank line",  # Not working, and I don't know why
+    r"undefined label: ",
+]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -97,3 +121,10 @@ html_context = {
     "github_repo": "tabular_ensemble",
     "github_version": "main/docs/source",
 }
+
+
+# -- Options for setup -------------------------------------------------
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip_member)
