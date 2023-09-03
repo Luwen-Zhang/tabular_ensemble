@@ -38,6 +38,7 @@ setup(
             "sphinx_copybutton",
             "sphinx_paramlinks",
             "numpydoc",
+            "pydata_sphinx_theme",
         ],
         "notebook": ["jupyter", "notebook<7.0.0"],
     },
