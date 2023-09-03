@@ -660,6 +660,10 @@ class AbstractScaler(AbstractTransformer):
 class AbstractSplitter:
     """
     The base class for data-splitters that split the dataset and return training, validation, and testing indices.
+
+    Attributes
+    ----------
+    support_cv
     """
 
     def __init__(

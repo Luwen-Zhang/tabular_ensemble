@@ -184,6 +184,9 @@ class AutoGluon(AbstractModel):
 
     @property
     def _name_mapping(self) -> Dict:
+        """
+        A dictionary mapping model names in this package to original names in autogluon.
+        """
         name_mapping = {
             "LightGBM": "GBM",
             "CatBoost": "CAT",

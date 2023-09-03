@@ -62,6 +62,7 @@ class AbstractModel:
         Whether to save models in the hard disk.
     trainer
         A :class:`tabensemb.trainer.Trainer` instance.
+    device
     """
 
     def __init__(
@@ -2136,6 +2137,11 @@ class AbstractWrapper:
     """
     For those required deep learning models, this is a wrapper to make them have hidden information like
     ``hidden_representation`` or something else extracted from the forward process.
+
+    Attributes
+    ----------
+    hidden_rep_dim
+    hidden_representation
     """
 
     def __init__(self, model: AbstractModel):
@@ -2224,6 +2230,40 @@ class AbstractNN(pl.LightningModule):
     """
     A subclass of ``pytorch_lightning.LightningModule`` that is compatible with :class:`TorchModel` and has implemented
     training and inferencing steps.
+
+    Attributes
+    ----------
+    default_loss_fn
+        The name of the default loss function returned by :meth:`get_loss_fn`
+    default_output_norm
+        The name of the default output normalization returned by :meth:`get_output_norm`
+    cont_feature_names
+        The names of continuous features
+    cat_feature_names
+        The names of categorical features
+    n_cont
+        The number of continuous features
+    n_cat
+        The number of categorical features
+    derived_feature_names
+        The keys of derived unstacked features.
+    derived_feature_dims
+        The dimensions of derived unstacked features
+    task
+        "regression", "binary", or "multiclass"
+    n_outputs
+        The number of outputs. Note that for classification tasks, logits are returned instead of probabilities.
+        For binary classification, the logit for the positive class is returned.
+    cat_num_unique
+        The number of unique values for each categorical feature.
+    hidden_representation
+        The extracted information of a deep learning model when forward-passing a batch.
+        It is usually the input of the last output layer (usually a linear layer or an MLP). It should be manually
+        recorded in :meth:`_forward`.
+    hidden_rep_dim
+        The dimension of :attr:`hidden_representation`. It should be manually set in :meth:`__init__`.
+    device
+    training
     """
 
     def __init__(self, datamodule: DataModule, **kwargs):
@@ -2234,38 +2274,6 @@ class AbstractNN(pl.LightningModule):
         ----------
         datamodule:
             A :class:`tabensemb.data.datamodule.DataModule` instance.
-
-        Attributes
-        ----------
-        default_loss_fn
-            The name of the default loss function returned by :meth:`get_loss_fn`
-        default_output_norm
-            The name of the default output normalization returned by :meth:`get_output_norm`
-        cont_feature_names
-            The names of continuous features
-        cat_feature_names
-            The names of categorical features
-        n_cont
-            The number of continuous features
-        n_cat
-            The number of categorical features
-        derived_feature_names
-            The keys of derived unstacked features.
-        derived_feature_dims
-            The dimensions of derived unstacked features
-        task
-            "regression", "binary", or "multiclass"
-        n_outputs
-            The number of outputs. Note that for classification tasks, logits are returned instead of probabilities.
-            For binary classification, the logit for the positive class is returned.
-        cat_num_unique
-            The number of unique values for each categorical feature.
-        hidden_representation
-            The extracted information of a deep learning model when forward-passing a batch.
-            It is usually the input of the last output layer (usually a linear layer or an MLP). It should be manually
-            recorded in :meth:`_forward`.
-        hidden_rep_dim
-            The dimension of :attr:`hidden_representation`. It should be manually set in :meth:`__init__`.
         """
         super(AbstractNN, self).__init__()
         self.default_loss_fn = self.get_loss_fn(datamodule.loss, datamodule.task)

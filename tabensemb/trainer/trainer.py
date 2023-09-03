@@ -50,6 +50,26 @@ class Trainer:
         ``project_root_subfolder`` and ``config`` are arguments of :meth:`load_config`.
     sys_summary
         Summary of the system when :meth:`summarize_device` is called.
+    SPACE
+    all_feature_names
+    cat_feature_mapping
+    cat_feature_names
+    chosen_params
+    cont_feature_names
+    derived_data
+    derived_stacked_features
+    df
+    feature_data
+    label_data
+    label_name
+    static_params
+    tensors
+    test_indices
+    train_indices
+    training
+    unscaled_feature_data
+    unscaled_label_data
+    val_indices
     """
 
     def __init__(self, device: str = "cpu", project: str = None):

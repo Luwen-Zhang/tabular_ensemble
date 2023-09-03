@@ -24,19 +24,6 @@
 
    {% endblock %}
 
-   {% block attributes %}
-   {% if attributes %}
-   .. rubric:: {{ _('Properties') }}
-
-   .. autosummary::
-   {% for item in attributes %}
-      {%- if not item in inherited_members%}
-      ~{{ name }}.{{ item }}
-      {%- endif %}
-   {%- endfor %}
-   {% endif %}
-   {% endblock %}
-
 {% if methods %}
    .. HACK -- the point here is that we don't want this to appear in the output, but the autosummary should still generate the pages.
       .. autosummary::

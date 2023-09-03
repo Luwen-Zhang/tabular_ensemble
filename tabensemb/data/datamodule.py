@@ -80,6 +80,25 @@ class DataModule:
         The validation set of the entire ``torch.utils.data.Dataset``.
     val_indices
         Indices of the validation set in the entire dataset (:attr:`df`).
+    D_test
+    D_train
+    D_val
+    X_test
+    X_train
+    X_val
+    all_feature_names
+    cat_imputed_mask
+    cat_num_unique
+    categorical_data
+    cont_imputed_mask
+    derived_stacked_features
+    feature_data
+    label_data
+    unscaled_feature_data
+    unscaled_label_data
+    y_test
+    y_train
+    y_val
     """
 
     def __init__(
