@@ -62,6 +62,7 @@ class AbstractModel:
         Whether to save models in the hard disk.
     trainer
         A :class:`tabensemb.trainer.Trainer` instance.
+    device
     """
 
     def __init__(
@@ -122,7 +123,7 @@ class AbstractModel:
         layer until it reaches the current caller.
 
         Notes
-        -------
+        -----
         It will be automatically called in :meth:`__init__`.
 
         Parameters
@@ -194,7 +195,7 @@ class AbstractModel:
         Fit all models using a tabular dataset.
 
         Notes
-        ------
+        -----
         The loaded dataset in the linked :class:`~tabensemb.trainer.Trainer` will be replaced.
 
         Parameters
@@ -453,7 +454,7 @@ class AbstractModel:
             Ignored.
 
         Returns
-        ----------
+        -------
         np.ndarray
             Values of feature importance.
         list
@@ -698,7 +699,7 @@ class AbstractModel:
         ``EXTERN_{Name of the model base}_{Name of the model}``
 
         Notes
-        -------
+        -----
         For :class:`TorchModel`, if the required model is in the :class:`TorchModel` itself, the
         :class:`.AbstractNN` is passed to :meth:`_new_model`; if the required model is in another model base, the
         :class:`.AbstractModel` is passed.
@@ -1337,7 +1338,7 @@ class AbstractModel:
         Processing the data from ``self.trainer.datamodule`` for training.
 
         Parameters
-        -------
+        ----------
         model_name:
             The name of a selected model.
 
@@ -1349,7 +1350,7 @@ class AbstractModel:
             :meth:`_bayes_eval`. All of them will be passed to :meth:`_pred_single_model` for evaluation.
 
         Notes
-        -------
+        -----
         ``self.trainer.datamodule.X_train/val/test`` are not scaled. To scale the df,
         run ``df = datamodule.data_transform(df, scaler_only=True)``
         """
@@ -1377,7 +1378,7 @@ class AbstractModel:
             The processed data that has the same structure as X_test from :meth:`_train_data_preprocess`.
 
         Notes
-        -------
+        -----
         The input df is not scaled. To scale the df, run ``df = datamodule.data_transform(df, scaler_only=True)``
         """
         raise NotImplementedError
@@ -1448,7 +1449,7 @@ class AbstractModel:
             Prediction of the target.
 
         Notes
-        -------
+        -----
         For deep learning models with mini-batch training (dataloaders), if an :class:`AbstractWrapper` will be used to extract
         hidden representations, the ``batch_size`` when inferring should be the length of the dataset. See
         :meth:`tabensemb.model.PytorchTabular._pred_single_model` and :meth:`tabensemb.model.WideDeep._pred_single_model`.
@@ -1564,7 +1565,7 @@ class TorchModel(AbstractModel):
             models that require other models.
 
         Returns
-        ----------
+        -------
         attr
             Values of feature importance.
         importance_names
@@ -1751,7 +1752,7 @@ class TorchModel(AbstractModel):
         torch.utils.data.Dataset
 
         See Also
-        ---------
+        --------
         :meth:`_generate_dataset_from_tensors`
         """
         required_models = self._get_required_models(model_name)
@@ -1877,7 +1878,7 @@ class TorchModel(AbstractModel):
         See :class:`tabensemb.model.CatEmbed` for example.
 
         See Also
-        ---------
+        --------
         :meth:`_prepare_custom_datamodule`
         """
         return df, derived_data, self.trainer.datamodule
@@ -1941,7 +1942,7 @@ class TorchModel(AbstractModel):
         torch.utils.data.Dataset
 
         See Also
-        ---------
+        --------
         :meth:`_generate_dataset`
         """
         required_models = self._get_required_models(model_name)
@@ -2136,6 +2137,11 @@ class AbstractWrapper:
     """
     For those required deep learning models, this is a wrapper to make them have hidden information like
     ``hidden_representation`` or something else extracted from the forward process.
+
+    Attributes
+    ----------
+    hidden_rep_dim
+    hidden_representation
     """
 
     def __init__(self, model: AbstractModel):
@@ -2224,6 +2230,40 @@ class AbstractNN(pl.LightningModule):
     """
     A subclass of ``pytorch_lightning.LightningModule`` that is compatible with :class:`TorchModel` and has implemented
     training and inferencing steps.
+
+    Attributes
+    ----------
+    default_loss_fn
+        The name of the default loss function returned by :meth:`get_loss_fn`
+    default_output_norm
+        The name of the default output normalization returned by :meth:`get_output_norm`
+    cont_feature_names
+        The names of continuous features
+    cat_feature_names
+        The names of categorical features
+    n_cont
+        The number of continuous features
+    n_cat
+        The number of categorical features
+    derived_feature_names
+        The keys of derived unstacked features.
+    derived_feature_dims
+        The dimensions of derived unstacked features
+    task
+        "regression", "binary", or "multiclass"
+    n_outputs
+        The number of outputs. Note that for classification tasks, logits are returned instead of probabilities.
+        For binary classification, the logit for the positive class is returned.
+    cat_num_unique
+        The number of unique values for each categorical feature.
+    hidden_representation
+        The extracted information of a deep learning model when forward-passing a batch.
+        It is usually the input of the last output layer (usually a linear layer or an MLP). It should be manually
+        recorded in :meth:`_forward`.
+    hidden_rep_dim
+        The dimension of :attr:`hidden_representation`. It should be manually set in :meth:`__init__`.
+    device
+    training
     """
 
     def __init__(self, datamodule: DataModule, **kwargs):
@@ -2234,38 +2274,6 @@ class AbstractNN(pl.LightningModule):
         ----------
         datamodule:
             A :class:`tabensemb.data.datamodule.DataModule` instance.
-
-        Attributes
-        ----------
-        default_loss_fn
-            The name of the default loss function returned by :meth:`get_loss_fn`
-        default_output_norm
-            The name of the default output normalization returned by :meth:`get_output_norm`
-        cont_feature_names
-            The names of continuous features
-        cat_feature_names
-            The names of categorical features
-        n_cont
-            The number of continuous features
-        n_cat
-            The number of categorical features
-        derived_feature_names
-            The keys of derived unstacked features.
-        derived_feature_dims
-            The dimensions of derived unstacked features
-        task
-            "regression", "binary", or "multiclass"
-        n_outputs
-            The number of outputs. Note that for classification tasks, logits are returned instead of probabilities.
-            For binary classification, the logit for the positive class is returned.
-        cat_num_unique
-            The number of unique values for each categorical feature.
-        hidden_representation
-            The extracted information of a deep learning model when forward-passing a batch.
-            It is usually the input of the last output layer (usually a linear layer or an MLP). It should be manually
-            recorded in :meth:`_forward`.
-        hidden_rep_dim
-            The dimension of :attr:`hidden_representation`. It should be manually set in :meth:`__init__`.
         """
         super(AbstractNN, self).__init__()
         self.default_loss_fn = self.get_loss_fn(datamodule.loss, datamodule.task)
@@ -2436,7 +2444,7 @@ class AbstractNN(pl.LightningModule):
             The output of the model.
 
         Notes
-        -------
+        -----
         For classification tasks, DO NOT turn logits into probabilities here because we have already
         implemented this later. See also :meth:`output_norm`.
         """
@@ -2606,7 +2614,7 @@ class AbstractNN(pl.LightningModule):
             A torch-like loss.
 
         Notes
-        -------
+        -----
         Other attributes in ``self`` can also be used to calculate loss values.
         """
         return self.default_loss_fn(y_pred, y_true)
@@ -2648,7 +2656,7 @@ class AbstractNN(pl.LightningModule):
             The loss returned by :meth:`loss_fn`.
 
         Notes
-        --------
+        -----
         Other attributes recorded in :meth:`loss_fn` can be also used.
         """
         self.manual_backward(loss)
@@ -2739,7 +2747,7 @@ class AbstractNN(pl.LightningModule):
              ``hidden_rep_dim``, ``1+n_inputs`` is returned.
 
         Notes
-        -------
+        -----
         For an ``AbstractNN``, whether the hidden representation (:attr:`hidden_representation`) is recorded is not
         guaranteed.
         """
@@ -2796,7 +2804,7 @@ class AbstractNN(pl.LightningModule):
             The result of the required model.
 
         Notes
-        -------
+        -----
         If you want to run the required model and further train it, pass a copied
         ``derived_tensors`` after removing the ``{MODEL_NAME}_pred`` item in its ``data_required_models`` item.
         """

@@ -21,6 +21,8 @@ set_random_seed(tabensemb.setting["random_seed"])
 
 class Trainer:
     """
+    The model manager that provides saving, loading, ranking, and analyzing utilities.
+
     Attributes
     ----------
     args
@@ -48,6 +50,26 @@ class Trainer:
         ``project_root_subfolder`` and ``config`` are arguments of :meth:`load_config`.
     sys_summary
         Summary of the system when :meth:`summarize_device` is called.
+    SPACE
+    all_feature_names
+    cat_feature_mapping
+    cat_feature_names
+    chosen_params
+    cont_feature_names
+    derived_data
+    derived_stacked_features
+    df
+    feature_data
+    label_data
+    label_name
+    static_params
+    tensors
+    test_indices
+    train_indices
+    training
+    unscaled_feature_data
+    unscaled_label_data
+    val_indices
     """
 
     def __init__(self, device: str = "cpu", project: str = None):
@@ -78,7 +100,7 @@ class Trainer:
             "cpu", "cuda", or "cuda:X" (if available)
 
         Notes
-        ----------
+        -----
         Multi-GPU training and training on a machine with multiple GPUs are not tested.
         """
         if device not in ["cpu", "cuda"] and "cuda" not in device:
@@ -146,7 +168,7 @@ class Trainer:
             A :class:`Trainer` with the selected model base.
 
         See Also
-        -------
+        --------
         :meth:`copy`, :meth:`detach_model`, :meth:`tabensemb.model.AbstractModel.detach_model`
         """
         modelbase = cp(self.get_modelbase(program=program))
@@ -202,7 +224,7 @@ class Trainer:
             A :class:`Trainer` instance.
 
         See Also
-        -------
+        --------
         :meth:`detach_modelbase`, :meth:`detach_model`, :meth:`tabensemb.model.AbstractModel.detach_model`
         """
         tmp_trainer = cp(self)
@@ -659,7 +681,7 @@ class Trainer:
             Arguments for :meth:`tabensemb.model.AbstractModel.train`
 
         Notes
-        -------
+        -----
         The results of a continuous run and a continued run (``load_from_previous=True``) are consistent.
 
         Returns
@@ -878,7 +900,7 @@ class Trainer:
         ``self.project_root/cv``.
 
         Parameters
-        -------
+        ----------
         leaderboard
             A reference leaderboard to be filled by avg and std, and to sort the returned DataFrame.
         save
@@ -892,7 +914,7 @@ class Trainer:
             Standard errors in the same format as the input ``leaderboard``. There is an additional column "Rank".
 
         Notes
-        -------
+        -----
         The returned results are approximations of the precise leaderboard from ``get_leaderboard``. Some metrics like
         RMSE may be different because data-point-wise and cross-validation-wise averaging are different.
         """
@@ -1156,7 +1178,7 @@ class Trainer:
             kwargs for :meth:`tabensemb.model.AbstractModel.cal_feature_importance`
 
         Returns
-        ----------
+        -------
         attr
             Values of feature importance.
         importance_names
@@ -1164,7 +1186,7 @@ class Trainer:
             features will be included. Otherwise, only :meth:`all_feature_names` will be considered.
 
         See Also
-        ----------
+        --------
         :meth:`tabensemb.model.AbstractModel.cal_feature_importance`,
         :meth:`tabensemb.model.TorchModel.cal_feature_importance`
         """
@@ -1196,7 +1218,7 @@ class Trainer:
             be included. Otherwise, only :meth:`all_feature_names` will be considered.
 
         See Also
-        ---------
+        --------
         :meth:`tabensemb.model.AbstractModel.cal_shap`,
         :meth:`tabensemb.model.TorchModel.cal_shap`
 

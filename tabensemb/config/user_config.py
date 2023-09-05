@@ -16,10 +16,12 @@ import warnings
 
 
 class UserConfig(dict):
+    """
+    The configuration holder for :class:`~tabensemb.data.datamodule.DataModule` and :class:`~tabensemb.trainer.Trainer`.
+    """
+
     def __init__(self, path: str = None):
         """
-        The configuration holder for :class:`~tabensemb.data.datamodule.DataModule` and :class:`~tabensemb.trainer.Trainer`.
-
         Parameters
         ----------
         path

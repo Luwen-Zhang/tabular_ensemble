@@ -10,6 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath("../"))
+sys.path.append(os.path.abspath("_ext"))
 
 project = "Tabular Ensemble"
 copyright = "2023, Tabular Ensemble developers"
@@ -24,6 +25,8 @@ extensions = [
     "nbsphinx",
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "numpydoc",
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
@@ -33,6 +36,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
     "sphinx_paramlinks",
+    "sphinx-zeta-suppress",
 ]
 
 source_suffix = {
@@ -47,6 +51,11 @@ myst_enable_extensions = [
     "dollarmath",
 ]
 
+templates_path = ["_templates"]
+exclude_patterns = []
+
+# -- Options for autodoc ---------------------------------------------------
+
 autodoc_default_options = {
     "member-order": "bysource",
     "special-members": True,
@@ -55,19 +64,67 @@ autodoc_default_options = {
     "private-members": True,
 }
 
-templates_path = ["_templates"]
-exclude_patterns = []
 
+def skip_member(app, what, name, obj, skip, options):
+    # These members trigger warnings that cannot be suppressed by sphinx-zeta-suppress when "reading sources".
+    if what == "property":
+        if any(
+            [
+                meth in obj.fget.__str__()
+                for meth in ["_DeviceDtypeModuleMixin.dtype", "LightningModule.trainer"]
+            ]
+        ):
+            return True
+
+
+# -- Options for numpydoc -------------------------------------------------
+
+# Manually generate members in _templates/autosummary/class.rst
+numpydoc_show_class_members = False
+numpydoc_class_members_toctree = False
+numpydoc_show_inherited_class_members = False
+
+# -- Options for autosummary -------------------------------------------------
+
+autosummary_generate = True
+
+# -- Options for zeta suppress -------------------------------------------------
+
+zeta_suppress_records = [
+    # r"Explicit markup ends without a blank line",  # Not working, and I don't know why
+    r"undefined label: ",
+]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 
+html_css_files = [
+    "css/nbsphinx_dataframe.css",
+]
+
+html_theme_options = {
+    "use_edit_page_button": True,
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/LuoXueling/tabular_ensemble",
+            "icon": "fa-brands fa-github",
+        },
+    ],
+}
+
 html_context = {
-    "display_github": True,
     "github_user": "LuoXueling",
     "github_repo": "tabular_ensemble",
-    "github_version": "main/docs/source/",
+    "github_version": "main/docs/source",
 }
+
+
+# -- Options for setup -------------------------------------------------
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip_member)
