@@ -188,7 +188,7 @@ class UserConfig(dict):
             The name of ".data" file in the downloaded .zip file. If is None and there exists more than one file with
             the suffix ".data" in a single dataset, the function will print available names.
         column_names
-            Labels of columns in the ".data" file in the downloaded .zip file. If not given, names recorded in the
+            Labels of columns in the ".data" file in the downloaded .zip file. If not given, names recorded on the
             website will be used. However, these names can be in a wrong order, of which "Auto MPG" is a typical
             example. So a warning will be logged, and `save_zip` will be set to True to let the user check the ".name"
             file in the .zip file for the correct order.
