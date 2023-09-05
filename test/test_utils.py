@@ -160,8 +160,9 @@ def test_metric_sklearn():
     y_true = np.ones((100, 2), dtype=np.float32)
     y_pred = np.ones((100, 2), dtype=np.float32) + np.random.randn(100, 1) / 10
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         metric_sklearn(y_true, y_pred, "UNKNOWN_METRIC")
+    assert "not implemented" in err.value.args[0]
 
     y_pred_na = copy.deepcopy(y_pred)
     y_pred_na[10] = np.nan

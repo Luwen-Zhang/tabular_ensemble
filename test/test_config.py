@@ -23,8 +23,9 @@ def test_config_json():
     config.to_file("sample.json")
     config.to_file("sample")
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         _ = UserConfig("./sample")
+    assert "Both" in err.value.args[0]
 
     config_json = UserConfig("./sample.json")
 
@@ -38,12 +39,15 @@ def test_config_json():
 
 def test_exceptions():
     print("\n--- not exist ---\n")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         _ = UserConfig("NOT_EXIST")
-    with pytest.raises(Exception):
+    assert "does not exist." in err.value.args[0]
+    with pytest.raises(Exception) as err:
         _ = UserConfig("NOT_EXIST.py")
-    with pytest.raises(Exception):
+    assert "does not exist." in err.value.args[0]
+    with pytest.raises(Exception) as err:
         _ = UserConfig("NOT_EXIST.json")
+    assert "does not exist." in err.value.args[0]
 
 
 def test_cmd_arguments(mocker):

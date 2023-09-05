@@ -412,8 +412,9 @@ def test_trainer_label_missing():
             "label_name": ["cont_1"],
         },
     )
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         trainer.load_data()
+    assert "Label missing" in err.value.args[0]
 
 
 def test_trainer_multitarget():
@@ -437,8 +438,9 @@ def test_trainer_multitarget():
 
         print(f"\n-- Initialize models --\n")
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception) as err:
             WideDeep(trainer, model_subset=["TabMlp"])
+        assert "does not support multi-target tasks" in err.value.args[0]
 
         models = [
             PytorchTabular(trainer, model_subset=["Category Embedding"]),
@@ -579,7 +581,7 @@ def test_feature_importance():
         program="CatEmbed", model_name="Category Embedding"
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         with pytest.warns(
             UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
         ):
@@ -588,6 +590,7 @@ def test_feature_importance():
                 model_name="Require Model PyTabular CatEmbed",
                 method="shap",
             )
+    assert "models that require other models is not supported" in err.value.args[0]
 
     assert len(absmodel_perm[0]) == len(absmodel_perm[1])
     assert np.all(np.abs(absmodel_perm[0]) > 1e-8)
@@ -715,8 +718,9 @@ def test_exception_during_bayes_opt(capfd):
 @pytest.mark.order(after="test_train_without_bayes")
 def test_exceptions():
     trainer = pytest.test_trainer_trainer
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         trainer.set_device("UNKNOWN_DEVICE")
+    assert "is an invalid selection" in err.value.args[0]
 
     with pytest.raises(Exception) as err:
         trainer.add_modelbases(
@@ -768,8 +772,9 @@ def test_user_input_config():
         "sample",
         manual_config={"SPACEs": {"lr": {"type": "UNKNOWN"}}},
     )
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         _ = trainer.SPACE
+    assert "Invalid type of skopt space" in err.value.args[0]
 
 
 def test_cmd_arguments_with_manual_config(mocker):
