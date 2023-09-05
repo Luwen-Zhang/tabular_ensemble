@@ -75,17 +75,44 @@ def test_from_uci():
     _default_data_path = tabensemb.setting["default_data_path"]
     os.makedirs("temp_data", exist_ok=True)
     tabensemb.setting["default_data_path"] = "temp_data"
-    cfg_iris = UserConfig.from_uci("Iris", datafile_name="iris", max_retries=10)
+    with pytest.warns(UserWarning, match=r"is not given"):
+        cfg_iris = UserConfig.from_uci(
+            "Iris",
+            datafile_name="iris",
+            max_retries=10,
+        )
     assert cfg_iris is not None
     assert cfg_iris["task"] == "multiclass"
-    cfg_autompg = UserConfig.from_uci("Auto MPG", sep="\s+", max_retries=10)
+    cfg_autompg = UserConfig.from_uci(
+        "Auto MPG", column_names=mpg_columns, sep="\s+", max_retries=10
+    )
     assert cfg_autompg is not None
     assert cfg_autompg["task"] == "regression"
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning, match=r"There exists"):
         # Exists a test file.
-        cfg_adult = UserConfig.from_uci("Adult", sep=", ", max_retries=10)
+        cfg_adult = UserConfig.from_uci(
+            "Adult", column_names=adult_columns, sep=", ", max_retries=10
+        )
     assert cfg_adult is not None
     assert cfg_adult["task"] == "binary"
+
+    with pytest.raises(Exception) as err:
+        _ = UserConfig.from_uci(
+            "Iris",
+            column_names=iris_columns + ["TEST"],
+            datafile_name="iris",
+            max_retries=10,
+        )
+    assert "Available column names are" in err.value.args[0]
+    with pytest.raises(Exception) as err:
+        with pytest.warns(UserWarning, match=r"Available column names are"):
+            _ = UserConfig.from_uci(
+                "Iris",
+                column_names=iris_columns[:-1],
+                datafile_name="iris",
+                max_retries=10,
+            )
+    assert "No label is found." in err.value.args[0]
 
     # sep
     assert UserConfig.from_uci("Auto MPG", max_retries=10) is None

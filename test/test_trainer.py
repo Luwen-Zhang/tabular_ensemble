@@ -809,7 +809,7 @@ def test_train_part_of_modelbases():
 def test_uci_iris_multiclass():
     tabensemb.setting["debug_mode"] = True
     trainer = Trainer(device="cpu")
-    cfg = UserConfig.from_uci("Iris", datafile_name="iris")
+    cfg = UserConfig.from_uci("Iris", column_names=iris_columns, datafile_name="iris")
     trainer.load_config(cfg)
     trainer.load_data()
     models = [
@@ -825,14 +825,10 @@ def test_uci_iris_multiclass():
 
 def test_uci_autompg_regression():
     tabensemb.setting["debug_mode"] = True
-    cfg = UserConfig.from_uci("Auto MPG", sep="\s+")
+    cfg = UserConfig.from_uci("Auto MPG", column_names=mpg_columns, sep="\s+")
     trainer = Trainer(device="cpu")
     trainer.load_config(cfg)
-    with pytest.warns(
-        UserWarning,
-        match=r"The inferred task multiclass is not consistent with the selected task regression",
-    ):
-        trainer.load_data()
+    trainer.load_data()
     models = [
         PytorchTabular(trainer, model_subset=["Category Embedding"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
@@ -848,7 +844,7 @@ def test_uci_autompg_regression():
 def test_uci_adult_binary():
     tabensemb.setting["debug_mode"] = True
     with pytest.warns(UserWarning):
-        cfg = UserConfig.from_uci("Adult", sep=", ")
+        cfg = UserConfig.from_uci("Adult", column_names=adult_columns, sep=", ")
     trainer = Trainer(device="cpu")
     trainer.load_config(cfg)
     trainer.load_data()

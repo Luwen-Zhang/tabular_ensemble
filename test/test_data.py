@@ -143,7 +143,9 @@ def test_prepare_new_data_randpermed():
 
 def test_prepare_new_data_categorical_label():
     pytest_configure_data()
-    config = UserConfig.from_uci("Iris", datafile_name="iris")
+    config = UserConfig.from_uci(
+        "Iris", column_names=iris_columns, datafile_name="iris"
+    )
     datamodule = DataModule(config=config)
     datamodule.load_data()
     csv_path = os.path.join(
