@@ -87,7 +87,7 @@ def test_from_uci():
         assert cfg_iris is not None
         assert cfg_iris["task"] == "multiclass"
         cfg_autompg = UserConfig.from_uci(
-            "Auto MPG", column_names=mpg_columns, sep="\s+", max_retries=10
+            "Auto MPG", column_names=mpg_columns, sep=r"\s+", max_retries=10
         )
         assert cfg_autompg is not None
         assert cfg_autompg["task"] == "regression"

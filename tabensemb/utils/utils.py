@@ -458,11 +458,7 @@ def str_to_dataframe(s, sep=",", names=None, check_nan_on=None) -> pd.DataFrame:
     pd.DataFrame
         The converted dataframe.
     """
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", "invalid escape sequence", category=DeprecationWarning
-        )
-        df = pd.read_csv(StringIO(s), names=names, sep=sep)
+    df = pd.read_csv(StringIO(s), names=names, sep=sep)
     if names is not None:
         if len(df.columns) != len(names) or (
             df.dtypes[names[0]] == object and pd.isna(df[names[1:]]).all().all()
@@ -697,11 +693,7 @@ def plot_pdp(
         right=False,
     )
     plt.ylabel("Predicted target")
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", "invalid escape sequence", category=DeprecationWarning
-        )
-        plt.xlabel("Value of predictors ($10\%$-$90\%$ percentile)")
+    plt.xlabel(r"Value of predictors ($10\%$-$90\%$ percentile)")
 
     return fig
 
