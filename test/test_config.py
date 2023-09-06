@@ -76,7 +76,6 @@ def test_cmd_arguments(mocker):
 
 
 def test_from_uci():
-    _default_data_path = tabensemb.setting["default_data_path"]
     os.makedirs("temp_data", exist_ok=True)
     with tabensemb.utils.global_setting({"default_data_path": "temp_data"}):
         with pytest.warns(UserWarning, match=r"is not given"):
@@ -147,4 +146,3 @@ def test_from_uci():
         assert "Do you mean" in err.value.args[0]
 
         shutil.rmtree("temp_data")
-        tabensemb.setting["default_data_path"] = _default_data_path
