@@ -277,11 +277,18 @@ def test_predict_function():
     assert len(models) > 0
     for model in models:
         model_name = model.model_subset[0]
-        pred = model.predict(x_test, model_name=model_name)
-        direct_pred = model._predict(x_test, derived_data=d_test, model_name=model_name)
+        x_test_wo_label = x_test.copy()
+        for label in trainer.label_name:
+            del x_test_wo_label[label]
+        pred = model.predict(x_test_wo_label, model_name=model_name)
+        direct_pred = model._predict(
+            x_test_wo_label, derived_data=d_test, model_name=model_name
+        )
+        pred_w_label = model.predict(x_test, model_name=model_name)
         assert np.allclose(
             pred, direct_pred
         ), f"{model.__class__.__name__} does not get consistent inference results."
+        assert np.allclose(pred, pred_w_label)
         with pytest.raises(Exception) as err:
             model.predict_proba(x_test, model_name=model_name)
         assert "Calling predict_proba on regression models" in err.value.args[0]
