@@ -577,9 +577,12 @@ def test_feature_importance():
             program="CatEmbed", model_name="Category Embedding", method="shap"
         )
     np.random.seed(0)
-    torchmodel_shap_direct = trainer.cal_shap(
-        program="CatEmbed", model_name="Category Embedding"
-    )
+    with pytest.warns(
+        UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
+    ):
+        torchmodel_shap_direct = trainer.cal_shap(
+            program="CatEmbed", model_name="Category Embedding"
+        )
 
     with pytest.raises(Exception) as err:
         with pytest.warns(
@@ -665,9 +668,12 @@ def test_plots():
 
         print(f"\n-- Importance --\n")
         trainer.plot_feature_importance(program="WideDeep", model_name="TabMlp")
-        trainer.plot_feature_importance(
-            program="CatEmbed", model_name="Category Embedding", method="shap"
-        )
+        with pytest.warns(
+            UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
+        ):
+            trainer.plot_feature_importance(
+                program="CatEmbed", model_name="Category Embedding", method="shap"
+            )
 
         print(f"\n-- PDP --\n")
         trainer.plot_partial_dependence(
