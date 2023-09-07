@@ -34,7 +34,7 @@ from io import StringIO
 clr = sns.color_palette("deep")
 sns.reset_defaults()
 # matplotlib.use("Agg")
-if find_executable("latex"):
+if find_executable("latex") and tabensemb.setting["matplotlib_usetex"]:
     matplotlib.rc("text", usetex=True)
 plt.rcParams["font.family"] = "serif"
 plt.rcParams["font.serif"] = "Times New Roman"
@@ -693,7 +693,7 @@ def plot_pdp(
         right=False,
     )
     plt.ylabel("Predicted target")
-    plt.xlabel("Value of predictors ($10\%$-$90\%$ percentile)")
+    plt.xlabel(r"Value of predictors ($10\%$-$90\%$ percentile)")
 
     return fig
 

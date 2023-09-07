@@ -277,11 +277,18 @@ def test_predict_function():
     assert len(models) > 0
     for model in models:
         model_name = model.model_subset[0]
-        pred = model.predict(x_test, model_name=model_name)
-        direct_pred = model._predict(x_test, derived_data=d_test, model_name=model_name)
+        x_test_wo_label = x_test.copy()
+        for label in trainer.label_name:
+            del x_test_wo_label[label]
+        pred = model.predict(x_test_wo_label, model_name=model_name)
+        direct_pred = model._predict(
+            x_test_wo_label, derived_data=d_test, model_name=model_name
+        )
+        pred_w_label = model.predict(x_test, model_name=model_name)
         assert np.allclose(
             pred, direct_pred
         ), f"{model.__class__.__name__} does not get consistent inference results."
+        assert np.allclose(pred, pred_w_label)
         with pytest.raises(Exception) as err:
             model.predict_proba(x_test, model_name=model_name)
         assert "Calling predict_proba on regression models" in err.value.args[0]
@@ -412,8 +419,9 @@ def test_trainer_label_missing():
             "label_name": ["cont_1"],
         },
     )
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         trainer.load_data()
+    assert "Label missing" in err.value.args[0]
 
 
 def test_trainer_multitarget():
@@ -437,8 +445,9 @@ def test_trainer_multitarget():
 
         print(f"\n-- Initialize models --\n")
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception) as err:
             WideDeep(trainer, model_subset=["TabMlp"])
+        assert "does not support multi-target tasks" in err.value.args[0]
 
         models = [
             PytorchTabular(trainer, model_subset=["Category Embedding"]),
@@ -575,11 +584,14 @@ def test_feature_importance():
             program="CatEmbed", model_name="Category Embedding", method="shap"
         )
     np.random.seed(0)
-    torchmodel_shap_direct = trainer.cal_shap(
-        program="CatEmbed", model_name="Category Embedding"
-    )
+    with pytest.warns(
+        UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
+    ):
+        torchmodel_shap_direct = trainer.cal_shap(
+            program="CatEmbed", model_name="Category Embedding"
+        )
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         with pytest.warns(
             UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
         ):
@@ -588,6 +600,7 @@ def test_feature_importance():
                 model_name="Require Model PyTabular CatEmbed",
                 method="shap",
             )
+    assert "models that require other models is not supported" in err.value.args[0]
 
     assert len(absmodel_perm[0]) == len(absmodel_perm[1])
     assert np.all(np.abs(absmodel_perm[0]) > 1e-8)
@@ -662,9 +675,12 @@ def test_plots():
 
         print(f"\n-- Importance --\n")
         trainer.plot_feature_importance(program="WideDeep", model_name="TabMlp")
-        trainer.plot_feature_importance(
-            program="CatEmbed", model_name="Category Embedding", method="shap"
-        )
+        with pytest.warns(
+            UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
+        ):
+            trainer.plot_feature_importance(
+                program="CatEmbed", model_name="Category Embedding", method="shap"
+            )
 
         print(f"\n-- PDP --\n")
         trainer.plot_partial_dependence(
@@ -715,8 +731,9 @@ def test_exception_during_bayes_opt(capfd):
 @pytest.mark.order(after="test_train_without_bayes")
 def test_exceptions():
     trainer = pytest.test_trainer_trainer
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         trainer.set_device("UNKNOWN_DEVICE")
+    assert "is an invalid selection" in err.value.args[0]
 
     with pytest.raises(Exception) as err:
         trainer.add_modelbases(
@@ -768,8 +785,9 @@ def test_user_input_config():
         "sample",
         manual_config={"SPACEs": {"lr": {"type": "UNKNOWN"}}},
     )
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         _ = trainer.SPACE
+    assert "Invalid type of skopt space" in err.value.args[0]
 
 
 def test_cmd_arguments_with_manual_config(mocker):
@@ -809,7 +827,7 @@ def test_train_part_of_modelbases():
 def test_uci_iris_multiclass():
     tabensemb.setting["debug_mode"] = True
     trainer = Trainer(device="cpu")
-    cfg = UserConfig.from_uci("Iris", datafile_name="iris")
+    cfg = UserConfig.from_uci("Iris", column_names=iris_columns, datafile_name="iris")
     trainer.load_config(cfg)
     trainer.load_data()
     models = [
@@ -825,14 +843,10 @@ def test_uci_iris_multiclass():
 
 def test_uci_autompg_regression():
     tabensemb.setting["debug_mode"] = True
-    cfg = UserConfig.from_uci("Auto MPG", sep="\s+")
+    cfg = UserConfig.from_uci("Auto MPG", column_names=mpg_columns, sep="\s+")
     trainer = Trainer(device="cpu")
     trainer.load_config(cfg)
-    with pytest.warns(
-        UserWarning,
-        match=r"The inferred task multiclass is not consistent with the selected task regression",
-    ):
-        trainer.load_data()
+    trainer.load_data()
     models = [
         PytorchTabular(trainer, model_subset=["Category Embedding"]),
         WideDeep(trainer, model_subset=["TabMlp"]),
@@ -848,7 +862,7 @@ def test_uci_autompg_regression():
 def test_uci_adult_binary():
     tabensemb.setting["debug_mode"] = True
     with pytest.warns(UserWarning):
-        cfg = UserConfig.from_uci("Adult", sep=", ")
+        cfg = UserConfig.from_uci("Adult", column_names=adult_columns, sep=", ")
     trainer = Trainer(device="cpu")
     trainer.load_config(cfg)
     trainer.load_data()

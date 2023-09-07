@@ -244,15 +244,17 @@ def test_exceptions(capfd):
     ]
     trainer.add_modelbases(models)
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         models[0]._check_train_status()
+    assert "not trained" in err.value.args[0]
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         models[0].predict(
             trainer.df,
             model_name="Category Embedding",
             derived_data=trainer.derived_data,
         )
+    assert "Run fit() before predict()" in err.value.args[0]
 
     models[0].fit(
         trainer.df,
@@ -266,12 +268,13 @@ def test_exceptions(capfd):
     assert "conflicts" in out
     assert trainer.args["bayes_opt"]
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         models[0].predict(
             trainer.df,
             model_name="TEST",
             derived_data=trainer.derived_data,
         )
+    assert "is not available" in err.value.args[0]
 
 
 def test_check_batch_size():
@@ -283,10 +286,11 @@ def test_check_batch_size():
     )
     l = len(trainer.train_indices)
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         model.limit_batch_size = -1
         with pytest.warns(UserWarning):
             res = model._check_params("TEST", **{"batch_size": 2})
+    assert "However, the attribute `limit_batch_size` is set to -1" in err.value.args[0]
 
     with pytest.warns(UserWarning):
         model.limit_batch_size = -1
@@ -315,8 +319,9 @@ def test_check_batch_size():
 def test_get_model_names():
     pytest_configure_trainer()
     trainer = pytest.test_model_trainer
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         model = CatEmbed(trainer, model_subset=["TEST"])
+    assert "not available" in err.value.args[0]
     model = CatEmbed(trainer, exclude_models=["Category Embedding"])
     got = model.get_model_names()
     got_all = model._get_model_names()
@@ -396,17 +401,19 @@ def test_abstract_model():
         super(NotImplementedModel, abs_model)._space("TEST")
     with pytest.raises(NotImplementedError):
         super(NotImplementedModel, abs_model)._initial_values("TEST")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         abs_model = NotImplementedModel(
             trainer,
             program="TEST_PROGRAM",
             model_subset=["TEST"],
             exclude_models=["TEST"],
         )
+    assert "Only one of model_subset and exclude_models" in err.value.args[0]
 
     abs_model.model = []
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         abs_model.detach_model(model_name="TEST")
+    assert "The modelbase does not support model detaching." in err.value.args[0]
 
     abs_model.model = {"TEST": None}
     abs_model.model_params = {"TEST": {"test_param": 1.2}}
@@ -449,17 +456,19 @@ def test_count_params():
     cnt_6 = new_model.count_params("Category Embedding", trainable_only=True)
     assert cnt_3 == cnt_6
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         new_model.model["Category Embedding"].set_requires_grad(
             new_model.model["Category Embedding"], state=state, requires_grad=False
         )
+    assert "One of" in err.value.args[0]
 
 
 def test_config_not_loaded():
     tabensemb.setting["debug_mode"] = True
     trainer = Trainer(device="cpu")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         model = CatEmbed(trainer)
+    assert "trainer.load_config is not called" in err.value.args[0]
 
 
 def test_require_model_exceptions():
@@ -661,12 +670,15 @@ def test_custom_dataset():
 
 
 def test_get_loss_fn():
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         _ = AbstractNN.get_loss_fn(loss="TEST", task="binary")
-    with pytest.raises(Exception):
+    assert "Only cross entropy loss is supported" in err.value.args[0]
+    with pytest.raises(Exception) as err:
         _ = AbstractNN.get_loss_fn(loss="TEST", task="multiclass")
-    with pytest.raises(Exception):
+    assert "Only cross entropy loss is supported" in err.value.args[0]
+    with pytest.raises(Exception) as err:
         _ = AbstractNN.get_loss_fn(loss="mse", task="TEST")
+    assert "Unrecognized task" in err.value.args[0]
 
     a = torch.tensor([-0.1, 1.1, 0.3, 0.2], dtype=torch.float32)
     b = torch.tensor([0, 1, 0, 1], dtype=torch.float32)

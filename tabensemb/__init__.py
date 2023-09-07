@@ -34,6 +34,8 @@ setting = dict(
     # Model bases will check the task type before training. If set to True and the inferred task is not consistent with
     # the configuration, an exception will be raised.
     raise_inconsistent_inferred_task=False,
+    # Set matplotlib.rc("text", usetex=True) if latex installation is found.
+    matplotlib_usetex=False,
 )
 
 if setting["debug_mode"]:

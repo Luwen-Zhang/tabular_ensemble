@@ -10,6 +10,7 @@ from tabensemb.utils.utils import global_setting
 import numpy as np
 import pandas as pd
 import torch
+import copy
 
 relative_deriver_kwargs = {
     "stacked": True,
@@ -143,7 +144,9 @@ def test_prepare_new_data_randpermed():
 
 def test_prepare_new_data_categorical_label():
     pytest_configure_data()
-    config = UserConfig.from_uci("Iris", datafile_name="iris")
+    config = UserConfig.from_uci(
+        "Iris", column_names=iris_columns, datafile_name="iris"
+    )
     datamodule = DataModule(config=config)
     datamodule.load_data()
     csv_path = os.path.join(
@@ -224,23 +227,30 @@ def test_get_feature_by_type():
             for real, got in zip(range(len(datamodule.cat_feature_names)), cat_idx)
         ]
     )
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         datamodule.get_feature_names_by_type("TEST")
+    assert "invalid" in err.value.args[0]
 
 
 def test_set_feature_names():
     pytest_configure_data()
     datamodule = pytest.datamodule
 
-    with pytest.raises(Exception):
-        datamodule.set_feature_names(datamodule.cat_feature_names)
+    # set without continuous features
+    no_cont_datamodule = copy.deepcopy(datamodule)
+    no_cont_datamodule.set_feature_names(datamodule.cat_feature_names)
+    assert len(no_cont_datamodule.cont_feature_names) == 0
+
+    no_cat_datamodule = copy.deepcopy(datamodule)
+    no_cat_datamodule.set_feature_names(datamodule.cont_feature_names)
+    assert len(no_cat_datamodule.cat_feature_names) == 0
 
     datamodule.set_feature_names(datamodule.cont_feature_names[:2])
     assert (
         len(datamodule.cont_feature_names) == 2
         and len(datamodule.cat_feature_names) == 0
         and len(datamodule.label_name) == 1
-    ), "set_feature_names is not functional."
+    ), "set_feature_names is not functioning."
 
 
 def test_sort_derived_data():
@@ -260,7 +270,7 @@ def test_sort_derived_data():
     )
     absent_derived_data = derived_data.copy()
     del absent_derived_data[list(derived_data.keys())[0]]
-    with pytest.raises(Exception):
+    with pytest.raises(KeyError):
         datamodule.sort_derived_data(absent_derived_data)
     datamodule.sort_derived_data(absent_derived_data, ignore_absence=True)
 
@@ -397,13 +407,14 @@ def test_illegal_cont_feature():
     datamodule.load_data()
 
     # "cat_0" is object and cannot be converted
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         datamodule.set_data(
             datamodule.df,
             cont_feature_names=["cont_0", "cat_0"],
             cat_feature_names=[],
             label_name=datamodule.label_name,
         )
+    assert "are object, but are included in continuous features" in err.value.args[0]
 
     df = datamodule.df.copy()
     df["cat_1"] = df["cat_1"].values.astype(object)
@@ -520,9 +531,10 @@ def test_abstract_deriver():
         def _required_cols(self):
             return []
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         # "stacked", "intermediate", and "derived_name" is not specified.
         _ = NotImplementedDeriver()
+    assert "stacked" in err.value.args[0]
     deriver = NotImplementedDeriver(
         **{"stacked": True, "intermediate": False, "derived_name": "TEST_DERIVED"}
     )
@@ -531,8 +543,9 @@ def test_abstract_deriver():
     with pytest.raises(NotImplementedError):
         super(NotImplementedDeriver, deriver)._required_cols()
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         _ = RelativeDeriver(**{"relative2_col": "TEST", "derived_name": "TEST_DERIVED"})
+    assert "absolute_col" in err.value.args[0]
     legal_deriver = RelativeDeriver(
         **{
             "relative2_col": "TEST",
@@ -541,12 +554,14 @@ def test_abstract_deriver():
         }
     )
     legal_deriver._check_arg(name="relative2_col")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         legal_deriver._check_exist(df=datamodule.df, name="relative2_col")
+    assert "is not a valid column" in err.value.args[0]
     legal_deriver.kwargs["relative2_col"] = "cont_0"
     legal_deriver._check_exist(df=datamodule.df, name="relative2_col")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         legal_deriver._check_values(np.zeros((len(datamodule.df),)))
+    assert "returns a one dimensional" in err.value.args[0]
     legal_deriver._check_values(np.zeros((len(datamodule.df), 1)))
     legal_deriver._check_values(np.zeros((len(datamodule.df), 2)))
 
@@ -646,8 +661,9 @@ def test_abstract_splitter():
     with pytest.raises(Exception) as err:
         splitter._check_split(np.array([1, 2, 3]), np.array([3]), np.array([5]))
     assert "intersection" in err.value.args[0]
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         splitter._check_exist(datamodule.df, "TEST", "TEST")
+    assert "is not a valid column" in err.value.args[0]
     splitter._check_exist(datamodule.df, "cont_0", "cont_0")
 
     from tabensemb.data import dataderiver, dataimputer, datasplitter, dataprocessor
@@ -682,7 +698,7 @@ def test_datamodule_utils():
     datamodule.set_data_splitter("RandomSplitter")
     datamodule.set_data_splitter("RandomSplitter", ratio=[0.6, 0.2, 0.2])
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         datamodule.set_data_processors(
             [
                 ("StandardScaler", {}),
@@ -690,10 +706,12 @@ def test_datamodule_utils():
                 ("StandardScaler", {}),
             ]
         )
-    with pytest.raises(Exception):
+    assert "More than one AbstractScaler" in err.value.args[0]
+    with pytest.raises(Exception) as err:
         datamodule.set_data_processors(
             [("StandardScaler", {}), ("CategoricalOrdinalEncoder", {})]
         )
+    assert "The last dataprocessor" in err.value.args[0]
 
     tensors = datamodule.get_additional_tensors_slice(datamodule.test_indices)
     arrays = list(
@@ -710,8 +728,9 @@ def test_datamodule_utils():
     assert np.allclose(tensor.cpu().numpy(), array)
 
     assert np.all(datamodule.test_indices == datamodule._get_indices("test"))
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as err:
         datamodule._get_indices("TEST")
+    assert "not available" in err.value.args[0]
 
     cont_data, cat_data, label_data = datamodule.divide_from_tabular_dataset(
         datamodule.scaled_df

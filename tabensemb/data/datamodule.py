@@ -410,8 +410,8 @@ class DataModule:
             current_derived_stacked_features = (
                 self.extract_derived_stacked_feature_names(cont_feature_names)
             )
-            removed = np.setdiff1d(
-                current_derived_stacked_features, derived_stacked_features
+            removed = list(
+                np.setdiff1d(current_derived_stacked_features, derived_stacked_features)
             )
             cont_feature_names = [x for x in cont_feature_names if x not in removed]
         self.cont_feature_names = cont_feature_names
@@ -866,8 +866,6 @@ class DataModule:
         derived_stacked_features = self.extract_derived_stacked_feature_names(
             all_feature_names
         )
-        if len(cont_feature_names) == 0:
-            raise Exception(f"At least one continuous feature should be provided.")
         has_indices = hasattr(self, "train_indices")
         self.set_data(
             self.df,

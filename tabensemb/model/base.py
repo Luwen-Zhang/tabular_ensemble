@@ -1602,7 +1602,7 @@ class TorchModel(AbstractModel):
 
             def forward_func(_X, *_D):
                 # This is decomposed from _data_preprocess (The second part)
-                _tensors = (_X, *_D)
+                _tensors = (_X, *_D, torch.ones_like(y))
                 dataset = self._generate_dataset_from_tensors(
                     _tensors, df, derived_data, model_name
                 )
@@ -1962,8 +1962,14 @@ class TorchModel(AbstractModel):
         # 1. prepare_custom_datamodule + DataModule.update_dataset
         # 2. _generate_dataset using tensors in DataModule
         # In _data_preprocess
+        # 0. Check the label(s).
         # 1. _prepare_tensors = _run_custom_data_module + update_dataset
         # 2. _generate_dataset_from_tensors is very similar to _generate_dataset, but does not split it into three parts.
+        df = df.copy()
+        for label in self.trainer.label_name:
+            if label not in df.columns:
+                # Just to create a placeholder for datamodule.generate_tensors.
+                df[label] = np.zeros_like(self.trainer.df[label].values)[: len(df)]
         tensors, df, derived_data, _ = self._prepare_tensors(
             df, derived_data, model_name
         )
@@ -2044,11 +2050,11 @@ class TorchModel(AbstractModel):
             fast_dev_run=False,
             max_time=None,
             gpus=None,
-            accelerator="auto",
+            accelerator="cpu" if self.device == "cpu" else "auto",
             devices=None,
             accumulate_grad_batches=1,
             auto_lr_find=False,
-            auto_select_gpus=True,
+            # auto_select_gpus=True,
             check_val_every_n_epoch=1,
             gradient_clip_val=0.0,
             overfit_batches=0.0,

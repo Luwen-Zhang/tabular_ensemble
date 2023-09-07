@@ -1,4 +1,4 @@
-from typing import Dict, Union
+from typing import Dict, Union, List
 import json
 import os.path
 import importlib.machinery
@@ -168,6 +168,7 @@ class UserConfig(dict):
     def from_uci(
         name: str,
         datafile_name: str = None,
+        column_names: List[str] = None,
         save_zip: bool = False,
         max_retries=3,
         timeout=5,
@@ -186,6 +187,11 @@ class UserConfig(dict):
         datafile_name
             The name of ".data" file in the downloaded .zip file. If is None and there exists more than one file with
             the suffix ".data" in a single dataset, the function will print available names.
+        column_names
+            Labels of columns in the ".data" file in the downloaded .zip file. If not given, names recorded on the
+            website will be used. However, these names can be in a wrong order, of which "Auto MPG" is a typical
+            example. So a warning will be logged, and `save_zip` will be set to True to let the user check the ".name"
+            file in the .zip file for the correct order.
         save_zip
             Whether the downloaded .zip file should be stored.
         max_retries
@@ -300,11 +306,49 @@ class UserConfig(dict):
 
         # Load and save as .csv
         datafile = zipf.read(datafile_name + ".data")
+        if column_names is None:
+            warnings.warn(
+                "`column_names` is not given. The order of columns will be loaded from the website. It is highly "
+                "recommended to manually set column names. The downloaded .zip is saved. Please check its .name file "
+                "for the correct order."
+            )
+            save_zip = True
+            column_names = all_features
+        column_names_not_all_features = [
+            x for x in column_names if x not in all_features
+        ]
+        if len(column_names_not_all_features) > 0:
+            raise Exception(
+                f"Available column names are {all_features}, but `column_names` has columns not available: "
+                f"{column_names_not_all_features}."
+            )
+        all_features_not_column_names = [
+            x for x in all_features if x not in column_names
+        ]
+        if len(all_features_not_column_names) > 0:
+            warnings.warn(
+                f"Available column names are {all_features}, but `column_names` does not have "
+                f"{all_features_not_column_names}."
+            )
+            cont_feature_names = [
+                x for x in cont_feature_names if x not in all_features_not_column_names
+            ]
+            cat_feature_names = [
+                x for x in cat_feature_names if x not in all_features_not_column_names
+            ]
+            original_label_names = label_name.copy()
+            label_name = [
+                x for x in label_name if x not in all_features_not_column_names
+            ]
+            if len(label_name) == 0:
+                raise Exception(
+                    f"No label is found. Did you miss the label names {original_label_names} in `column_names`?"
+                )
         try:
             df = str_to_dataframe(
                 datafile.decode(),
                 sep=sep,
-                names=all_features,
+                names=column_names,
                 check_nan_on=cont_feature_names,
             )
         except Exception as e:
