@@ -657,8 +657,12 @@ def test_plots():
 
     with HiddenPltShow():
         print(f"\n-- Correlation --\n")
-        trainer.plot_corr()
+        trainer.plot_corr(imputed=True)
         trainer.plot_corr(imputed=False)
+
+        print(f"\n-- hist --\n")
+        trainer.plot_hist(imputed=True)
+        trainer.plot_hist(imputed=False)
 
         print(f"\n-- Pair --\n")
         trainer.plot_pairplot()
@@ -668,7 +672,8 @@ def test_plots():
         trainer.plot_truth_pred(program="CatEmbed", log_trans=False)
 
         print(f"\n-- Feature box --\n")
-        trainer.plot_feature_box()
+        trainer.plot_feature_box(imputed=False)
+        trainer.plot_feature_box(imputed=True)
 
         print(f"\n-- Partial Err --\n")
         trainer.plot_partial_err(program="CatEmbed", model_name="Category Embedding")
@@ -843,7 +848,7 @@ def test_uci_iris_multiclass():
 
 def test_uci_autompg_regression():
     tabensemb.setting["debug_mode"] = True
-    cfg = UserConfig.from_uci("Auto MPG", column_names=mpg_columns, sep="\s+")
+    cfg = UserConfig.from_uci("Auto MPG", column_names=mpg_columns, sep=r"\s+")
     trainer = Trainer(device="cpu")
     trainer.load_config(cfg)
     trainer.load_data()

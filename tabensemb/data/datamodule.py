@@ -14,6 +14,7 @@ import sklearn.pipeline
 import sklearn.ensemble
 from collections.abc import Iterable
 from sklearn.preprocessing import OrdinalEncoder
+import scipy.stats as st
 
 
 class DataModule:
@@ -1049,7 +1050,9 @@ class DataModule:
         X.columns = X.columns.astype(str)
         try:
             if transform:
-                X.loc[:, cat_features] = encoder.transform(X[cat_features].copy())
+                X.loc[:, cat_features] = encoder.transform(
+                    X[cat_features].copy()
+                ).astype(int)
             else:
                 X.loc[:, cat_features] = encoder.inverse_transform(
                     X[cat_features].copy()
@@ -1642,6 +1645,10 @@ class DataModule:
         mode, cnt_mode, mode_percent = self._get_mode(tabular)
         desc = pd.concat([desc, mode, cnt_mode, mode_percent], axis=0)
 
+        kurtosis = self._get_kurtosis(tabular)
+        kurtosis[self.cat_feature_names] = np.nan
+        desc = pd.concat([desc, kurtosis], axis=0)
+
         return desc
 
     def get_derived_data_sizes(self) -> List[Tuple]:
@@ -1674,6 +1681,27 @@ class DataModule:
             data=np.array([[gini(tabular[x]) for x in tabular.columns]]),
             columns=tabular.columns,
             index=["Gini Index"],
+        )
+
+    @staticmethod
+    def _get_kurtosis(tabular: pd.DataFrame) -> pd.DataFrame:
+        """
+        Get the kurtosis for each feature in the tabular dataset.
+
+        Parameters
+        ----------
+        tabular
+            The tabular dataset.
+
+        Returns
+        -------
+        pd.DataFrame
+            The kurtosis for each feature in the dataset.
+        """
+        return pd.DataFrame(
+            data=st.kurtosis(tabular.values, axis=0).reshape(1, -1),
+            columns=tabular.columns,
+            index=["Kurtosis"],
         )
 
     @staticmethod
@@ -1853,16 +1881,12 @@ class DataModule:
         """
         tmp_cont_df = self.df.copy().loc[:, self.cont_feature_names]
         if np.sum(np.abs(self.cont_imputed_mask.values)) != 0:
-            tmp_cont_df.values[
-                np.where(self.cont_imputed_mask[self.cont_feature_names].values)
-            ] = np.nan
+            tmp_cont_df[self.cont_imputed_mask == 1] = np.nan
         tmp_cat_df = self.categories_inverse_transform(self.df).loc[
             :, self.cat_feature_names
         ]
         if np.sum(np.abs(self.cat_imputed_mask.values)) != 0:
-            tmp_cat_df.values[
-                np.where(self.cat_imputed_mask[self.cat_feature_names].values)
-            ] = np.nan
+            tmp_cat_df[self.cat_imputed_mask == 1] = np.nan
         not_imputed_df = self.df.copy()
         not_imputed_df.loc[:, self.all_feature_names] = pd.concat(
             [tmp_cont_df, tmp_cat_df], axis=1

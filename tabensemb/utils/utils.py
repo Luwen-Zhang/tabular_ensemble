@@ -543,10 +543,10 @@ def get_figsize(n, max_col, width_per_item, height_per_item, max_width):
     -------
     tuple
         The ``figsize`` argument of ``matplotlib``
-    float
-        The width of the figure
-    float
-        The height of the figure
+    int
+        The number of columns of the figure
+    int
+        The number of rows of the figure
     """
     if n > max_col:
         width = max_col
@@ -596,18 +596,6 @@ def plot_pdp(
     fill_between_kwargs_ = update_defaults_by_kwargs(
         dict(alpha=0.4, color="k", edgecolor=None), fill_between_kwargs
     )
-    bar_kwargs_ = update_defaults_by_kwargs(
-        dict(
-            capsize=5,
-            color=[0.5, 0.5, 0.5],
-            edgecolor=None,
-            error_kw={"elinewidth": 0.2, "capthick": 0.2},
-        ),
-        bar_kwargs,
-    )
-    hist_kwargs_ = update_defaults_by_kwargs(
-        dict(density=True, color="k", alpha=0.2, rwidth=0.8), hist_kwargs
-    )
 
     figsize, width, height = get_figsize(n=len(feature_names), **get_figsize_kwargs_)
 
@@ -642,14 +630,11 @@ def plot_pdp(
                 if not np.isnan(ci_left_list[idx]).any()
                 else None
             )
-            ax.bar(
+            ax.errorbar(
                 x_values_list[idx],
                 transform(mean_pdp_list[idx]),
                 yerr=yerr,
-                tick_label=[
-                    cat_feature_mapping[focus_feature][x] for x in x_values_list[idx]
-                ],
-                **bar_kwargs_,
+                **plot_kwargs_,
             )
 
         ax.set_title(focus_feature, {"fontsize": 12})
@@ -666,16 +651,21 @@ def plot_pdp(
             ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
 
         if np.min(x_values_list[idx]) < np.max(x_values_list[idx]):
-            if focus_feature not in cat_feature_names:
-                ax2 = ax.twinx()
-
-                ax2.hist(
-                    hist_data[focus_feature], bins=x_values_list[idx], **hist_kwargs_
-                )
-                # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
-                # ax2.set_ylim([0,1])
-                ax2.set_xlim([np.min(x_values_list[idx]), np.max(x_values_list[idx])])
-                ax2.set_yticks([])
+            ax2 = ax.twinx()
+            hist_kwargs_ = update_defaults_by_kwargs(
+                dict(bins=x_values_list[idx]), hist_kwargs
+            )
+            plot_one_hist(
+                ax=ax2,
+                hist_data=hist_data,
+                cat_feature_mapping=cat_feature_mapping,
+                focus_feature=focus_feature,
+                cat_feature_names=cat_feature_names,
+                x_values=x_values_list[idx],
+                hist_kwargs=hist_kwargs_,
+                bar_kwargs=bar_kwargs,
+            )
+            ax2.set_yticks([])
         else:
             ax2 = ax.twinx()
             ax2.text(0.5, 0.5, "Invalid interval", ha="center", va="center")
@@ -696,6 +686,66 @@ def plot_pdp(
     plt.xlabel(r"Value of predictors ($10\%$-$90\%$ percentile)")
 
     return fig
+
+
+def plot_one_hist(
+    ax,
+    hist_data,
+    cat_feature_mapping,
+    focus_feature,
+    cat_feature_names,
+    x_values=None,
+    hist_kwargs: Dict = None,
+    bar_kwargs: Dict = None,
+):
+    """
+    A utility of :meth:`tabensemb.trainer.Trainer.plot_partial_dependence` and
+    :meth:`tabensemb.trainer.Trainer.plot_hist`.
+    """
+    bar_kwargs_ = update_defaults_by_kwargs(
+        dict(color="k", alpha=0.2, edgecolor=None), bar_kwargs
+    )
+    hist_kwargs_ = update_defaults_by_kwargs(
+        dict(density=True, color="k", alpha=0.2, rwidth=0.95), hist_kwargs
+    )
+    x_values = (
+        np.sort(np.unique(hist_data[focus_feature].values.flatten()))
+        if x_values is None
+        else x_values
+    )
+    x_values = x_values[np.isfinite(x_values)]
+    if len(x_values) > 0:
+        if focus_feature not in cat_feature_names:
+            ax.hist(hist_data[focus_feature], **hist_kwargs_)
+            # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
+            # ax2.set_ylim([0,1])
+            ax.set_xlim([np.min(x_values), np.max(x_values)])
+        else:
+            counts = np.array(
+                [
+                    len(np.where(hist_data[focus_feature].values == x)[0])
+                    for x in x_values
+                ]
+            )
+            ax.bar(
+                x_values,
+                counts,
+                tick_label=[cat_feature_mapping[focus_feature][x] for x in x_values],
+                **bar_kwargs_,
+            )
+            ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
+            count_range = np.max(counts) - np.min(counts)
+            ax.set_ylim(
+                [
+                    np.min(counts) - 0.2 * count_range,
+                    np.max(counts) + 0.2 * count_range,
+                ]
+            )
+    else:
+        ax.text(0.5, 0.5, "Invalid interval", ha="center", va="center")
+        ax.set_xlim([0, 1])
+        ax.set_ylim([0, 1])
+        ax.set_yticks([])
 
 
 def plot_partial_err(

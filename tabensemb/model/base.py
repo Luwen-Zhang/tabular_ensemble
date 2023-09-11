@@ -876,8 +876,8 @@ class AbstractModel:
 
     def _custom_training_params(self, model_name) -> Dict:
         """
-        Customized training settings to override settings in the configuration. Functional keys are ``epoch``,
-        ``patience``, and ``bayes_calls``.
+        Customized training settings to override settings in the configuration. The configuration will be restored after
+        training the model.
 
         Parameters
         ----------
@@ -931,8 +931,12 @@ class AbstractModel:
             data = self._train_data_preprocess(model_name)
             tmp_params = self._get_params(model_name, verbose=verbose)
             space = self._space(model_name=model_name)
+
+            original_args = self.trainer.args
             args = self.trainer.args.copy()
             args.update(self._custom_training_params(model_name))
+            self.trainer.args = args
+
             do_bayes_opt = args["bayes_opt"] and not warm_start
             total_epoch = args["epoch"] if not tabensemb.setting["debug_mode"] else 2
             if do_bayes_opt and len(space) > 0:
@@ -1106,6 +1110,7 @@ class AbstractModel:
             pred_set(data["X_test"], data["y_test"], "Testing")
             self.model[model_name] = model
             torch.cuda.empty_cache()
+            self.trainer.args = original_args
 
         self.trainer.set_status(training=False)
         if dump_trainer:
