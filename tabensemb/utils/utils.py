@@ -642,14 +642,11 @@ def plot_pdp(
                 if not np.isnan(ci_left_list[idx]).any()
                 else None
             )
-            ax.bar(
+            ax.errorbar(
                 x_values_list[idx],
                 transform(mean_pdp_list[idx]),
                 yerr=yerr,
-                tick_label=[
-                    cat_feature_mapping[focus_feature][x] for x in x_values_list[idx]
-                ],
-                **bar_kwargs_,
+                **plot_kwargs_,
             )
 
         ax.set_title(focus_feature, {"fontsize": 12})
