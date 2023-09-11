@@ -1049,7 +1049,9 @@ class DataModule:
         X.columns = X.columns.astype(str)
         try:
             if transform:
-                X.loc[:, cat_features] = encoder.transform(X[cat_features].copy())
+                X.loc[:, cat_features] = encoder.transform(
+                    X[cat_features].copy()
+                ).astype(int)
             else:
                 X.loc[:, cat_features] = encoder.inverse_transform(
                     X[cat_features].copy()
