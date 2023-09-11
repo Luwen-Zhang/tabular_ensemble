@@ -1881,16 +1881,12 @@ class DataModule:
         """
         tmp_cont_df = self.df.copy().loc[:, self.cont_feature_names]
         if np.sum(np.abs(self.cont_imputed_mask.values)) != 0:
-            tmp_cont_df.values[
-                np.where(self.cont_imputed_mask[self.cont_feature_names].values)
-            ] = np.nan
+            tmp_cont_df[self.cont_imputed_mask == 1] = np.nan
         tmp_cat_df = self.categories_inverse_transform(self.df).loc[
             :, self.cat_feature_names
         ]
         if np.sum(np.abs(self.cat_imputed_mask.values)) != 0:
-            tmp_cat_df.values[
-                np.where(self.cat_imputed_mask[self.cat_feature_names].values)
-            ] = np.nan
+            tmp_cat_df[self.cat_imputed_mask == 1] = np.nan
         not_imputed_df = self.df.copy()
         not_imputed_df.loc[:, self.all_feature_names] = pd.concat(
             [tmp_cont_df, tmp_cat_df], axis=1

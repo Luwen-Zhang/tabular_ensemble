@@ -194,7 +194,7 @@ def test_data_deriver():
 @pytest.mark.order(before="test_set_feature_names")
 def test_describe():
     pytest_configure_data()
-    datamodule = pytest.datamodule
+    datamodule = pytest.min_datamodule
     datamodule.describe()
     datamodule.cal_corr()
 
@@ -202,7 +202,15 @@ def test_describe():
 @pytest.mark.order(before="test_set_feature_names")
 def test_get_not_imputed():
     pytest_configure_data()
-    pytest.datamodule.get_not_imputed_df()
+    not_imputed = pytest.min_datamodule.get_not_imputed_df()
+    mask = pytest.min_datamodule.cont_imputed_mask
+    missing = np.where(mask.values == 1)
+    assert all(
+        [
+            np.isnan(not_imputed.values[missing[0][i], missing[1][i]])
+            for i in range(len(missing[0]))
+        ]
+    )
 
 
 @pytest.mark.order(before="test_set_feature_names")
