@@ -1368,9 +1368,9 @@ class Trainer:
         fill_between_kwargs
             Arguments for ``ax.fill_between``.
         bar_kwargs
-            Arguments for ``ax.bar``.
+            Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
-            Arguments for ``ax.hist``.
+            Arguments for ``ax.hist`` (used for histograms of continuous features).
         """
         (
             x_values_list,
@@ -1401,7 +1401,7 @@ class Trainer:
             mean_pdp_list,
             ci_left_list,
             ci_right_list,
-            self.unscaled_feature_data,
+            self.datamodule.get_tabular_dataset(transformed=False)[0],
             log_trans=log_trans,
             lower_lim=lower_lim,
             upper_lim=upper_lim,
@@ -1583,7 +1583,9 @@ class Trainer:
                 )
 
         plt.tight_layout()
-        plt.savefig(os.path.join(self.project_root, "corr.pdf"))
+        plt.savefig(
+            os.path.join(self.project_root, f"corr{'_imputed' if imputed else ''}.pdf")
+        )
         if is_notebook():
             plt.show()
         plt.close()
@@ -1662,8 +1664,86 @@ class Trainer:
         plt.ylabel("Values (Standard Scaled)")
         # ax.tick_params(axis='x', rotation=90)
         plt.tight_layout()
-        plt.savefig(os.path.join(self.project_root, "feature_box.pdf"))
+        plt.savefig(
+            os.path.join(
+                self.project_root, f"feature_box{'_imputed' if imputed else ''}.pdf"
+            )
+        )
         plt.show()
+        plt.close()
+
+    def plot_hist(
+        self,
+        imputed=False,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        bar_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+    ):
+        """
+        Plot histograms of the tabular data.
+
+        Parameters
+        ----------
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        bar_kwargs
+            Arguments for ``ax.bar`` (used for frequencies of categorical features).
+        hist_kwargs
+            Arguments for ``ax.hist`` (used for histograms of continuous features).
+        """
+        get_figsize_kwargs_ = update_defaults_by_kwargs(
+            dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
+            get_figsize_kwargs,
+        )
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+
+        feature_names = self.all_feature_names + self.label_name
+        hist_data = (
+            self.datamodule.categories_transform(self.datamodule.get_not_imputed_df())
+            if not imputed
+            else self.df
+        )
+        figsize, width, height = get_figsize(
+            n=len(feature_names), **get_figsize_kwargs_
+        )
+
+        fig = plt.figure(figsize=figsize, **figure_kwargs_)
+
+        for idx, focus_feature in enumerate(feature_names):
+            ax = plt.subplot(height, width, idx + 1)
+            ax.set_title(focus_feature, {"fontsize": 12})
+            plot_one_hist(
+                ax=ax,
+                hist_data=hist_data,
+                cat_feature_mapping=self.cat_feature_mapping,
+                focus_feature=focus_feature,
+                cat_feature_names=self.cat_feature_names,
+                hist_kwargs=hist_kwargs,
+                bar_kwargs=bar_kwargs,
+            )
+
+        ax = fig.add_subplot(111, frameon=False)
+        plt.tick_params(
+            labelcolor="none",
+            which="both",
+            top=False,
+            bottom=False,
+            left=False,
+            right=False,
+        )
+        plt.ylabel("Density")
+        plt.xlabel("Value of predictors")
+
+        plt.savefig(
+            os.path.join(self.project_root, f"hist{'_imputed' if imputed else ''}.pdf")
+        )
+        if is_notebook():
+            plt.show()
         plt.close()
 
     def _bootstrap(
