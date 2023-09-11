@@ -14,6 +14,7 @@ import sklearn.pipeline
 import sklearn.ensemble
 from collections.abc import Iterable
 from sklearn.preprocessing import OrdinalEncoder
+import scipy.stats as st
 
 
 class DataModule:
@@ -1644,6 +1645,10 @@ class DataModule:
         mode, cnt_mode, mode_percent = self._get_mode(tabular)
         desc = pd.concat([desc, mode, cnt_mode, mode_percent], axis=0)
 
+        kurtosis = self._get_kurtosis(tabular)
+        kurtosis[self.cat_feature_names] = np.nan
+        desc = pd.concat([desc, kurtosis], axis=0)
+
         return desc
 
     def get_derived_data_sizes(self) -> List[Tuple]:
@@ -1676,6 +1681,27 @@ class DataModule:
             data=np.array([[gini(tabular[x]) for x in tabular.columns]]),
             columns=tabular.columns,
             index=["Gini Index"],
+        )
+
+    @staticmethod
+    def _get_kurtosis(tabular: pd.DataFrame) -> pd.DataFrame:
+        """
+        Get the kurtosis for each feature in the tabular dataset.
+
+        Parameters
+        ----------
+        tabular
+            The tabular dataset.
+
+        Returns
+        -------
+        pd.DataFrame
+            The kurtosis for each feature in the dataset.
+        """
+        return pd.DataFrame(
+            data=st.kurtosis(tabular.values, axis=0).reshape(1, -1),
+            columns=tabular.columns,
+            index=["Kurtosis"],
         )
 
     @staticmethod
