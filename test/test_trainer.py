@@ -848,7 +848,7 @@ def test_uci_iris_multiclass():
 
 def test_uci_autompg_regression():
     tabensemb.setting["debug_mode"] = True
-    cfg = UserConfig.from_uci("Auto MPG", column_names=mpg_columns, sep="\s+")
+    cfg = UserConfig.from_uci("Auto MPG", column_names=mpg_columns, sep=r"\s+")
     trainer = Trainer(device="cpu")
     trainer.load_config(cfg)
     trainer.load_data()
