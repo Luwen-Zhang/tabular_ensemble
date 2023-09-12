@@ -344,7 +344,7 @@ class DataModule:
         )
         for feature in illegal_cont_features:
             try:
-                df.loc[:, feature] = df.loc[:, feature].values.astype(np.float64)
+                df[feature] = df[feature].values.astype(np.float64)
                 illegal_cont_features.remove(feature)
             except:
                 pass
@@ -492,8 +492,8 @@ class DataModule:
             ]
             self.label_ordinal_encoder = OrdinalEncoder()
             res = self.label_ordinal_encoder.fit_transform(self.label_data).astype(int)
-            self.df.loc[:, self.label_name] = res
-            self.scaled_df.loc[:, self.label_name] = res
+            self.df[self.label_name] = res
+            self.scaled_df[self.label_name] = res
         else:
             self.label_ordinal_encoder = None
             self.n_classes = [None]
@@ -1050,13 +1050,9 @@ class DataModule:
         X.columns = X.columns.astype(str)
         try:
             if transform:
-                X.loc[:, cat_features] = encoder.transform(
-                    X[cat_features].copy()
-                ).astype(int)
+                X[cat_features] = encoder.transform(X[cat_features].copy()).astype(int)
             else:
-                X.loc[:, cat_features] = encoder.inverse_transform(
-                    X[cat_features].copy()
-                )
+                X[cat_features] = encoder.inverse_transform(X[cat_features].copy())
         except:
             try:
                 if transform:
@@ -1270,9 +1266,7 @@ class DataModule:
                 df = pd.concat(
                     [df, training.loc[self.augmented_indices, :]], axis=0
                 ).reset_index(drop=True)
-            df.loc[:, self.cat_feature_names] = df.loc[
-                :, self.cat_feature_names
-            ].astype(np.int16)
+            df[self.cat_feature_names] = df[self.cat_feature_names].astype(int)
             return df
 
         self.df = process_df(self.df, unscaled_training_data, unscaled_testing_data)
@@ -1504,12 +1498,12 @@ class DataModule:
             A tensor of continuous features, a list of tensors of derived_unstacked data, and a tensor of the target.
         """
         X = torch.tensor(
-            scaled_df[self.cont_feature_names].values.astype(np.float32),
+            scaled_df[self.cont_feature_names].values.astype(np.float64),
             dtype=torch.float32,
         )
-        D = [torch.tensor(value.astype(np.float32)) for value in derived_data.values()]
+        D = [torch.tensor(value.astype(np.float64)) for value in derived_data.values()]
         y = torch.tensor(
-            scaled_df[self.label_name].values.astype(np.float32),
+            scaled_df[self.label_name].values.astype(np.float64),
             dtype=torch.float32,
         )
         return X, D, y
@@ -1879,7 +1873,7 @@ class DataModule:
         pd.DataFrame
             The tabular dataset without imputation.
         """
-        tmp_cont_df = self.df.copy().loc[:, self.cont_feature_names]
+        tmp_cont_df = self.df.copy()[self.cont_feature_names]
         if np.sum(np.abs(self.cont_imputed_mask.values)) != 0:
             tmp_cont_df[self.cont_imputed_mask == 1] = np.nan
         tmp_cat_df = self.categories_inverse_transform(self.df).loc[
@@ -1888,7 +1882,7 @@ class DataModule:
         if np.sum(np.abs(self.cat_imputed_mask.values)) != 0:
             tmp_cat_df[self.cat_imputed_mask == 1] = np.nan
         not_imputed_df = self.df.copy()
-        not_imputed_df.loc[:, self.all_feature_names] = pd.concat(
+        not_imputed_df[self.all_feature_names] = pd.concat(
             [tmp_cont_df, tmp_cat_df], axis=1
         )
         return not_imputed_df

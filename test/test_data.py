@@ -156,6 +156,10 @@ def test_prepare_new_data_categorical_label():
     os.remove(csv_path)
     df, derived_data = datamodule.prepare_new_data(original_df)
     assert np.equal(
+        datamodule.df[datamodule.all_feature_names].values,
+        df[datamodule.all_feature_names].values,
+    ).all()
+    assert np.equal(
         datamodule.df[datamodule.label_name].values, df[datamodule.label_name].values
     ).all()
     inv_df = datamodule.label_categories_inverse_transform(df)

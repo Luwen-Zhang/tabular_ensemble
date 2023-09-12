@@ -32,25 +32,23 @@ class MiceLightgbmImputer(AbstractImputer):
         impute_features = self._get_impute_features(
             datamodule.cont_feature_names, input_data
         )
-        no_nan = not np.any(np.isnan(input_data.loc[:, impute_features].values))
+        no_nan = not np.any(np.isnan(input_data[impute_features].values))
         imputer = mf.ImputationKernel(
-            input_data.loc[:, impute_features], random_state=0, train_nonmissing=no_nan
+            input_data[impute_features], random_state=0, train_nonmissing=no_nan
         )
         imputer.mice(**self.kwargs)
-        input_data.loc[:, impute_features] = imputer.complete_data().values.astype(
-            np.float32
-        )
+        input_data[impute_features] = imputer.complete_data().values.astype(np.float64)
         imputer.compile_candidate_preds()
         self.transformer = imputer
         return input_data
 
     def _transform(self, input_data: pd.DataFrame, datamodule: DataModule, **kwargs):
-        input_data.loc[:, self.record_imputed_features] = (
+        input_data[self.record_imputed_features] = (
             self.transformer.impute_new_data(
-                new_data=input_data.loc[:, self.record_imputed_features]
+                new_data=input_data[self.record_imputed_features]
             )
             .complete_data()
-            .values.astype(np.float32)
+            .values.astype(np.float64)
         )
         return input_data
 

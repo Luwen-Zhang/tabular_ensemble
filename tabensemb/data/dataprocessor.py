@@ -312,18 +312,18 @@ class StandardScaler(AbstractScaler):
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         scaler = skStandardScaler()
         if len(datamodule.cont_feature_names) > 0:
-            data.loc[:, datamodule.cont_feature_names] = scaler.fit_transform(
-                data.loc[:, datamodule.cont_feature_names]
-            ).astype(np.float32)
+            data[datamodule.cont_feature_names] = scaler.fit_transform(
+                data[datamodule.cont_feature_names]
+            ).astype(np.float64)
 
         self.transformer = scaler
         return data
 
     def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         if len(datamodule.cont_feature_names) > 0:
-            data.loc[:, datamodule.cont_feature_names] = self.transformer.transform(
-                data.loc[:, datamodule.cont_feature_names]
-            ).astype(np.float32)
+            data[datamodule.cont_feature_names] = self.transformer.transform(
+                data[datamodule.cont_feature_names]
+            ).astype(np.float64)
         return data
 
 
@@ -339,8 +339,8 @@ class CategoricalOrdinalEncoder(AbstractTransformer):
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         oe = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan)
-        data.loc[:, datamodule.cat_feature_names] = oe.fit_transform(
-            data.loc[:, datamodule.cat_feature_names]
+        data[datamodule.cat_feature_names] = oe.fit_transform(
+            data[datamodule.cat_feature_names]
         ).astype(int)
         for feature, categories in zip(datamodule.cat_feature_names, oe.categories_):
             datamodule.cat_feature_mapping[feature] = categories
@@ -351,7 +351,7 @@ class CategoricalOrdinalEncoder(AbstractTransformer):
     def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         datamodule.cat_feature_mapping = cp(self.record_feature_mapping)
         try:
-            res = self.transformer.transform(data.loc[:, datamodule.cat_feature_names])
+            res = self.transformer.transform(data[datamodule.cat_feature_names])
             for idx, cat_feature in enumerate(datamodule.cat_feature_names):
                 res[:, idx] = np.nan_to_num(
                     res[:, idx],
@@ -359,13 +359,11 @@ class CategoricalOrdinalEncoder(AbstractTransformer):
                     if "UNK" in self.record_feature_mapping.keys()
                     else len(self.record_feature_mapping),
                 )
-            data.loc[:, datamodule.cat_feature_names] = res.astype(int)
+            data[datamodule.cat_feature_names] = res.astype(int)
         except Exception as e:
             try:
                 # Categorical features are already transformed.
-                self.transformer.inverse_transform(
-                    data.loc[:, datamodule.cat_feature_names]
-                )
+                self.transformer.inverse_transform(data[datamodule.cat_feature_names])
                 return data
             except:
                 raise Exception(
