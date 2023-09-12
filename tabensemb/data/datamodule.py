@@ -2009,3 +2009,46 @@ class DataModule:
             return pip
         else:
             return rf
+
+    def select_by_value(
+        self,
+        column: str,
+        value: Any,
+        df: pd.DataFrame = None,
+        eps: float = None,
+        partition: str = None,
+    ) -> np.ndarray:
+        """
+        Select data points with the given value in the given column.
+
+        Parameters
+        ----------
+        column
+            The column to be investigated.
+        value
+            The value to be selected.
+        df
+            A dataframe to be filtered. If not given, :attr:`df` is used.
+        eps
+            The threshold of `value`. If None, only values "equal" to `value` will be selected.
+        partition
+            "train", "val", "test", or "all"
+
+        Returns
+        -------
+        np.ndarray
+            Indices of the selected data points in the dataframe.
+        """
+        if partition is not None and df is not None:
+            raise Exception(f"Provide only one of `partition` and `df`.")
+        if df is None:
+            df = self.df
+        if eps is None:
+            res = np.array(df[df[column] == value].index)
+        else:
+            res = np.array(df[((df[column] - value).__abs__() <= eps)].index)
+        res = np.sort(res)
+        if partition is not None:
+            part = self._get_indices(partition)
+            res = np.sort(np.intersect1d(res, part))
+        return res
