@@ -476,9 +476,9 @@ class AbstractModel:
             )
             for idx, feature in enumerate(all_feature_names):
                 df = test_data.copy()
-                shuffled = df.loc[:, feature].values
+                shuffled = df[feature].values
                 np.random.shuffle(shuffled)
-                df.loc[:, feature] = shuffled
+                df[feature] = shuffled
                 perm_pred = self.predict(
                     df,
                     derived_data=datamodule.derive_unstacked(df),

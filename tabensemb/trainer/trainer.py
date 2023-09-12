@@ -983,7 +983,7 @@ class Trainer:
                     )
                     model_metrics = df_cv.loc[where_model][metrics].values.flatten()
                     cv_metrics[cv_idx, :] = model_metrics
-                res_cvs[program][model].loc[:, metrics] = cv_metrics
+                res_cvs[program][model][metrics] = cv_metrics
                 res_cvs[program][model]["Program"] = program
                 res_cvs[program][model]["Model"] = model
         return res_cvs

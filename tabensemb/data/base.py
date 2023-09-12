@@ -273,9 +273,7 @@ class AbstractImputer(AbstractRequireKwargs):
         data = input_data.copy()
         self.record_cont_features = cp(datamodule.cont_feature_names)
         self.record_cat_features = cp(datamodule.cat_feature_names)
-        data.loc[:, self.record_cat_features] = data[self.record_cat_features].fillna(
-            "UNK"
-        )
+        data[self.record_cat_features] = data[self.record_cat_features].fillna("UNK")
         return (
             self._fit_transform(data, datamodule)
             if len(self.record_cont_features) > 0
@@ -305,9 +303,9 @@ class AbstractImputer(AbstractRequireKwargs):
         if not getattr(datamodule, "_force_features", False):
             datamodule.cont_feature_names = cp(self.record_cont_features)
             datamodule.cat_feature_names = cp(self.record_cat_features)
-        data.loc[:, datamodule.cat_feature_names] = data[
-            datamodule.cat_feature_names
-        ].fillna("UNK")
+        data[datamodule.cat_feature_names] = data[datamodule.cat_feature_names].fillna(
+            "UNK"
+        )
         return (
             self._transform(data, datamodule)
             if len(self.record_cont_features) > 0
@@ -399,12 +397,10 @@ class AbstractSklearnImputer(AbstractImputer):
         # SimpleImputer reduces the number of features without giving messages. The issue is fixed in
         # scikit-learn==1.2.0 by an argument "keep_empty_features"; however, autogluon==0.6.1 requires
         # scikit-learn<1.2.0.
-        res = imputer.fit_transform(input_data.loc[:, impute_features]).astype(
-            np.float32
-        )
+        res = imputer.fit_transform(input_data[impute_features])
         if type(res) == pd.DataFrame:
             res = res.values
-        input_data.loc[:, impute_features] = res
+        input_data[impute_features] = res.astype(np.float64)
 
         self.transformer = imputer
         return input_data
@@ -412,12 +408,10 @@ class AbstractSklearnImputer(AbstractImputer):
     def _transform(
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
-        res = self.transformer.transform(
-            input_data.loc[:, self.record_imputed_features]
-        ).astype(np.float32)
+        res = self.transformer.transform(input_data[self.record_imputed_features])
         if type(res) == pd.DataFrame:
             res = res.values
-        input_data.loc[:, self.record_imputed_features] = res
+        input_data[self.record_imputed_features] = res.astype(np.float64)
         return input_data
 
     def _new_imputer(self):
