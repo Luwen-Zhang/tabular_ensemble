@@ -792,48 +792,88 @@ class AbstractModel:
         Returns
         -------
         dict
-            A dict of results. Its keys are "Training", "Testing", and "Validation". Its values are tuples containing
-            predicted values and ground truth values
+            A dict of results. Its keys are names of models, and its values are results from :meth:`_predict_model` for
+            each model.
         """
         self.trainer.set_status(training=False)
         self._check_train_status()
-
         model_names = self.get_model_names()
-        data = self.trainer.datamodule
-
         predictions = {}
         tc = TqdmController()
         tc.disable_tqdm()
         for idx, model_name in enumerate(model_names):
             if verbose:
                 print(model_name, f"{idx + 1}/{len(model_names)}")
-            if not test_data_only:
-                y_train_pred = self._predict(
-                    data.X_train,
-                    derived_data=data.D_train,
-                    model_name=model_name,
-                )
-                y_val_pred = self._predict(
-                    data.X_val, derived_data=data.D_val, model_name=model_name
-                )
-                y_train = data.y_train
-                y_val = data.y_val
-            else:
-                y_train_pred = y_train = None
-                y_val_pred = y_val = None
-
-            y_test_pred = self._predict(
-                data.X_test, derived_data=data.D_test, model_name=model_name
+            predictions[model_name] = self._predict_model(
+                model_name=model_name, test_data_only=test_data_only
             )
-
-            predictions[model_name] = {
-                "Training": (y_train_pred, y_train),
-                "Testing": (y_test_pred, data.y_test),
-                "Validation": (y_val_pred, y_val),
-            }
-
         tc.enable_tqdm()
         return predictions
+
+    def _predict_model_on_partition(
+        self, model_name: str, partition: str
+    ) -> np.ndarray:
+        """
+        Get predictions of a model on the selected partition.
+
+        Parameters
+        ----------
+        model_name
+            The selected model.
+        partition
+            "train", "val", or "test".
+        """
+        data = self.trainer.datamodule
+        d = {
+            "train": (data.X_train, data.D_train),
+            "val": (data.X_val, data.D_val),
+            "test": (data.X_test, data.D_test),
+        }
+        return self._predict(
+            d[partition][0], derived_data=d[partition][1], model_name=model_name
+        )
+
+    def _predict_model(
+        self, model_name: str, test_data_only: bool = False
+    ) -> Dict[str, Tuple]:
+        """
+        Get predictions of a model on all partitions.
+
+        Parameters
+        ----------
+        model_name
+            The selected model.
+        test_data_only:
+            Whether to predict only the testing set. If True, the whole dataset will be evaluated.
+
+        Returns
+        -------
+        Its keys are "Training", "Testing", and "Validation". Its values are tuples containing predicted values and
+        ground truth values.
+        """
+        data = self.trainer.datamodule
+        if not test_data_only:
+            y_train_pred = self._predict_model_on_partition(
+                model_name=model_name, partition="train"
+            )
+            y_val_pred = self._predict_model_on_partition(
+                model_name=model_name, partition="val"
+            )
+            y_train = data.y_train
+            y_val = data.y_val
+        else:
+            y_train_pred = y_train = None
+            y_val_pred = y_val = None
+
+        y_test_pred = self._predict_model_on_partition(
+            model_name=model_name, partition="test"
+        )
+
+        return {
+            "Training": (y_train_pred, y_train),
+            "Testing": (y_test_pred, data.y_test),
+            "Validation": (y_val_pred, y_val),
+        }
 
     def _predict(
         self,
