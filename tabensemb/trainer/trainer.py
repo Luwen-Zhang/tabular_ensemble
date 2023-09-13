@@ -1,5 +1,6 @@
 import os.path
 import matplotlib.figure
+import matplotlib.axes
 import numpy as np
 import tabensemb
 from tabensemb.utils import *
@@ -1214,6 +1215,11 @@ class Trainer:
             instance.
         kwargs
             Arguments for :meth:`plot_truth_pred`
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure if ``save_show_close`` is False.
         """
         modelbase = self.get_modelbase(program)
         model_names = modelbase.get_model_names()
@@ -1251,7 +1257,7 @@ class Trainer:
         scatter_kwargs: dict = None,
         legend_kwargs: dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
         """
         Compare ground truth and prediction for one model.
 
@@ -1277,6 +1283,10 @@ class Trainer:
             Arguments for ``plt.legend()``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(
@@ -1377,6 +1387,7 @@ class Trainer:
                     ),
                     tight_layout=False,
                 )
+        return ax
 
     def cal_feature_importance(
         self, program: str, model_name: str, method: str = "permutation", **kwargs
@@ -1456,7 +1467,7 @@ class Trainer:
         figure_kwargs: dict = None,
         bar_kwargs: dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
         """
         Plot feature importance of a model using :meth:`cal_feature_importance`.
 
@@ -1480,6 +1491,10 @@ class Trainer:
             Arguments for ``seaborn.barplot``.
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         attr, names = self.cal_feature_importance(
             program=program, model_name=model_name, method=method
@@ -1573,6 +1588,7 @@ class Trainer:
                     ),
                     tight_layout=True,
                 )
+        return ax
 
     def plot_partial_dependence_all(
         self,
@@ -1604,6 +1620,11 @@ class Trainer:
             instance.
         kwargs
             Arguments for :meth:`plot_partial_dependence`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure if ``save_show_close`` is False.
         """
         fig = self._plot_subplots(
             ls=self.all_feature_names,
@@ -1648,7 +1669,7 @@ class Trainer:
         bar_kwargs: dict = None,
         hist_kwargs: dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
         """
         Calculate and plot a partial dependence plot with bootstrapping for a feature.
 
@@ -1690,6 +1711,10 @@ class Trainer:
             Arguments for ``ax.hist`` (used for histograms of continuous features).
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         (
             x_values_list,
@@ -1798,6 +1823,7 @@ class Trainer:
                     ),
                     tight_layout=False,
                 )
+        return ax
 
     def cal_partial_dependence(
         self, feature_subset: List[str] = None, **kwargs
@@ -1876,6 +1902,11 @@ class Trainer:
             instance.
         kwargs
             Arguments for :meth:`plot_partial_err`
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure if ``save_show_close`` is False.
         """
         fig = self._plot_subplots(
             ls=self.all_feature_names,
@@ -1911,7 +1942,7 @@ class Trainer:
         scatter_kwargs: dict = None,
         hist_kwargs: dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
         """
         Calculate prediction absolute errors on the testing dataset, and plot histograms of high-error samples and
         low-error samples respectively for a single feature.
@@ -1936,6 +1967,10 @@ class Trainer:
             Arguments for ``ax.hist()``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         scatter_kwargs_ = update_defaults_by_kwargs(dict(s=1), scatter_kwargs)
@@ -2021,6 +2056,7 @@ class Trainer:
                     ),
                     tight_layout=False,
                 )
+        return ax
 
     def plot_corr(
         self,
@@ -2030,7 +2066,7 @@ class Trainer:
         figure_kwargs: dict = None,
         imshow_kwargs: dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
         """
         Plot Pearson correlation coefficients among features and the target.
 
@@ -2049,6 +2085,10 @@ class Trainer:
             Arguments for ``plt.imshow``.
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(
             dict(figsize=(10, 10)), figure_kwargs
@@ -2095,6 +2135,7 @@ class Trainer:
                 ),
                 tight_layout=True,
             )
+        return ax
 
     def plot_pairplot(
         self, pairplot_kwargs: dict = None, save_show_close: bool = True
@@ -2134,7 +2175,7 @@ class Trainer:
         figure_kwargs: dict = None,
         boxplot_kwargs: dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
         """
         Plot boxplot of the tabular data.
 
@@ -2150,6 +2191,10 @@ class Trainer:
             Arguments for ``seaborn.boxplot``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(6, 6)), figure_kwargs)
         boxplot_kwargs_ = update_defaults_by_kwargs(
@@ -2198,6 +2243,7 @@ class Trainer:
                     ),
                     tight_layout=True,
                 )
+        return ax
 
     def plot_hist_all(
         self,
@@ -2226,6 +2272,11 @@ class Trainer:
             instance.
         **kwargs
             Arguments for :meth:`plot_hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure if ``save_show_close`` is False.
         """
         fig = self._plot_subplots(
             ls=self.all_feature_names + self.label_name,
@@ -2260,7 +2311,7 @@ class Trainer:
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
         """
         Plot the histogram of a feature.
 
@@ -2282,6 +2333,10 @@ class Trainer:
             Arguments for ``ax.hist`` (used for histograms of continuous features).
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
 
@@ -2349,6 +2404,7 @@ class Trainer:
                     ),
                     tight_layout=False,
                 )
+        return ax
 
     def _bootstrap(
         self,
