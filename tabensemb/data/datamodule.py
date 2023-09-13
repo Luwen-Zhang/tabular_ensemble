@@ -2016,6 +2016,7 @@ class DataModule:
         selection: Dict[str, Union[str, int, float, List, Tuple]],
         df: pd.DataFrame = None,
         partition: str = None,
+        eps: float = None,
     ) -> np.ndarray:
         """
         Select data points with the given value(s) in the given column(s).
@@ -2029,6 +2030,9 @@ class DataModule:
             A dataframe to be filtered. If not given, :attr:`df` is used.
         partition
             "train", "val", "test", or "all"
+        eps
+            A tolerance value if the value to be selected is a float. If None, only values "equal" to the float will be
+            selected.
 
         Returns
         -------
@@ -2052,7 +2056,10 @@ class DataModule:
             elif isinstance(val, tuple) and len(val) == 2:
                 col_res = df[(df[col] >= val[0]) & (df[col] <= val[1])].index
             elif isinstance(val, int) or isinstance(val, float) or isinstance(val, str):
-                col_res = df[df[col] == val].index
+                if isinstance(val, float) and eps is not None:
+                    col_res = np.array(df[((df[col] - val).__abs__() <= eps)].index)
+                else:
+                    col_res = df[df[col] == val].index
             else:
                 raise Exception(f"Unrecognized selection of {col}: {val}.")
             col_res = np.sort(np.intersect1d(np.unique(col_res), part))

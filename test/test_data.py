@@ -885,6 +885,14 @@ def test_select_by_value():
     cont_1 = datamodule.select_by_value({"cont_1": (-0.1, 0.1)})
     assert np.all(np.abs(datamodule.df.loc[cont_1, "cont_1"]) <= 0.1)
 
+    cont_1 = datamodule.select_by_value({"cont_1": 0.0})
+    assert len(cont_1) == 0
+
+    cont_1 = datamodule.select_by_value({"cont_1": 0.0}, eps=0.1)
+    assert len(cont_1) > 0 and np.all(
+        np.abs(datamodule.df.loc[cont_1, "cont_1"]) <= 0.1
+    )
+
     cont_1_df = datamodule.select_by_value(
         {"cont_1": (-0.1, 0.1)},
         df=datamodule.df.loc[datamodule._get_indices(partition="train"), :],
@@ -901,3 +909,7 @@ def test_select_by_value():
             df=datamodule.df.loc[datamodule._get_indices(partition="train"), :],
         )
     assert "Provide only one of" in err.value.args[0]
+
+    with pytest.raises(Exception) as err:
+        datamodule.select_by_value({"cont_1": (-0.1, 0.1, 0.2)})
+    assert "Unrecognized selection of" in err.value.args[0]
