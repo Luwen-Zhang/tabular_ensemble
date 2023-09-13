@@ -650,33 +650,72 @@ def test_finetune():
             )
 
 
+@pytest.mark.order(after="test_train_without_bayes")
 def test_plots():
     matplotlib.rc("text", usetex=False)
     matplotlib.rcParams.update(matplotlib.rcParamsDefault)
     trainer = pytest.test_trainer_trainer
 
     with HiddenPltShow():
+        print(f"\n-- Scatter --\n")
+        trainer.plot_scatter(x_col="cont_1", y_col="cont_2")
+        trainer.plot_scatter(
+            x_col="cont_1",
+            y_col="cont_2",
+            select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
+        )
+
+        print(f"\n-- multiple scatter --\n")
+        trainer.plot_on_one_axes(
+            meth_name="plot_scatter",
+            meth_kwargs_ls=[
+                {},
+                dict(select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}}),
+            ],
+            meth_fix_kwargs=dict(x_col="cont_1", y_col="cont_2"),
+        )
+        trainer.plot_on_one_axes(
+            meth_name="plot_scatter",
+            meth_kwargs_ls=[
+                dict(x_col="cont_1", y_col="cont_2"),
+                dict(
+                    x_col="cont_1",
+                    y_col="cont_2",
+                    select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
+                ),
+            ],
+        )
+
         print(f"\n-- Correlation --\n")
         trainer.plot_corr(imputed=True)
         trainer.plot_corr(imputed=False)
 
         print(f"\n-- hist --\n")
-        trainer.plot_hist(imputed=True)
-        trainer.plot_hist(imputed=False)
+        trainer.plot_hist_all(imputed=True)
+        trainer.plot_hist_all(imputed=False)
+        trainer.plot_hist(feature="cont_0")
 
         print(f"\n-- Pair --\n")
         trainer.plot_pairplot()
 
         print(f"\n-- Truth pred --\n")
-        trainer.plot_truth_pred(program="CatEmbed", log_trans=True)
-        trainer.plot_truth_pred(program="CatEmbed", log_trans=False)
+        trainer.plot_truth_pred_all(program="CatEmbed", log_trans=True)
+        trainer.plot_truth_pred_all(program="CatEmbed", log_trans=False)
+        trainer.plot_truth_pred(
+            program="CatEmbed", model_name="Category Embedding", log_trans=True
+        )
 
         print(f"\n-- Feature box --\n")
         trainer.plot_feature_box(imputed=False)
         trainer.plot_feature_box(imputed=True)
 
         print(f"\n-- Partial Err --\n")
-        trainer.plot_partial_err(program="CatEmbed", model_name="Category Embedding")
+        trainer.plot_partial_err_all(
+            program="CatEmbed", model_name="Category Embedding"
+        )
+        trainer.plot_partial_err(
+            program="CatEmbed", model_name="Category Embedding", feature="cont_0"
+        )
 
         print(f"\n-- Importance --\n")
         trainer.plot_feature_importance(program="WideDeep", model_name="TabMlp")
@@ -688,16 +727,25 @@ def test_plots():
             )
 
         print(f"\n-- PDP --\n")
-        trainer.plot_partial_dependence(
+        trainer.plot_partial_dependence_all(
             program="WideDeep",
             model_name="TabMlp",
             n_bootstrap=1,
             grid_size=2,
             log_trans=True,
         )
+        trainer.plot_partial_dependence_all(
+            program="WideDeep",
+            model_name="TabMlp",
+            n_bootstrap=2,
+            grid_size=2,
+            log_trans=False,
+            refit=False,
+        )
         trainer.plot_partial_dependence(
             program="WideDeep",
             model_name="TabMlp",
+            feature="cont_0",
             n_bootstrap=2,
             grid_size=2,
             log_trans=False,

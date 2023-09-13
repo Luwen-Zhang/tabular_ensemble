@@ -864,3 +864,52 @@ def test_infer_loss():
     with pytest.raises(Exception) as err:
         _ = datamodule._infer_loss("binary")
     assert "Multiple losses is not supported" in err.value.args[0]
+
+
+def test_select_by_value():
+    pytest_configure_data()
+
+    datamodule = pytest.min_datamodule
+    cat_1 = datamodule.select_by_value({"cat_1": 1})
+    assert np.all(datamodule.df.loc[cat_1, "cat_1"] == 1)
+
+    cat_2 = datamodule.select_by_value({"cat_2": [1, 2]})
+    assert np.all(
+        (datamodule.df.loc[cat_2, "cat_2"] == 1)
+        | (datamodule.df.loc[cat_2, "cat_2"] == 2)
+    )
+
+    cat_5 = datamodule.select_by_value({"cat_5": "category_1"})
+    assert np.all(datamodule.df.loc[cat_5, "cat_5"] == "category_1")
+
+    cont_1 = datamodule.select_by_value({"cont_1": (-0.1, 0.1)})
+    assert np.all(np.abs(datamodule.df.loc[cont_1, "cont_1"]) <= 0.1)
+
+    cont_1 = datamodule.select_by_value({"cont_1": 0.0})
+    assert len(cont_1) == 0
+
+    cont_1 = datamodule.select_by_value({"cont_1": 0.0}, eps=0.1)
+    assert len(cont_1) > 0 and np.all(
+        np.abs(datamodule.df.loc[cont_1, "cont_1"]) <= 0.1
+    )
+
+    cont_1_df = datamodule.select_by_value(
+        {"cont_1": (-0.1, 0.1)},
+        df=datamodule.df.loc[datamodule._get_indices(partition="train"), :],
+    )
+    cont_1_part = datamodule.select_by_value({"cont_1": (-0.1, 0.1)}, partition="train")
+    assert len(np.setdiff1d(cont_1_df, datamodule.train_indices)) == 0
+    assert np.all(np.abs(datamodule.df.loc[cont_1_df, "cont_1"]) <= 0.1)
+    assert np.allclose(cont_1_df, cont_1_part)
+
+    with pytest.raises(Exception) as err:
+        datamodule.select_by_value(
+            {"cont_1": (-0.1, 0.1)},
+            partition="train",
+            df=datamodule.df.loc[datamodule._get_indices(partition="train"), :],
+        )
+    assert "Provide only one of" in err.value.args[0]
+
+    with pytest.raises(Exception) as err:
+        datamodule.select_by_value({"cont_1": (-0.1, 0.1, 0.2)})
+    assert "Unrecognized selection of" in err.value.args[0]

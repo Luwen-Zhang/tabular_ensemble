@@ -15,6 +15,7 @@ import sklearn.ensemble
 from collections.abc import Iterable
 from sklearn.preprocessing import OrdinalEncoder
 import scipy.stats as st
+from functools import reduce
 
 
 class DataModule:
@@ -2009,3 +2010,59 @@ class DataModule:
             return pip
         else:
             return rf
+
+    def select_by_value(
+        self,
+        selection: Dict[str, Union[str, int, float, List, Tuple]],
+        df: pd.DataFrame = None,
+        partition: str = None,
+        eps: float = None,
+    ) -> np.ndarray:
+        """
+        Select data points with the given value(s) in the given column(s).
+
+        Parameters
+        ----------
+        selection
+            A dictionary whose items indicate the columns to be investigated and the values (if is a list/int/float/str)
+            or a range of values (closed interval, if is a tuple with two components) to be selected for each column.
+        df
+            A dataframe to be filtered. If not given, :attr:`df` is used.
+        partition
+            "train", "val", "test", or "all"
+        eps
+            A tolerance value if the value to be selected is a float. If None, only values "equal" to the float will be
+            selected.
+
+        Returns
+        -------
+        np.ndarray
+            Indices of the selected data points in the dataframe.
+        """
+        if partition is not None and df is not None:
+            raise Exception(f"Provide only one of `partition` and `df`.")
+        if df is None:
+            df = self.df
+        if partition is not None:
+            part = self._get_indices(partition)
+        else:
+            part = np.array(df.index)
+        col_res_ls = []
+        for col, val in selection.items():
+            if isinstance(val, list):
+                col_res = []
+                for v in val:
+                    col_res += list(df[df[col] == v].index)
+            elif isinstance(val, tuple) and len(val) == 2:
+                col_res = df[(df[col] >= val[0]) & (df[col] <= val[1])].index
+            elif isinstance(val, int) or isinstance(val, float) or isinstance(val, str):
+                if isinstance(val, float) and eps is not None:
+                    col_res = np.array(df[((df[col] - val).__abs__() <= eps)].index)
+                else:
+                    col_res = df[df[col] == val].index
+            else:
+                raise Exception(f"Unrecognized selection of {col}: {val}.")
+            col_res = np.sort(np.intersect1d(np.unique(col_res), part))
+            col_res_ls.append(col_res)
+        res = np.sort(reduce(np.intersect1d, col_res_ls))
+        return res
