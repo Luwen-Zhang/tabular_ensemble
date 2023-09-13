@@ -1092,7 +1092,7 @@ class Trainer:
                 self.get_approx_cv_leaderboard(df_leaderboard, save=True)
         return df_leaderboard
 
-    def _plot_by_list(
+    def _plot_subplots(
         self,
         ls,
         ls_kwarg_name,
@@ -1215,7 +1215,7 @@ class Trainer:
         modelbase = self.get_modelbase(program)
         model_names = modelbase.get_model_names()
 
-        fig = self._plot_by_list(
+        fig = self._plot_subplots(
             ls=model_names,
             ls_kwarg_name="model_name",
             meth_name="plot_truth_pred",
@@ -1586,7 +1586,7 @@ class Trainer:
         kwargs
             Arguments for :meth:`plot_partial_dependence`.
         """
-        fig = self._plot_by_list(
+        fig = self._plot_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_dependence",
@@ -1846,7 +1846,7 @@ class Trainer:
         kwargs
             Arguments for :meth:`plot_partial_err`
         """
-        fig = self._plot_by_list(
+        fig = self._plot_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_err",
@@ -2167,7 +2167,7 @@ class Trainer:
         **kwargs
             Arguments for :meth:`plot_hist`.
         """
-        fig = self._plot_by_list(
+        fig = self._plot_subplots(
             ls=self.all_feature_names + self.label_name,
             ls_kwarg_name="feature",
             meth_name="plot_hist",
