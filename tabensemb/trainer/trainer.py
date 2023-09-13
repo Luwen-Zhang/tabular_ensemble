@@ -1271,8 +1271,6 @@ class Trainer:
             Whether the label data is in log scale.
         upper_lim
             The upper limit of x/y-axis.
-        fontsize
-            ``plt.rcParams["font.size"]``
         ax
             ``matplotlib.axes.Axes``
         figure_kwargs
@@ -1477,8 +1475,6 @@ class Trainer:
             The selected model base.
         model_name
             The selected model in the model base.
-        fig_size
-            The figure size.
         method
             The method to calculate feature importance. "permutation" or "shap".
         clr
@@ -2516,6 +2512,8 @@ class Trainer:
             Arguments for ``plt.scatter()``
         select_by_value_kwargs
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
         Returns
         -------
