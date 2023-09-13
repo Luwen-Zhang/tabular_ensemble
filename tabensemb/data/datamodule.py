@@ -889,11 +889,11 @@ class DataModule:
         List
             Names of all derived stacked from the current data derivers.
         """
-        return [
-            deriver.kwargs["derived_name"]
-            for deriver in self.dataderivers
-            if deriver.kwargs["stacked"] and not deriver.kwargs["intermediate"]
-        ]
+        names = []
+        for deriver in self.dataderivers:
+            if deriver.kwargs["stacked"] and not deriver.kwargs["intermediate"]:
+                names += deriver.last_derived_col_names
+        return names
 
     def set_feature_names(self, all_feature_names: List[str]):
         """
