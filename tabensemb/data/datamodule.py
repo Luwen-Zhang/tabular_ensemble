@@ -730,7 +730,7 @@ class DataModule:
 
     def get_feature_names_by_type(self, typ: str) -> List[str]:
         """
-        Find features with the type given by ``feature_names_type`` and ``feature_types`` in the configuration.
+        Find features of the specified type defined by ``feature_names_type`` and ``feature_types`` in the configuration.
 
         Parameters
         ----------
@@ -759,8 +759,8 @@ class DataModule:
 
     def get_feature_idx_by_type(self, typ: str) -> np.ndarray:
         """
-        Find features (by their index) with the type given by ``feature_names_type`` and ``feature_types`` in the
-        configuration.
+        Find features (by their index) of the specified type defined by ``feature_names_type`` and ``feature_types``
+        in the configuration.
 
         Parameters
         ----------
