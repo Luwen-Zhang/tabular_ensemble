@@ -1,4 +1,5 @@
 import os.path
+import numpy as np
 import tabensemb
 from tabensemb.utils import *
 from tabensemb.config import UserConfig
@@ -1091,15 +1092,109 @@ class Trainer:
                 self.get_approx_cv_leaderboard(df_leaderboard, save=True)
         return df_leaderboard
 
-    def plot_truth_pred(
+    def _plot_by_list(
+        self,
+        ls,
+        ls_kwarg_name,
+        meth_name,
+        with_title=False,
+        fontsize=12,
+        xlabel=None,
+        ylabel=None,
+        get_figsize_kwargs: dict = None,
+        figure_kwargs: dict = None,
+        meth_fix_kwargs: dict = None,
+    ):
+        """
+        Iterate over a list to plot subplots.
+
+        Parameters
+        ----------
+        ls
+            The list to be iterated.
+        ls_kwarg_name
+            The argument name of the components in `ls` when the component is passed to `meth_name`.
+        meth_name
+            The method to plot on a subplot. It has an argument named `ax` which indicates the subplot.
+        with_title
+            Whether each subplot has a title, which is the components in `ls`.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        xlabel
+            The overall xlabel.
+        ylabel
+            The overall ylabel.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        figure_kwargs
+            Arguments for ``plt.figure()``
+        meth_fix_kwargs
+            Fixed arguments of `meth_name` (except for `ax` and `ls_kwarg_name`).
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure that has plotted subplots.
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        get_figsize_kwargs_ = update_defaults_by_kwargs(
+            dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
+            get_figsize_kwargs,
+        )
+        figsize, width, height = get_figsize(n=len(ls), **get_figsize_kwargs_)
+
+        fig = plt.figure(figsize=figsize, **figure_kwargs_)
+        plt.rcParams["font.size"] = fontsize
+        for idx, name in enumerate(ls):
+            ax = plt.subplot(height, width, idx + 1)
+            if with_title:
+                ax.set_title(name, {"fontsize": fontsize})
+            meth_fix_kwargs_ = meth_fix_kwargs.copy()
+            meth_fix_kwargs_.update({ls_kwarg_name: name})
+            getattr(self, meth_name)(ax=ax, **meth_fix_kwargs_)
+
+        ax = fig.add_subplot(111, frameon=False)
+        plt.tick_params(
+            labelcolor="none",
+            which="both",
+            top=False,
+            bottom=False,
+            left=False,
+            right=False,
+        )
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        return fig
+
+    def _after_plot(self, fig_name, tight_layout=False, savefig_kwargs: dict = None):
+        """
+        Set the layout, save the current figure, show the figure if in a notebook, and close the figure.
+
+        Parameters
+        ----------
+        fig_name
+            The path to save the figure.
+        tight_layout
+            If True, ``plt.tight_layout`` is called.
+        savefig_kwargs
+            Arguments for ``plt.savefig``.
+        """
+        savefig_kwargs_ = update_defaults_by_kwargs(dict(), savefig_kwargs)
+        if tight_layout:
+            plt.tight_layout()
+        plt.savefig(fig_name, **savefig_kwargs_)
+        if is_notebook():
+            plt.show()
+        plt.close()
+
+    def plot_truth_pred_all(
         self,
         program: str,
-        log_trans: bool = True,
-        upper_lim=9,
         fontsize=14,
+        get_figsize_kwargs: dict = None,
         figure_kwargs: dict = None,
-        scatter_kwargs: dict = None,
-        legend_kwargs: dict = None,
+        **kwargs,
     ):
         """
         Compare ground truth and prediction for all models in a model base.
@@ -1108,12 +1203,64 @@ class Trainer:
         ----------
         program
             The selected model base.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        figure_kwargs
+            Arguments for ``plt.figure()``
+        kwargs
+            Arguments for :meth:`plot_truth_pred`
+        """
+        modelbase = self.get_modelbase(program)
+        model_names = modelbase.get_model_names()
+
+        fig = self._plot_by_list(
+            ls=model_names,
+            ls_kwarg_name="model_name",
+            meth_name="plot_truth_pred",
+            meth_fix_kwargs=dict(program=program, **kwargs),
+            fontsize=fontsize,
+            with_title=True,
+            xlabel="Ground truth",
+            ylabel="Prediction",
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+        )
+
+        self._after_plot(
+            fig_name=os.path.join(self.project_root, program, f"truth_pred.pdf"),
+            tight_layout=False,
+        )
+
+    def plot_truth_pred(
+        self,
+        program: str,
+        model_name: str,
+        log_trans: bool = True,
+        upper_lim=9,
+        ax=None,
+        figure_kwargs: dict = None,
+        scatter_kwargs: dict = None,
+        legend_kwargs: dict = None,
+    ):
+        """
+        Compare ground truth and prediction for one model.
+
+        Parameters
+        ----------
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base
         log_trans
             Whether the label data is in log scale.
         upper_lim
             The upper limit of x/y-axis.
         fontsize
             ``plt.rcParams["font.size"]``
+        ax
+            ``matplotlib.axes.Axes``
         figure_kwargs
             Arguments for ``plt.figure()``
         scatter_kwargs
@@ -1121,42 +1268,104 @@ class Trainer:
         legend_kwargs
             Arguments for ``plt.legend()``
         """
-        modelbase = self.get_modelbase(program)
-        model_names = modelbase.get_model_names()
-        predictions = modelbase._predict_all()
-
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(
             dict(loc="upper left", markerscale=1.5, handlelength=0.2, handleheight=0.9),
             legend_kwargs,
         )
 
-        for idx, model_name in enumerate(model_names):
-            print(model_name, f"{idx + 1}/{len(model_names)}")
+        given_ax = ax is not None
+        if not given_ax:
             plt.figure(**figure_kwargs_)
-            plt.rcParams["font.size"] = fontsize
             ax = plt.subplot(111)
+        plt.sca(ax)
 
-            plot_truth_pred(
-                predictions,
-                ax,
-                model_name,
-                log_trans=log_trans,
-                verbose=True,
-                scatter_kwargs=scatter_kwargs,
+        prediction = self.get_modelbase(program)._predict_model(
+            model_name=model_name, test_data_only=False
+        )
+
+        def plot_one(name, color, marker):
+            pred_y, y = prediction[name]
+            r2 = metric_sklearn(y, pred_y, "r2")
+            loss = metric_sklearn(y, pred_y, "mse")
+            print(f"{name} MSE Loss: {loss:.4f}, R2: {r2:.4f}")
+            scatter_kwargs_ = update_defaults_by_kwargs(
+                dict(
+                    s=20,
+                    color=color,
+                    marker=marker,
+                    label=f"{name} dataset ($R^2$={r2:.3f})",
+                    linewidth=0.4,
+                    edgecolors="k",
+                ),
+                scatter_kwargs,
+            )
+            ax.scatter(
+                10**y if log_trans else y,
+                10**pred_y if log_trans else pred_y,
+                **scatter_kwargs_,
             )
 
-            set_truth_pred(ax, log_trans, upper_lim=upper_lim)
+        plot_one("Training", clr[0], "o")
+        plot_one("Validation", clr[2], "o")
+        plot_one("Testing", clr[1], "o")
 
-            plt.legend(**legend_kwargs_)
+        if log_trans:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
 
+            ax.plot(
+                np.linspace(0, 10**upper_lim, 100),
+                np.linspace(0, 10**upper_lim, 100),
+                "--",
+                c="grey",
+                alpha=0.2,
+            )
+            locmin = matplotlib.ticker.LogLocator(
+                base=10.0, subs=[0.1 * x for x in range(10)], numticks=20
+            )
+
+            # ax.set_aspect("equal", "box")
+
+            ax.xaxis.set_minor_locator(locmin)
+            ax.yaxis.set_minor_locator(locmin)
+            ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+            ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+
+            ax.set_xlim(1, 10**upper_lim)
+            ax.set_ylim(1, 10**upper_lim)
+            ax.set_box_aspect(1)
+        else:
+            # ax.set_aspect("equal", "box")
+            lx, rx = ax.get_xlim()
+            ly, ry = ax.get_ylim()
+            l = np.min([lx, ly])
+            r = np.max([rx, ry])
+
+            ax.plot(
+                np.linspace(l, r, 100),
+                np.linspace(l, r, 100),
+                "--",
+                c="grey",
+                alpha=0.2,
+            )
+
+            ax.set_xlim(left=l, right=r)
+            ax.set_ylim(bottom=l, top=r)
+            ax.set_box_aspect(1)
+
+        ax.legend(**legend_kwargs_)
+
+        if not given_ax:
+            ax.set_xlabel("Ground truth")
+            ax.set_ylabel("Prediction")
             s = model_name.replace("/", "_")
-
-            plt.savefig(os.path.join(self.project_root, program, f"{s}_truth_pred.pdf"))
-            if is_notebook():
-                plt.show()
-
-            plt.close()
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root, program, f"{s}_truth_pred.pdf"
+                ),
+                tight_layout=False,
+            )
 
     def cal_feature_importance(
         self, program: str, model_name: str, method: str = "permutation", **kwargs
@@ -1232,6 +1441,7 @@ class Trainer:
         model_name: str,
         method: str = "permutation",
         clr=None,
+        ax=None,
         figure_kwargs: dict = None,
         bar_kwargs: dict = None,
     ):
@@ -1250,6 +1460,8 @@ class Trainer:
             The method to calculate feature importance. "permutation" or "shap".
         clr
             A seaborn color palette. For example seaborn.color_palette("deep").
+        ax
+            ``matplotlib.axes.Axes``
         figure_kwargs
             Arguments for ``plt.figure``
         bar_kwargs
@@ -1292,47 +1504,69 @@ class Trainer:
         attr = attr[where_effective]
         pal = [pal[x] for x in np.where(where_effective)[0]]
 
-        plt.figure(**figure_kwargs_)
-        ax = plt.subplot(111)
-        plot_importance(
-            ax, effective_names, attr, pal=pal, clr_map=clr_map, **bar_kwargs_
-        )
-        if method == "permutation":
-            ax.set_xlabel("Permutation feature importance")
-        elif method == "shap":
-            ax.set_xlabel("SHAP feature importance")
-        else:
-            ax.set_xlabel("Feature importance")
-        plt.tight_layout()
+        given_ax = ax is not None
+        if not given_ax:
+            plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
 
-        plt.savefig(
-            os.path.join(
-                self.project_root,
-                f"feature_importance_{program}_{model_name}_{method}.png",
+        df = pd.DataFrame(columns=["feature", "attr", "clr"])
+        df["feature"] = effective_names
+        df["attr"] = np.abs(attr) / np.sum(np.abs(attr))
+        df["pal"] = pal
+        df.sort_values(by="attr", inplace=True, ascending=False)
+        df.reset_index(drop=True, inplace=True)
+
+        ax.set_axisbelow(True)
+        x = df["feature"].values
+        y = df["attr"].values
+
+        palette = df["pal"]
+
+        # ax.set_facecolor((0.97,0.97,0.97))
+        # plt.grid(axis='x')
+        plt.grid(axis="x", linewidth=0.2)
+        # plt.barh(x,y, color= [clr_map[name] for name in x])
+        sns.barplot(x=y, y=x, palette=palette, **bar_kwargs_)
+        # ax.set_xlim([0, 1])
+
+        legend = ax.legend(
+            handles=[
+                Rectangle((0, 0), 1, 1, color=value, ec="k", label=key)
+                for key, value in clr_map.items()
+            ],
+            loc="lower right",
+            handleheight=2,
+            fancybox=False,
+            frameon=False,
+        )
+
+        legend.get_frame().set_alpha(None)
+        legend.get_frame().set_facecolor([1, 1, 1, 0.4])
+
+        if not given_ax:
+            if method == "permutation":
+                ax.set_xlabel("Permutation feature importance")
+            elif method == "shap":
+                ax.set_xlabel("SHAP feature importance")
+            else:
+                ax.set_xlabel("Feature importance")
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root,
+                    f"feature_importance_{program}_{model_name}_{method}.png",
+                ),
+                tight_layout=True,
             )
-        )
-        if is_notebook():
-            plt.show()
-        plt.close()
 
-    def plot_partial_dependence(
+    def plot_partial_dependence_all(
         self,
         program: str,
         model_name: str,
-        refit: bool = True,
-        log_trans: bool = True,
-        lower_lim: float = 2,
-        upper_lim: float = 7,
-        n_bootstrap: int = 1,
-        grid_size: int = 30,
-        CI: float = 0.95,
-        verbose: bool = True,
+        fontsize=12,
         figure_kwargs: dict = None,
         get_figsize_kwargs: dict = None,
-        plot_kwargs: dict = None,
-        fill_between_kwargs: dict = None,
-        bar_kwargs: dict = None,
-        hist_kwargs: dict = None,
+        **kwargs,
     ):
         """
         Calculate and plot partial dependence plots with bootstrapping.
@@ -1343,6 +1577,67 @@ class Trainer:
             The selected model base.
         model_name
             The selected model in the model base.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        kwargs
+            Arguments for :meth:`plot_partial_dependence`.
+        """
+        fig = self._plot_by_list(
+            ls=self.all_feature_names,
+            ls_kwarg_name="feature",
+            meth_name="plot_partial_dependence",
+            meth_fix_kwargs=dict(program=program, model_name=model_name, **kwargs),
+            fontsize=fontsize,
+            with_title=True,
+            xlabel=r"Value of predictors ($10\%$-$90\%$ percentile)",
+            ylabel="Predicted target",
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+        )
+        self._after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
+            ),
+            tight_layout=False,
+        )
+
+    def plot_partial_dependence(
+        self,
+        program: str,
+        model_name: str,
+        feature: str,
+        ax=None,
+        refit: bool = True,
+        log_trans: bool = True,
+        lower_lim: float = 2,
+        upper_lim: float = 7,
+        n_bootstrap: int = 1,
+        grid_size: int = 30,
+        CI: float = 0.95,
+        verbose: bool = True,
+        figure_kwargs: dict = None,
+        plot_kwargs: dict = None,
+        fill_between_kwargs: dict = None,
+        bar_kwargs: dict = None,
+        hist_kwargs: dict = None,
+    ):
+        """
+        Calculate and plot a partial dependence plot with bootstrapping for a feature.
+
+        Parameters
+        ----------
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base.
+        feature
+            The selected feature to calculate partial dependence.
+        ax
+            ``matplotlib.axes.Axes``
         refit
             Whether to refit models on bootstrapped datasets. See :meth:`_bootstrap`.
         log_trans
@@ -1361,8 +1656,6 @@ class Trainer:
             Verbosity
         figure_kwargs
             Arguments for ``plt.figure``.
-        get_figsize_kwargs
-            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
         plot_kwargs
             Arguments for ``ax.plot``.
         fill_between_kwargs
@@ -1378,7 +1671,7 @@ class Trainer:
             ci_left_list,
             ci_right_list,
         ) = self.cal_partial_dependence(
-            feature_subset=self.all_feature_names,
+            feature_subset=[feature],
             program=program,
             model_name=model_name,
             df=self.datamodule.X_train,
@@ -1392,35 +1685,92 @@ class Trainer:
             CI=CI,
             average=True,
         )
+        x_values = x_values_list[0]
+        mean_pdp = mean_pdp_list[0]
+        ci_left = ci_left_list[0]
+        ci_right = ci_right_list[0]
 
-        fig = plot_pdp(
-            self.all_feature_names,
-            self.cat_feature_names,
-            self.cat_feature_mapping,
-            x_values_list,
-            mean_pdp_list,
-            ci_left_list,
-            ci_right_list,
-            self.datamodule.get_tabular_dataset(transformed=False)[0],
-            log_trans=log_trans,
-            lower_lim=lower_lim,
-            upper_lim=upper_lim,
-            figure_kwargs=figure_kwargs,
-            get_figsize_kwargs=get_figsize_kwargs,
-            plot_kwargs=plot_kwargs,
-            fill_between_kwargs=fill_between_kwargs,
-            bar_kwargs=bar_kwargs,
-            hist_kwargs=hist_kwargs,
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        plot_kwargs_ = update_defaults_by_kwargs(
+            dict(color="k", linewidth=0.7), plot_kwargs
+        )
+        fill_between_kwargs_ = update_defaults_by_kwargs(
+            dict(alpha=0.4, color="k", edgecolor=None), fill_between_kwargs
         )
 
-        plt.savefig(
-            os.path.join(
-                self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
+        given_ax = ax is not None
+        if not given_ax:
+            plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+
+        def transform(value):
+            if log_trans:
+                return 10**value
+            else:
+                return value
+
+        if feature not in self.cat_feature_names:
+            ax.plot(x_values, transform(mean_pdp), **plot_kwargs_)
+
+            ax.fill_between(
+                x_values,
+                transform(ci_left),
+                transform(ci_right),
+                **fill_between_kwargs_,
             )
-        )
-        if is_notebook():
-            plt.show()
-        plt.close()
+        else:
+            yerr = (
+                np.abs(
+                    np.vstack([transform(ci_left), transform(ci_right)])
+                    - transform(mean_pdp)
+                )
+                if not np.isnan(ci_left).any()
+                else None
+            )
+            ax.errorbar(x_values, transform(mean_pdp), yerr=yerr, **plot_kwargs_)
+
+        # ax.set_xlim([0, 1])
+        if log_trans:
+            ax.set_yscale("log")
+            ax.set_ylim([10**lower_lim, 10**upper_lim])
+            locmin = matplotlib.ticker.LogLocator(
+                base=10.0, subs=[0.1 * x for x in range(10)], numticks=20
+            )
+            # ax.xaxis.set_minor_locator(locmin)
+            ax.yaxis.set_minor_locator(locmin)
+            # ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+            ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+
+        if np.min(x_values) < np.max(x_values):
+            ax2 = ax.twinx()
+            hist_kwargs_ = update_defaults_by_kwargs(dict(bins=x_values), hist_kwargs)
+            self.plot_hist(
+                feature=feature,
+                ax=ax2,
+                imputed=False,
+                x_values=x_values,
+                hist_kwargs=hist_kwargs_,
+                bar_kwargs=bar_kwargs,
+            )
+            ax2.set_yticks([])
+        else:
+            ax2 = ax.twinx()
+            ax2.text(0.5, 0.5, "Invalid interval", ha="center", va="center")
+            ax2.set_xlim([0, 1])
+            ax2.set_ylim([0, 1])
+            ax2.set_yticks([])
+
+        if not given_ax:
+            ax.set_ylabel("Predicted target")
+            ax.set_xlabel(feature + r" ($10\%$-$90\%$ percentile)")
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root,
+                    f"partial_dependence_{program}_{model_name}_{feature}.pdf",
+                ),
+                tight_layout=False,
+            )
 
     def cal_partial_dependence(
         self, feature_subset: List[str] = None, **kwargs
@@ -1468,15 +1818,14 @@ class Trainer:
 
         return x_values_list, mean_pdp_list, ci_left_list, ci_right_list
 
-    def plot_partial_err(
+    def plot_partial_err_all(
         self,
         program: str,
         model_name: str,
-        thres: Any = 0.8,
+        fontsize=12,
         figure_kwargs: dict = None,
         get_figsize_kwargs: dict = None,
-        scatter_kwargs: dict = None,
-        hist_kwargs: dict = None,
+        **kwargs,
     ):
         """
         Calculate prediction absolute errors on the testing dataset, and plot histograms of high-error samples and
@@ -1488,51 +1837,157 @@ class Trainer:
             The selected model base.
         model_name
             The selected model in the model base.
-        thres
-            The absolute error threshold to identify high-error samples and low-error samples.
+        fontsize
+            ``plt.rcParams["font.size"]``
         figure_kwargs
             Arguments for ``plt.figure``.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        kwargs
+            Arguments for :meth:`plot_partial_err`
+        """
+        fig = self._plot_by_list(
+            ls=self.all_feature_names,
+            ls_kwarg_name="feature",
+            meth_name="plot_partial_err",
+            meth_fix_kwargs=dict(program=program, model_name=model_name, **kwargs),
+            fontsize=fontsize,
+            with_title=True,
+            xlabel="Value of predictors",
+            ylabel="Prediction absolute error",
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+        )
+        self._after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"partial_err_{program}_{model_name}.pdf"
+            ),
+            tight_layout=False,
+        )
+
+    def plot_partial_err(
+        self,
+        program: str,
+        model_name: str,
+        feature,
+        thres=0.8,
+        ax=None,
+        figure_kwargs: dict = None,
+        scatter_kwargs: dict = None,
+        hist_kwargs: dict = None,
+    ):
+        """
+        Calculate prediction absolute errors on the testing dataset, and plot histograms of high-error samples and
+        low-error samples respectively for a single feature.
+
+        Parameters
+        ----------
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base.
+        feature
+            The selected feature.
+        thres
+            The absolute error threshold to identify high-error samples and low-error samples.
+        ax
+            ``matplotlib.axes.Axes``
+        figure_kwargs
+            Arguments for ``plt.figure``.
         scatter_kwargs
             Arguments for ``ax.scatter()``
         hist_kwargs
             Arguments for ``ax.hist()``
         """
-        modelbase = self.get_modelbase(program)
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(dict(s=1), scatter_kwargs)
+        hist_kwargs_ = update_defaults_by_kwargs(
+            dict(density=True, alpha=0.2, rwidth=0.8), hist_kwargs
+        )
 
-        ground_truth = self.label_data.loc[self.test_indices, :].values.flatten()
-        prediction = modelbase.predict(
+        feature_data = self.df.loc[
+            np.array(self.test_indices), self.all_feature_names
+        ].reset_index(drop=True)
+
+        truth = self.label_data.loc[self.test_indices, :].values.flatten()
+        modelbase = self.get_modelbase(program)
+        pred = modelbase.predict(
             df=self.datamodule.X_test,
             derived_data=self.datamodule.D_test,
             model_name=model_name,
         ).flatten()
-        plot_partial_err(
-            self.df.loc[
-                np.array(self.test_indices), self.all_feature_names
-            ].reset_index(drop=True),
-            cat_feature_names=self.cat_feature_names,
-            cat_feature_mapping=self.cat_feature_mapping,
-            truth=ground_truth,
-            pred=prediction,
-            thres=thres,
-            figure_kwargs=figure_kwargs,
-            get_figsize_kwargs=get_figsize_kwargs,
-            scatter_kwargs=scatter_kwargs,
-            hist_kwargs=hist_kwargs,
+        err = np.abs(truth - pred)
+        high_err_data = feature_data.loc[np.where(err > thres)[0], :]
+        high_err = err[np.where(err > thres)[0]]
+        low_err_data = feature_data.loc[np.where(err <= thres)[0], :]
+        low_err = err[np.where(err <= thres)[0]]
+
+        given_ax = ax is not None
+        if not given_ax:
+            plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+
+        ax.scatter(
+            high_err_data[feature].values,
+            high_err,
+            color=clr[0],
+            marker="s",
+            **scatter_kwargs_,
+        )
+        ax.scatter(
+            low_err_data[feature].values,
+            low_err,
+            color=clr[1],
+            marker="^",
+            **scatter_kwargs_,
         )
 
-        plt.savefig(
-            os.path.join(self.project_root, f"partial_err_{program}_{model_name}.pdf")
+        ax.set_ylim([0, np.max(err) * 1.1])
+        ax2 = ax.twinx()
+
+        ax2.hist(
+            [
+                high_err_data[feature].values,
+                low_err_data[feature].values,
+            ],
+            bins=np.linspace(
+                np.min(feature_data[feature].values),
+                np.max(feature_data[feature].values),
+                20,
+            ),
+            color=clr[:2],
+            **hist_kwargs_,
         )
-        if is_notebook():
-            plt.show()
-        plt.close()
+        if feature in self.cat_feature_names:
+            ticks = np.sort(np.unique(feature_data[feature].values)).astype(int)
+            tick_label = [self.cat_feature_mapping[feature][x] for x in ticks]
+            ax.set_xticks(ticks)
+            ax.set_xticklabels(tick_label)
+            ax.set_xlim([-0.5, len(ticks) - 0.5])
+            ax2.set_xlim([-0.5, len(ticks) - 0.5])
+
+        # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
+        # ax2.set_ylim([0,1])
+        # ax2.set_xlim([np.min(x_values_list[idx]), np.max(x_values_list[idx])])
+        ax2.set_yticks([])
+
+        if not given_ax:
+            ax.set_ylabel("Prediction absolute error")
+            ax.set_xlabel(feature)
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root,
+                    f"partial_err_{program}_{model_name}_{feature}.pdf",
+                ),
+                tight_layout=False,
+            )
 
     def plot_corr(
         self,
         fontsize: Any = 10,
         imputed=False,
+        ax=None,
         figure_kwargs: dict = None,
         imshow_kwargs: dict = None,
     ):
@@ -1546,6 +2001,12 @@ class Trainer:
         imputed
             Whether the imputed dataset should be considered. If False, some NaN coefficients may exist for features
             with missing values.
+        ax
+            ``matplotlib.axes.Axes``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        imshow_kwargs
+            Arguments for ``plt.imshow``.
         """
         figure_kwargs_ = update_defaults_by_kwargs(
             dict(figsize=(10, 10)), figure_kwargs
@@ -1554,8 +2015,11 @@ class Trainer:
 
         cont_feature_names = self.cont_feature_names + self.label_name
         # sns.reset_defaults()
-        fig = plt.figure(**figure_kwargs_)
-        ax = plt.subplot(111)
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
         plt.box(on=True)
         corr = self.datamodule.cal_corr(imputed=imputed).values
         im = ax.imshow(corr, **imshow_kwargs_)
@@ -1582,13 +2046,13 @@ class Trainer:
                     fontsize=fontsize,
                 )
 
-        plt.tight_layout()
-        plt.savefig(
-            os.path.join(self.project_root, f"corr{'_imputed' if imputed else ''}.pdf")
-        )
-        if is_notebook():
-            plt.show()
-        plt.close()
+        if not given_ax:
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root, f"corr{'_imputed' if imputed else ''}.pdf"
+                ),
+                tight_layout=True,
+            )
 
     def plot_pairplot(self, pairplot_kwargs: dict = None):
         """
@@ -1607,15 +2071,15 @@ class Trainer:
             [self.unscaled_feature_data, self.unscaled_label_data], axis=1
         )
         sns.pairplot(df_all, **pairplot_kwargs_)
-        plt.tight_layout()
-        plt.savefig(os.path.join(self.project_root, "pair.jpg"))
-        if is_notebook():
-            plt.show()
-        plt.close()
+        self._after_plot(
+            fig_name=os.path.join(self.project_root, "pair.jpg"),
+            tight_layout=True,
+        )
 
     def plot_feature_box(
         self,
         imputed: bool = False,
+        ax=None,
         figure_kwargs: dict = None,
         boxplot_kwargs: dict = None,
     ):
@@ -1626,6 +2090,8 @@ class Trainer:
         ----------
         imputed
             Whether the imputed dataset should be considered.
+        ax
+            ``matplotlib.axes.Axes``
         figure_kwargs
             Arguments for ``plt.figure``
         boxplot_kwargs
@@ -1638,12 +2104,18 @@ class Trainer:
         )
 
         # sns.reset_defaults()
-        plt.figure(**figure_kwargs_)
-        ax = plt.subplot(111)
+        given_ax = ax is not None
+        if not given_ax:
+            plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
         bp = sns.boxplot(
             data=self.feature_data
             if imputed
-            else self.datamodule.get_not_imputed_df()[self.cont_feature_names],
+            else self.datamodule.data_transform(
+                self.datamodule.get_not_imputed_df()[self.cont_feature_names],
+                scaler_only=True,
+            ),
             ax=ax,
             **boxplot_kwargs_,
         )
@@ -1661,24 +2133,23 @@ class Trainer:
 
         plt.grid(linewidth=0.4, axis="x")
         ax.set_axisbelow(True)
-        plt.ylabel("Values (Standard Scaled)")
         # ax.tick_params(axis='x', rotation=90)
-        plt.tight_layout()
-        plt.savefig(
-            os.path.join(
-                self.project_root, f"feature_box{'_imputed' if imputed else ''}.pdf"
+        if not given_ax:
+            plt.ylabel("Values (Scaled)")
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root, f"feature_box{'_imputed' if imputed else ''}.pdf"
+                ),
+                tight_layout=True,
             )
-        )
-        plt.show()
-        plt.close()
 
-    def plot_hist(
+    def plot_hist_all(
         self,
         imputed=False,
+        fontsize=12,
         get_figsize_kwargs: Dict = None,
         figure_kwargs: Dict = None,
-        bar_kwargs: Dict = None,
-        hist_kwargs: Dict = None,
+        **kwargs,
     ):
         """
         Plot histograms of the tabular data.
@@ -1689,62 +2160,127 @@ class Trainer:
             Whether the imputed dataset should be considered.
         figure_kwargs
             Arguments for ``plt.figure``.
+        fontsize
+            ``plt.rcParams["font.size"]``
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        **kwargs
+            Arguments for :meth:`plot_hist`.
+        """
+        fig = self._plot_by_list(
+            ls=self.all_feature_names + self.label_name,
+            ls_kwarg_name="feature",
+            meth_name="plot_hist",
+            meth_fix_kwargs=dict(imputed=imputed, **kwargs),
+            fontsize=fontsize,
+            with_title=True,
+            xlabel="Value of predictors",
+            ylabel="Density",
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+        )
+        self._after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
+            ),
+            tight_layout=False,
+        )
+
+    def plot_hist(
+        self,
+        feature: str,
+        ax=None,
+        imputed=False,
+        x_values=None,
+        figure_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+        bar_kwargs: Dict = None,
+    ):
+        """
+        Plot the histogram of a feature.
+
+        Parameters
+        ----------
+        feature
+            The selected feature.
+        ax
+            ``matplotlib.axes.Axes``
+        imputed
+            Whether the imputed dataset should be considered.
+        x_values
+            Unique values of the `feature`. If None, it will be inferred from the dataset.
+        figure_kwargs
+            Arguments for ``plt.figure``.
         bar_kwargs
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
         """
-        get_figsize_kwargs_ = update_defaults_by_kwargs(
-            dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
-            get_figsize_kwargs,
-        )
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
 
-        feature_names = self.all_feature_names + self.label_name
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+
         hist_data = (
             self.datamodule.categories_transform(self.datamodule.get_not_imputed_df())
             if not imputed
             else self.df
         )
-        figsize, width, height = get_figsize(
-            n=len(feature_names), **get_figsize_kwargs_
+        bar_kwargs_ = update_defaults_by_kwargs(
+            dict(color="k", alpha=0.2, edgecolor=None), bar_kwargs
         )
+        hist_kwargs_ = update_defaults_by_kwargs(
+            dict(density=True, color="k", alpha=0.2, rwidth=0.95), hist_kwargs
+        )
+        x_values = (
+            np.sort(np.unique(hist_data[feature].values.flatten()))
+            if x_values is None
+            else x_values
+        )
+        x_values = x_values[np.isfinite(x_values)]
+        if len(x_values) > 0:
+            if feature not in self.cat_feature_names:
+                ax.hist(hist_data[feature], **hist_kwargs_)
+                # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
+                # ax2.set_ylim([0,1])
+                ax.set_xlim([np.min(x_values), np.max(x_values)])
+            else:
+                counts = np.array(
+                    [len(np.where(hist_data[feature].values == x)[0]) for x in x_values]
+                )
+                ax.bar(
+                    x_values,
+                    counts,
+                    tick_label=[self.cat_feature_mapping[feature][x] for x in x_values],
+                    **bar_kwargs_,
+                )
+                ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
+                count_range = np.max(counts) - np.min(counts)
+                ax.set_ylim(
+                    [
+                        np.min(counts) - 0.2 * count_range,
+                        np.max(counts) + 0.2 * count_range,
+                    ]
+                )
+        else:
+            ax.text(0.5, 0.5, "Invalid interval", ha="center", va="center")
+            ax.set_xlim([0, 1])
+            ax.set_ylim([0, 1])
+            ax.set_yticks([])
 
-        fig = plt.figure(figsize=figsize, **figure_kwargs_)
-
-        for idx, focus_feature in enumerate(feature_names):
-            ax = plt.subplot(height, width, idx + 1)
-            ax.set_title(focus_feature, {"fontsize": 12})
-            plot_one_hist(
-                ax=ax,
-                hist_data=hist_data,
-                cat_feature_mapping=self.cat_feature_mapping,
-                focus_feature=focus_feature,
-                cat_feature_names=self.cat_feature_names,
-                hist_kwargs=hist_kwargs,
-                bar_kwargs=bar_kwargs,
+        if not given_ax:
+            ax.set_ylabel("Density")
+            ax.set_xlabel(feature)
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root,
+                    f"hist{'_imputed' if imputed else ''}_{feature}.pdf",
+                ),
+                tight_layout=False,
             )
-
-        ax = fig.add_subplot(111, frameon=False)
-        plt.tick_params(
-            labelcolor="none",
-            which="both",
-            top=False,
-            bottom=False,
-            left=False,
-            right=False,
-        )
-        plt.ylabel("Density")
-        plt.xlabel("Value of predictors")
-
-        plt.savefig(
-            os.path.join(self.project_root, f"hist{'_imputed' if imputed else ''}.pdf")
-        )
-        if is_notebook():
-            plt.show()
-        plt.close()
 
     def _bootstrap(
         self,
