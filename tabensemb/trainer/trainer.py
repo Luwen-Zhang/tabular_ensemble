@@ -1094,13 +1094,13 @@ class Trainer:
 
     def _plot_subplots(
         self,
-        ls,
-        ls_kwarg_name,
-        meth_name,
-        with_title=False,
-        fontsize=12,
-        xlabel=None,
-        ylabel=None,
+        ls: List[str],
+        ls_kwarg_name: str,
+        meth_name: str,
+        with_title: bool = False,
+        fontsize: float = 12,
+        xlabel: str = None,
+        ylabel: str = None,
         get_figsize_kwargs: dict = None,
         figure_kwargs: dict = None,
         meth_fix_kwargs: dict = None,
@@ -1149,9 +1149,7 @@ class Trainer:
             ax = plt.subplot(height, width, idx + 1)
             if with_title:
                 ax.set_title(name, {"fontsize": fontsize})
-            meth_fix_kwargs_ = meth_fix_kwargs.copy()
-            meth_fix_kwargs_.update({ls_kwarg_name: name})
-            getattr(self, meth_name)(ax=ax, **meth_fix_kwargs_)
+            getattr(self, meth_name)(ax=ax, **{ls_kwarg_name: name}, **meth_fix_kwargs)
 
         ax = fig.add_subplot(111, frameon=False)
         plt.tick_params(
