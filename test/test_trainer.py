@@ -657,6 +657,23 @@ def test_plots():
     trainer = pytest.test_trainer_trainer
 
     with HiddenPltShow():
+        print(f"\n-- Scatter --\n")
+        trainer.plot_scatter(x_col="cont_1", y_col="cont_2")
+        trainer.plot_scatter(
+            x_col="cont_1",
+            y_col="cont_2",
+            select_by_value_kwargs={"selection": {"cat_1", [1, 2, 3]}},
+        )
+
+        print(f"\n-- multiple scatter --\n")
+        trainer.plot_on_one_axes(
+            meth_name="plot_scatter",
+            meth_kwargs_ls=[
+                {},
+                dict(select_by_value_kwargs={"selection": {"cat_1", [1, 2, 3]}}),
+            ],
+        )
+
         print(f"\n-- Correlation --\n")
         trainer.plot_corr(imputed=True)
         trainer.plot_corr(imputed=False)

@@ -2406,6 +2406,155 @@ class Trainer:
                 )
         return ax
 
+    def plot_on_one_axes(
+        self,
+        meth_name: Union[str, List],
+        meth_kwargs_ls: List[Dict],
+        fontsize: float = 12,
+        xlabel: str = None,
+        ylabel: str = None,
+        ax=None,
+        meth_fix_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        save_show_close: bool = True,
+        fig_name: str = None,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot multiple items on one ``matplotlib.axes.Axes``.
+
+        Parameters
+        ----------
+        meth_name
+            The method or a list of methods to plot multiple items. The method should have an argument named `ax` which
+            indicates the subplot.
+        meth_kwargs_ls
+            A list of arguments of the corresponding ``meth_name`` (except for ``ax``).
+        fontsize
+            ``plt.rcParams["font.size"]``
+        xlabel
+            The overall xlabel.
+        ylabel
+            The overall ylabel.
+        ax
+            ``matplotlib.axes.Axes``
+        meth_fix_kwargs
+            Fixed arguments of ``meth_name`` (except for ``ax``, ``ls_kwarg_name``, and those given in
+            ``meth_kwargs_ls``).
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        legend_kwargs
+            Arguments for ``plt.legend()``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+        fig_name
+            The path to save the figure.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
+
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+
+        plt.rcParams["font.size"] = fontsize
+        if isinstance(meth_name, str):
+            meth_name = [meth_name] * len(meth_kwargs_ls)
+        for meth, meth_kwargs in zip(meth_name, meth_kwargs_ls):
+            getattr(self, meth)(ax=ax, **meth_kwargs, **meth_fix_kwargs)
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.legend(**legend_kwargs_)
+
+        if not given_ax and save_show_close:
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root,
+                    "plot_on_one_axes.pdf",
+                )
+                if fig_name is None
+                else fig_name,
+                tight_layout=False,
+            )
+        return ax
+
+    def plot_scatter(
+        self,
+        x_col: str,
+        y_col: str,
+        ax=None,
+        imputed: bool = False,
+        figure_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot one column versus the other.
+
+        Parameters
+        ----------
+        x_col
+            The column for the x-axis.
+        y_col
+            The column for the y-axis.
+        ax
+            ``matplotlib.axes.Axes``
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        scatter_kwargs
+            Arguments for ``plt.scatter()``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+
+        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        if select_by_value_kwargs is not None:
+            indices = self.datamodule.select_by_value(**select_by_value_kwargs)
+        else:
+            indices = df.index
+
+        x = df.loc[indices, x_col].values.flatten()
+        y = df.loc[indices, y_col].values.flatten()
+        isna = np.union1d(np.where(np.isnan(x))[0], np.where(np.isnan(y))[0])
+        notna = np.setdiff1d(np.arange(len(x)), isna)
+
+        ax.scatter(x[notna], y[notna], **scatter_kwargs_)
+
+        if not given_ax:
+            ax.set_ylabel(y_col)
+            ax.set_xlabel(x_col)
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root,
+                        f"scatter_{x_col}_{y_col}.pdf",
+                    ),
+                    tight_layout=False,
+                )
+        return ax
+
     def _bootstrap(
         self,
         program: str,
