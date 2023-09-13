@@ -728,6 +728,38 @@ class DataModule:
         """
         return self.extract_derived_stacked_feature_names(self.all_feature_names)
 
+    def get_feature_types(self, features: List[str]) -> List[str]:
+        """
+        Get the type of each feature in ``features``, which is defined by ``feature_names_type`` and ``feature_types``
+        in the configuration.
+
+        Parameters
+        ----------
+        features
+            A list of features.
+
+        Returns
+        -------
+        list
+            The type of each feature
+        """
+        invalid_features = [
+            feature
+            for feature in features
+            if feature not in self.args["feature_names_type"].keys()
+            and feature not in self.get_all_derived_stacked_feature_names()
+        ]
+        if len(invalid_features) > 0:
+            raise Exception(f"Unknown features: {invalid_features}")
+        return [
+            self.args["feature_types"][
+                self.args["feature_names_type"].get(
+                    i, self.args["feature_types"].index("Derived")
+                )
+            ]
+            for i in features
+        ]
+
     def get_feature_names_by_type(self, typ: str) -> List[str]:
         """
         Find features of the specified type defined by ``feature_names_type`` and ``feature_types`` in the configuration.
@@ -844,13 +876,23 @@ class DataModule:
         """
         return [
             str(x)
-            for x in np.setdiff1d(
-                all_feature_names,
-                np.append(
-                    self.extract_cont_feature_names(all_feature_names),
-                    self.extract_cat_feature_names(all_feature_names),
-                ),
-            )
+            for x in all_feature_names
+            if x in self.get_all_derived_stacked_feature_names()
+        ]
+
+    def get_all_derived_stacked_feature_names(self):
+        """
+        Get all derived stacked features (not intermediate) from arguments of :attr:`dataderivers`.
+
+        Returns
+        -------
+        List
+            Names of all derived stacked from the current data derivers.
+        """
+        return [
+            deriver.kwargs["derived_name"]
+            for deriver in self.dataderivers
+            if deriver.kwargs["stacked"] and not deriver.kwargs["intermediate"]
         ]
 
     def set_feature_names(self, all_feature_names: List[str]):
