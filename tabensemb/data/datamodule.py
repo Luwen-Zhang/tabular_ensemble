@@ -15,6 +15,7 @@ import sklearn.ensemble
 from collections.abc import Iterable
 from sklearn.preprocessing import OrdinalEncoder
 import scipy.stats as st
+from functools import reduce
 
 
 class DataModule:
@@ -2012,25 +2013,20 @@ class DataModule:
 
     def select_by_value(
         self,
-        column: str,
-        value: Any,
+        selection: Dict[str, Union[str, int, float, List, Tuple]],
         df: pd.DataFrame = None,
-        eps: float = None,
         partition: str = None,
     ) -> np.ndarray:
         """
-        Select data points with the given value in the given column.
+        Select data points with the given value(s) in the given column(s).
 
         Parameters
         ----------
-        column
-            The column to be investigated.
-        value
-            The value to be selected.
+        selection
+            A dictionary whose items indicate the columns to be investigated and the values (if is a list/int/float/str)
+            or a range of values (closed interval, if is a tuple with two components) to be selected for each column.
         df
             A dataframe to be filtered. If not given, :attr:`df` is used.
-        eps
-            The threshold of `value`. If None, only values "equal" to `value` will be selected.
         partition
             "train", "val", "test", or "all"
 
@@ -2043,12 +2039,23 @@ class DataModule:
             raise Exception(f"Provide only one of `partition` and `df`.")
         if df is None:
             df = self.df
-        if eps is None:
-            res = np.array(df[df[column] == value].index)
-        else:
-            res = np.array(df[((df[column] - value).__abs__() <= eps)].index)
-        res = np.sort(res)
         if partition is not None:
             part = self._get_indices(partition)
-            res = np.sort(np.intersect1d(res, part))
+        else:
+            part = np.array(df.index)
+        col_res_ls = []
+        for col, val in selection.items():
+            if isinstance(val, list):
+                col_res = []
+                for v in val:
+                    col_res += list(df[df[col] == v].index)
+            elif isinstance(val, tuple) and len(val) == 2:
+                col_res = df[(df[col] >= val[0]) & (df[col] <= val[1])].index
+            elif isinstance(val, int) or isinstance(val, float) or isinstance(val, str):
+                col_res = df[df[col] == val].index
+            else:
+                raise Exception(f"Unrecognized selection of {col}: {val}.")
+            col_res = np.sort(np.intersect1d(np.unique(col_res), part))
+            col_res_ls.append(col_res)
+        res = np.sort(reduce(np.intersect1d, col_res_ls))
         return res
