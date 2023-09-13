@@ -2456,6 +2456,7 @@ class Trainer:
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
+        meth_fix_kwargs_ = update_defaults_by_kwargs(dict(), meth_fix_kwargs)
 
         given_ax = ax is not None
         if not given_ax:
@@ -2467,7 +2468,7 @@ class Trainer:
         if isinstance(meth_name, str):
             meth_name = [meth_name] * len(meth_kwargs_ls)
         for meth, meth_kwargs in zip(meth_name, meth_kwargs_ls):
-            getattr(self, meth)(ax=ax, **meth_kwargs, **meth_fix_kwargs)
+            getattr(self, meth)(ax=ax, **meth_kwargs, **meth_fix_kwargs_)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)

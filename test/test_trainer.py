@@ -662,7 +662,7 @@ def test_plots():
         trainer.plot_scatter(
             x_col="cont_1",
             y_col="cont_2",
-            select_by_value_kwargs={"selection": {"cat_1", [1, 2, 3]}},
+            select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
         )
 
         print(f"\n-- multiple scatter --\n")
@@ -670,7 +670,19 @@ def test_plots():
             meth_name="plot_scatter",
             meth_kwargs_ls=[
                 {},
-                dict(select_by_value_kwargs={"selection": {"cat_1", [1, 2, 3]}}),
+                dict(select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}}),
+            ],
+            meth_fix_kwargs=dict(x_col="cont_1", y_col="cont_2"),
+        )
+        trainer.plot_on_one_axes(
+            meth_name="plot_scatter",
+            meth_kwargs_ls=[
+                dict(x_col="cont_1", y_col="cont_2"),
+                dict(
+                    x_col="cont_1",
+                    y_col="cont_2",
+                    select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
+                ),
             ],
         )
 
