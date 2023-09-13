@@ -1,4 +1,5 @@
 import os.path
+import matplotlib.figure
 import numpy as np
 import tabensemb
 from tabensemb.utils import *
@@ -1113,11 +1114,11 @@ class Trainer:
         ls
             The list to be iterated.
         ls_kwarg_name
-            The argument name of the components in `ls` when the component is passed to `meth_name`.
+            The argument name of the components in ``ls`` when the component is passed to ``meth_name``.
         meth_name
-            The method to plot on a subplot. It has an argument named `ax` which indicates the subplot.
+            The method to plot on a subplot. It has an argument named ``ax`` which indicates the subplot.
         with_title
-            Whether each subplot has a title, which is the components in `ls`.
+            Whether each subplot has a title, which is the components in ``ls``.
         fontsize
             ``plt.rcParams["font.size"]``
         xlabel
@@ -1129,7 +1130,7 @@ class Trainer:
         figure_kwargs
             Arguments for ``plt.figure()``
         meth_fix_kwargs
-            Fixed arguments of `meth_name` (except for `ax` and `ls_kwarg_name`).
+            Fixed arguments of ``meth_name`` (except for ``ax`` and ``ls_kwarg_name``).
 
         Returns
         -------
@@ -1192,8 +1193,9 @@ class Trainer:
         fontsize=14,
         get_figsize_kwargs: dict = None,
         figure_kwargs: dict = None,
+        save_show_close: bool = True,
         **kwargs,
-    ):
+    ) -> Union[None, matplotlib.figure.Figure]:
         """
         Compare ground truth and prediction for all models in a model base.
 
@@ -1207,6 +1209,9 @@ class Trainer:
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
         figure_kwargs
             Arguments for ``plt.figure()``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
         kwargs
             Arguments for :meth:`plot_truth_pred`
         """
@@ -1226,9 +1231,13 @@ class Trainer:
             figure_kwargs=figure_kwargs,
         )
 
-        self._after_plot(
-            fig_name=os.path.join(self.project_root, program, f"truth_pred.pdf"),
-            tight_layout=False,
+        return (
+            self._after_plot(
+                fig_name=os.path.join(self.project_root, program, f"truth_pred.pdf"),
+                tight_layout=False,
+            )
+            if save_show_close
+            else fig
         )
 
     def plot_truth_pred(
@@ -1241,6 +1250,7 @@ class Trainer:
         figure_kwargs: dict = None,
         scatter_kwargs: dict = None,
         legend_kwargs: dict = None,
+        save_show_close: bool = True,
     ):
         """
         Compare ground truth and prediction for one model.
@@ -1265,6 +1275,8 @@ class Trainer:
             Arguments for ``plt.scatter()``
         legend_kwargs
             Arguments for ``plt.legend()``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(
@@ -1358,12 +1370,13 @@ class Trainer:
             ax.set_xlabel("Ground truth")
             ax.set_ylabel("Prediction")
             s = model_name.replace("/", "_")
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root, program, f"{s}_truth_pred.pdf"
-                ),
-                tight_layout=False,
-            )
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root, program, f"{s}_truth_pred.pdf"
+                    ),
+                    tight_layout=False,
+                )
 
     def cal_feature_importance(
         self, program: str, model_name: str, method: str = "permutation", **kwargs
@@ -1442,6 +1455,7 @@ class Trainer:
         ax=None,
         figure_kwargs: dict = None,
         bar_kwargs: dict = None,
+        save_show_close: bool = True,
     ):
         """
         Plot feature importance of a model using :meth:`cal_feature_importance`.
@@ -1464,6 +1478,8 @@ class Trainer:
             Arguments for ``plt.figure``
         bar_kwargs
             Arguments for ``seaborn.barplot``.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
         """
         attr, names = self.cal_feature_importance(
             program=program, model_name=model_name, method=method
@@ -1549,13 +1565,14 @@ class Trainer:
                 ax.set_xlabel("SHAP feature importance")
             else:
                 ax.set_xlabel("Feature importance")
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root,
-                    f"feature_importance_{program}_{model_name}_{method}.png",
-                ),
-                tight_layout=True,
-            )
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root,
+                        f"feature_importance_{program}_{model_name}_{method}.png",
+                    ),
+                    tight_layout=True,
+                )
 
     def plot_partial_dependence_all(
         self,
@@ -1564,8 +1581,9 @@ class Trainer:
         fontsize=12,
         figure_kwargs: dict = None,
         get_figsize_kwargs: dict = None,
+        save_show_close: bool = True,
         **kwargs,
-    ):
+    ) -> Union[None, matplotlib.figure.Figure]:
         """
         Calculate and plot partial dependence plots with bootstrapping.
 
@@ -1581,6 +1599,9 @@ class Trainer:
             Arguments for ``plt.figure``.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
         kwargs
             Arguments for :meth:`plot_partial_dependence`.
         """
@@ -1596,11 +1617,15 @@ class Trainer:
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
-        self._after_plot(
-            fig_name=os.path.join(
-                self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
-            ),
-            tight_layout=False,
+        return (
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
+                ),
+                tight_layout=False,
+            )
+            if save_show_close
+            else fig
         )
 
     def plot_partial_dependence(
@@ -1622,6 +1647,7 @@ class Trainer:
         fill_between_kwargs: dict = None,
         bar_kwargs: dict = None,
         hist_kwargs: dict = None,
+        save_show_close: bool = True,
     ):
         """
         Calculate and plot a partial dependence plot with bootstrapping for a feature.
@@ -1662,6 +1688,8 @@ class Trainer:
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
         """
         (
             x_values_list,
@@ -1762,13 +1790,14 @@ class Trainer:
         if not given_ax:
             ax.set_ylabel("Predicted target")
             ax.set_xlabel(feature + r" ($10\%$-$90\%$ percentile)")
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root,
-                    f"partial_dependence_{program}_{model_name}_{feature}.pdf",
-                ),
-                tight_layout=False,
-            )
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root,
+                        f"partial_dependence_{program}_{model_name}_{feature}.pdf",
+                    ),
+                    tight_layout=False,
+                )
 
     def cal_partial_dependence(
         self, feature_subset: List[str] = None, **kwargs
@@ -1823,8 +1852,9 @@ class Trainer:
         fontsize=12,
         figure_kwargs: dict = None,
         get_figsize_kwargs: dict = None,
+        save_show_close: bool = True,
         **kwargs,
-    ):
+    ) -> Union[None, matplotlib.figure.Figure]:
         """
         Calculate prediction absolute errors on the testing dataset, and plot histograms of high-error samples and
         low-error samples respectively.
@@ -1841,6 +1871,9 @@ class Trainer:
             Arguments for ``plt.figure``.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
         kwargs
             Arguments for :meth:`plot_partial_err`
         """
@@ -1856,11 +1889,15 @@ class Trainer:
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
-        self._after_plot(
-            fig_name=os.path.join(
-                self.project_root, f"partial_err_{program}_{model_name}.pdf"
-            ),
-            tight_layout=False,
+        return (
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root, f"partial_err_{program}_{model_name}.pdf"
+                ),
+                tight_layout=False,
+            )
+            if save_show_close
+            else fig
         )
 
     def plot_partial_err(
@@ -1873,6 +1910,7 @@ class Trainer:
         figure_kwargs: dict = None,
         scatter_kwargs: dict = None,
         hist_kwargs: dict = None,
+        save_show_close: bool = True,
     ):
         """
         Calculate prediction absolute errors on the testing dataset, and plot histograms of high-error samples and
@@ -1896,6 +1934,8 @@ class Trainer:
             Arguments for ``ax.scatter()``
         hist_kwargs
             Arguments for ``ax.hist()``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         scatter_kwargs_ = update_defaults_by_kwargs(dict(s=1), scatter_kwargs)
@@ -1973,13 +2013,14 @@ class Trainer:
         if not given_ax:
             ax.set_ylabel("Prediction absolute error")
             ax.set_xlabel(feature)
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root,
-                    f"partial_err_{program}_{model_name}_{feature}.pdf",
-                ),
-                tight_layout=False,
-            )
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root,
+                        f"partial_err_{program}_{model_name}_{feature}.pdf",
+                    ),
+                    tight_layout=False,
+                )
 
     def plot_corr(
         self,
@@ -1988,6 +2029,7 @@ class Trainer:
         ax=None,
         figure_kwargs: dict = None,
         imshow_kwargs: dict = None,
+        save_show_close: bool = True,
     ):
         """
         Plot Pearson correlation coefficients among features and the target.
@@ -2005,6 +2047,8 @@ class Trainer:
             Arguments for ``plt.figure``.
         imshow_kwargs
             Arguments for ``plt.imshow``.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
         """
         figure_kwargs_ = update_defaults_by_kwargs(
             dict(figsize=(10, 10)), figure_kwargs
@@ -2044,7 +2088,7 @@ class Trainer:
                     fontsize=fontsize,
                 )
 
-        if not given_ax:
+        if not given_ax and save_show_close:
             self._after_plot(
                 fig_name=os.path.join(
                     self.project_root, f"corr{'_imputed' if imputed else ''}.pdf"
@@ -2052,7 +2096,9 @@ class Trainer:
                 tight_layout=True,
             )
 
-    def plot_pairplot(self, pairplot_kwargs: dict = None):
+    def plot_pairplot(
+        self, pairplot_kwargs: dict = None, save_show_close: bool = True
+    ) -> Union[None, sns.axisgrid.PairGrid]:
         """
         Plot ``seaborn.pairplot`` among features and label. Kernel Density Estimation plots are on the diagonal.
 
@@ -2060,6 +2106,9 @@ class Trainer:
         ----------
         pairplot_kwargs
             Arguments for ``seaborn.pairplot``.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``seaborn.axisgrid.PairGrid``
+            instance.
         """
         pairplot_kwargs_ = update_defaults_by_kwargs(
             dict(corner=True, diag_kind="kde"), pairplot_kwargs
@@ -2068,11 +2117,15 @@ class Trainer:
         df_all = pd.concat(
             [self.unscaled_feature_data, self.unscaled_label_data], axis=1
         )
-        sns.pairplot(df_all, **pairplot_kwargs_)
-        self._after_plot(
-            fig_name=os.path.join(self.project_root, "pair.jpg"),
-            tight_layout=True,
-        )
+        grid = sns.pairplot(df_all, **pairplot_kwargs_)
+
+        if save_show_close:
+            self._after_plot(
+                fig_name=os.path.join(self.project_root, "pair.jpg"),
+                tight_layout=True,
+            )
+        else:
+            return grid
 
     def plot_feature_box(
         self,
@@ -2080,6 +2133,7 @@ class Trainer:
         ax=None,
         figure_kwargs: dict = None,
         boxplot_kwargs: dict = None,
+        save_show_close: bool = True,
     ):
         """
         Plot boxplot of the tabular data.
@@ -2094,6 +2148,8 @@ class Trainer:
             Arguments for ``plt.figure``
         boxplot_kwargs
             Arguments for ``seaborn.boxplot``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(6, 6)), figure_kwargs)
         boxplot_kwargs_ = update_defaults_by_kwargs(
@@ -2134,12 +2190,14 @@ class Trainer:
         # ax.tick_params(axis='x', rotation=90)
         if not given_ax:
             plt.ylabel("Values (Scaled)")
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root, f"feature_box{'_imputed' if imputed else ''}.pdf"
-                ),
-                tight_layout=True,
-            )
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root,
+                        f"feature_box{'_imputed' if imputed else ''}.pdf",
+                    ),
+                    tight_layout=True,
+                )
 
     def plot_hist_all(
         self,
@@ -2147,8 +2205,9 @@ class Trainer:
         fontsize=12,
         get_figsize_kwargs: Dict = None,
         figure_kwargs: Dict = None,
+        save_show_close: bool = True,
         **kwargs,
-    ):
+    ) -> Union[None, matplotlib.figure.Figure]:
         """
         Plot histograms of the tabular data.
 
@@ -2162,6 +2221,9 @@ class Trainer:
             ``plt.rcParams["font.size"]``
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
         **kwargs
             Arguments for :meth:`plot_hist`.
         """
@@ -2177,11 +2239,15 @@ class Trainer:
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
-        self._after_plot(
-            fig_name=os.path.join(
-                self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
-            ),
-            tight_layout=False,
+        return (
+            self._after_plot(
+                fig_name=os.path.join(
+                    self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
+                ),
+                tight_layout=False,
+            )
+            if save_show_close
+            else fig
         )
 
     def plot_hist(
@@ -2193,6 +2259,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
+        save_show_close: bool = True,
     ):
         """
         Plot the histogram of a feature.
@@ -2213,6 +2280,8 @@ class Trainer:
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
 
@@ -2272,13 +2341,14 @@ class Trainer:
         if not given_ax:
             ax.set_ylabel("Density")
             ax.set_xlabel(feature)
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root,
-                    f"hist{'_imputed' if imputed else ''}_{feature}.pdf",
-                ),
-                tight_layout=False,
-            )
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root,
+                        f"hist{'_imputed' if imputed else ''}_{feature}.pdf",
+                    ),
+                    tight_layout=False,
+                )
 
     def _bootstrap(
         self,
