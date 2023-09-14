@@ -1502,20 +1502,8 @@ class Trainer:
         )
         figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(7, 4)), figure_kwargs)
 
-        # if feature type is not assigned in config files, the feature is from dataderiver.
-        pal = []
-        for key in names:
-            if key in self.cont_feature_names:
-                c = (
-                    clr[self.args["feature_names_type"][key]]
-                    if key in self.args["feature_names_type"].keys()
-                    else clr[self.args["feature_types"].index("Derived")]
-                )
-            elif key in self.cat_feature_names:
-                c = clr[self.args["feature_types"].index("Categorical")]
-            else:
-                c = clr[self.args["feature_types"].index("Derived")]
-            pal.append(c)
+        type_idx = self.datamodule.get_feature_types_idx(names, unknown_as_derived=True)
+        pal = [clr[i] for i in type_idx]
 
         clr_map = dict()
         for idx, feature_type in enumerate(self.args["feature_types"]):

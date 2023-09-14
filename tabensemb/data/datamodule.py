@@ -773,6 +773,33 @@ class DataModule:
             for i in features
         ]
 
+    def get_feature_types_idx(
+        self, features: List[str], unknown_as_derived: bool = False
+    ) -> List[str]:
+        """
+        Get the type defined in ``feature_types`` in the configuration for each feature by their index, which is defined
+        by ``feature_names_type`` in the configuration. Derived unstacked features are supported.
+
+        Parameters
+        ----------
+        features
+            A list of features.
+        unknown_as_derived
+            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
+            found.
+
+        Returns
+        -------
+        list
+            The index of the type for each feature
+
+        See Also
+        --------
+        :meth:`get_feature_types`
+        """
+        types = self.get_feature_types(features, unknown_as_derived=unknown_as_derived)
+        return [self.args["feature_types"].index(x) for x in types]
+
     def get_feature_names_by_type(self, typ: str) -> List[str]:
         """
         Find features of the specified type defined by ``feature_names_type`` and ``feature_types`` in the configuration.

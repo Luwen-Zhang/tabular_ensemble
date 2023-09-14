@@ -263,6 +263,16 @@ def test_get_feature_types():
         and "Derived" == types[3]
     )
 
+    idxs = datamodule.get_feature_types_idx(
+        [
+            datamodule.cont_feature_names[0],
+            datamodule.cat_feature_names[0],
+            "derived_cont",
+            "derived_cont_unstacked",
+        ]
+    )
+    assert idxs[0] == 0 and idxs[1] == 1 and idxs[2] == 2 and idxs[3] == 2
+
     with pytest.raises(Exception) as err:
         datamodule.get_feature_types(
             ["TEST", datamodule.cont_feature_names[0], datamodule.cat_feature_names[0]],
