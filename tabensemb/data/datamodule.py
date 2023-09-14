@@ -267,10 +267,10 @@ class DataModule:
             self.df = pd.read_csv(data_path, **kwargs)
         self.data_path = data_path
 
-        cont_feature_names = self.extract_cont_feature_names(
+        cont_feature_names = self.extract_original_cont_feature_names(
             self.args["feature_names_type"].keys()
         )
-        cat_feature_names = self.extract_cat_feature_names(
+        cat_feature_names = self.extract_original_cat_feature_names(
             self.args["feature_names_type"].keys()
         )
         label_name = self.args["label_name"]
@@ -814,7 +814,9 @@ class DataModule:
         else:
             return np.array([self.cont_feature_names.index(name) for name in names])
 
-    def extract_cont_feature_names(self, all_feature_names: List[str]) -> List[str]:
+    def extract_original_cont_feature_names(
+        self, all_feature_names: List[str]
+    ) -> List[str]:
         """
         Get original continuous features specified in the configuration.
 
@@ -835,7 +837,9 @@ class DataModule:
             and x not in self.args["categorical_feature_names"]
         ]
 
-    def extract_cat_feature_names(self, all_feature_names: List[str]) -> List[str]:
+    def extract_original_cat_feature_names(
+        self, all_feature_names: List[str]
+    ) -> List[str]:
         """
         Get original categorical features specified in the configuration.
 
@@ -905,8 +909,8 @@ class DataModule:
             A subset of current features.
         """
         self.set_status(training=True)
-        cont_feature_names = self.extract_cont_feature_names(all_feature_names)
-        cat_feature_names = self.extract_cat_feature_names(all_feature_names)
+        cont_feature_names = self.extract_original_cont_feature_names(all_feature_names)
+        cat_feature_names = self.extract_original_cat_feature_names(all_feature_names)
         derived_stacked_features = self.extract_derived_stacked_feature_names(
             all_feature_names
         )

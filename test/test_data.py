@@ -283,12 +283,12 @@ def test_extract_names():
     )
     assert len(with_derived_cont) == 1 and "derived_cont" in with_derived_cont
 
-    extract_cont = datamodule.extract_cont_feature_names(
+    extract_cont = datamodule.extract_original_cont_feature_names(
         ["derived_cont", "derived_cont_unstacked"] + names
     )
     assert len(extract_cont) == 1 and datamodule.cont_feature_names[0] in extract_cont
 
-    extract_cat = datamodule.extract_cat_feature_names(
+    extract_cat = datamodule.extract_original_cat_feature_names(
         ["derived_cont", "derived_cont_unstacked"] + names
     )
     assert len(extract_cat) == 1 and datamodule.cat_feature_names[0] in extract_cat
