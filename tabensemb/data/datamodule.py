@@ -615,7 +615,7 @@ class DataModule:
         return loss
 
     def prepare_new_data(
-        self, df: pd.DataFrame, derived_data: dict = None, ignore_absence=False
+        self, df: pd.DataFrame, derived_data: Dict = None, ignore_absence=False
     ) -> Tuple[pd.DataFrame, dict]:
         """
         Prepare the new tabular dataset for predictions using :meth:`~tabensemb.model.AbstractModel._predict`

@@ -1105,9 +1105,9 @@ class Trainer:
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
-        get_figsize_kwargs: dict = None,
-        figure_kwargs: dict = None,
-        meth_fix_kwargs: dict = None,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        meth_fix_kwargs: Dict = None,
     ):
         """
         Iterate over a list to plot subplots.
@@ -1169,7 +1169,7 @@ class Trainer:
 
         return fig
 
-    def _after_plot(self, fig_name, tight_layout=False, savefig_kwargs: dict = None):
+    def _after_plot(self, fig_name, tight_layout=False, savefig_kwargs: Dict = None):
         """
         Set the layout, save the current figure, show the figure if in a notebook, and close the figure.
 
@@ -1194,8 +1194,8 @@ class Trainer:
         self,
         program: str,
         fontsize=14,
-        get_figsize_kwargs: dict = None,
-        figure_kwargs: dict = None,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
         save_show_close: bool = True,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
@@ -1255,9 +1255,9 @@ class Trainer:
         log_trans: bool = True,
         upper_lim=9,
         ax=None,
-        figure_kwargs: dict = None,
-        scatter_kwargs: dict = None,
-        legend_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -1567,8 +1567,8 @@ class Trainer:
         program: str,
         model_name: str,
         fontsize=12,
-        figure_kwargs: dict = None,
-        get_figsize_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        get_figsize_kwargs: Dict = None,
         save_show_close: bool = True,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
@@ -1635,11 +1635,11 @@ class Trainer:
         grid_size: int = 30,
         CI: float = 0.95,
         verbose: bool = True,
-        figure_kwargs: dict = None,
-        plot_kwargs: dict = None,
-        fill_between_kwargs: dict = None,
-        bar_kwargs: dict = None,
-        hist_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        plot_kwargs: Dict = None,
+        fill_between_kwargs: Dict = None,
+        bar_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -1848,8 +1848,8 @@ class Trainer:
         program: str,
         model_name: str,
         fontsize=12,
-        figure_kwargs: dict = None,
-        get_figsize_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        get_figsize_kwargs: Dict = None,
         save_show_close: bool = True,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
@@ -1910,9 +1910,9 @@ class Trainer:
         feature,
         thres=0.8,
         ax=None,
-        figure_kwargs: dict = None,
-        scatter_kwargs: dict = None,
-        hist_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2035,8 +2035,8 @@ class Trainer:
         fontsize: Any = 10,
         imputed=False,
         ax=None,
-        figure_kwargs: dict = None,
-        imshow_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        imshow_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -2158,8 +2158,8 @@ class Trainer:
         self,
         imputed: bool = False,
         ax=None,
-        figure_kwargs: dict = None,
-        boxplot_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        boxplot_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -2418,7 +2418,7 @@ class Trainer:
         xlabel: str = None,
         ylabel: str = None,
         ax=None,
-        meth_fix_kwargs: dict = None,
+        meth_fix_kwargs: Dict = None,
         figure_kwargs: Dict = None,
         legend_kwargs: Dict = None,
         save_show_close: bool = True,

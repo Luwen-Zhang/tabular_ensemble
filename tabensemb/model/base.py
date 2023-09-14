@@ -115,7 +115,7 @@ class AbstractModel:
         self._mkdir()
         self.limit_batch_size = 6
 
-    def save_kwargs(self, d: dict = None, ignore: List[str] = None):
+    def save_kwargs(self, d: Dict = None, ignore: List[str] = None):
         """
         Save all args and kwargs of the caller except for those in ``ignore``. It will trace back to the top caller that
         has the same method name and the same class of ``self`` as that of the current frame. For example, in nested
@@ -278,7 +278,7 @@ class AbstractModel:
         df: pd.DataFrame,
         model_name: str,
         model: Any = None,
-        derived_data: dict = None,
+        derived_data: Dict = None,
         ignore_absence: bool = False,
         proba: bool = False,
         **kwargs,

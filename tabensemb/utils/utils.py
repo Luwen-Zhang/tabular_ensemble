@@ -773,7 +773,7 @@ def pretty(value, htchar="\t", lfchar="\n", indent=0):
         return repr(value)
 
 
-def update_defaults_by_kwargs(defaults: dict = None, kwargs: dict = None):
+def update_defaults_by_kwargs(defaults: Dict = None, kwargs: Dict = None):
     defaults = defaults if defaults is not None else {}
     defaults.update({} if kwargs is None else kwargs)
     return defaults
