@@ -550,6 +550,16 @@ def test_feature_importance():
                         "derived_name": "derived_cont",
                     },
                 ),
+                (
+                    "RelativeDeriver",
+                    {
+                        "stacked": False,
+                        "absolute_col": "cont_0",
+                        "relative2_col": "cont_1",
+                        "intermediate": False,
+                        "derived_name": "unstacked_derived_cont",
+                    },
+                ),
             ],
         },
     )
@@ -609,15 +619,43 @@ def test_feature_importance():
     assert np.all(np.abs(absmodel_shap[0]) > 1e-8)
 
     assert len(torchmodel_perm[0]) == len(torchmodel_perm[1])
-    assert np.all(np.abs(torchmodel_perm[0][: len(trainer.all_feature_names)]) > 1e-8)
+    cont_index = np.array(
+        [torchmodel_perm[1].index(i) for i in trainer.cont_feature_names]
+    )
+    cat_index = np.array(
+        [torchmodel_perm[1].index(i) for i in trainer.cat_feature_names]
+    )
+    other_index = np.setdiff1d(
+        np.setdiff1d(np.arange(len(torchmodel_perm[1])), cont_index), cat_index
+    )
+    assert (
+        "unstacked_derived_cont" in torchmodel_perm[1]
+        and torchmodel_shap[1].index("unstacked_derived_cont") in other_index
+    )
+    assert np.all(np.abs(torchmodel_perm[0][cont_index]) > 1e-8)
+    assert np.all(np.abs(torchmodel_perm[0][cat_index]) > 1e-8)
     # Unused data does not have feature importance.
-    assert np.all(np.abs(torchmodel_perm[0][len(trainer.all_feature_names) :]) < 1e-8)
+    assert np.all(np.abs(torchmodel_perm[0][other_index]) < 1e-8)
 
     assert len(torchmodel_shap[0]) == len(torchmodel_shap[1])
+    cont_index = np.array(
+        [torchmodel_shap[1].index(i) for i in trainer.cont_feature_names]
+    )
+    cat_index = np.array(
+        [torchmodel_shap[1].index(i) for i in trainer.cat_feature_names]
+    )
+    other_index = np.setdiff1d(
+        np.setdiff1d(np.arange(len(torchmodel_shap[1])), cont_index), cat_index
+    )
+    assert (
+        "unstacked_derived_cont" in torchmodel_perm[1]
+        and torchmodel_shap[1].index("unstacked_derived_cont") in other_index
+    )
+    assert np.all(np.abs(torchmodel_shap[0][cont_index]) > 1e-8)
     # Categorical features does not have gradients, therefore does not have shap values using DeepExplainer.
-    assert np.all(np.abs(torchmodel_shap[0][: len(trainer.cont_feature_names)]) > 1e-8)
+    assert np.all(np.abs(torchmodel_shap[0][cat_index]) < 1e-8)
     # Unused data does not have feature importance.
-    assert np.all(np.abs(torchmodel_shap[0][len(trainer.cont_feature_names) :]) < 1e-8)
+    assert np.all(np.abs(torchmodel_shap[0][other_index]) < 1e-8)
 
     assert np.allclose(torchmodel_shap[0], torchmodel_shap_direct)
 
