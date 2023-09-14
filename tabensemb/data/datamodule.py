@@ -735,8 +735,8 @@ class DataModule:
         self, features: List[str], unknown_as_derived: bool = False
     ) -> List[str]:
         """
-        Get the type of each feature in ``features``, which is defined by ``feature_names_type`` and ``feature_types``
-        in the configuration.
+        Get the type defined in ``feature_types`` in the configuration for each feature, which is defined by
+        ``feature_names_type`` in the configuration. Derived unstacked features are supported.
 
         Parameters
         ----------
@@ -750,6 +750,10 @@ class DataModule:
         -------
         list
             The type of each feature
+
+        See Also
+        --------
+        :meth:`get_feature_types_idx`
         """
         invalid_features = [
             feature
@@ -772,6 +776,7 @@ class DataModule:
     def get_feature_names_by_type(self, typ: str) -> List[str]:
         """
         Find features of the specified type defined by ``feature_names_type`` and ``feature_types`` in the configuration.
+        Derived unstacked features will not be included if ``typ="Derived"``.
 
         Parameters
         ----------
@@ -801,7 +806,7 @@ class DataModule:
     def get_feature_idx_by_type(self, typ: str) -> np.ndarray:
         """
         Find features (by their index) of the specified type defined by ``feature_names_type`` and ``feature_types``
-        in the configuration.
+        in the configuration. Derived unstacked features will not be included if ``typ="Derived"``.
 
         Parameters
         ----------
@@ -838,6 +843,10 @@ class DataModule:
         -------
         List
             Names of continuous original features both in the configuration and the input list.
+
+        See Also
+        --------
+        :meth:`extract_original_cat_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
             x
@@ -861,6 +870,10 @@ class DataModule:
         -------
         List
             Names of categorical original features that are both in the configuration and the input list.
+
+        See Also
+        --------
+        :meth:`extract_original_cont_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
             str(x)
@@ -886,6 +899,10 @@ class DataModule:
         -------
         List
             Names of stacked features in the input list.
+
+        See Also
+        --------
+        :meth:`extract_original_cont_feature_names`, :meth:`extract_original_cat_feature_names`
         """
         return [
             str(x)
