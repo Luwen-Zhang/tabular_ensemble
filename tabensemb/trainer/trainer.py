@@ -2374,6 +2374,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         legend_kwargs: Dict = None,
         save_show_close: bool = True,
+        legend: bool = False,
         fig_name: str = None,
     ) -> matplotlib.axes.Axes:
         """
@@ -2403,6 +2404,8 @@ class Trainer:
             Arguments for ``plt.legend()``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+        legend
+            Whether to show the legend.
         fig_name
             The path to save the figure.
 
@@ -2424,7 +2427,8 @@ class Trainer:
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        ax.legend(**legend_kwargs_)
+        if legend:
+            ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(
@@ -2503,6 +2507,135 @@ class Trainer:
             ax_or_fig=ax,
             xlabel=x_col,
             ylabel=y_col,
+            tight_layout=False,
+            save_show_close=save_show_close,
+        )
+
+    def plot_pdf(
+        self,
+        feature: str,
+        dist: st.rv_continuous = st.norm,
+        ax=None,
+        imputed: bool = False,
+        figure_kwargs: Dict = None,
+        plot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the probability density function of a feature.
+
+        Parameters
+        ----------
+        feature
+            The investigated feature.
+        dist
+            The distribution to fit. It should be an instance of ``scipy.stats.rv_continuous`` that has ``fit`` and
+            ``pdf`` methods.
+        ax
+            ``matplotlib.axes.Axes``
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        plot_kwargs
+            Arguments for ``plt.plot``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        plot_kwargs_ = update_defaults_by_kwargs(dict(), plot_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+
+        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = df.loc[indices, :]
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        values = df[feature].values.flatten()
+        x = np.linspace(np.nanmin(values), np.nanmax(values), 200)
+        pdf = dist.pdf(x, *dist.fit(values[np.isfinite(values)]))
+        ax.plot(x, pdf, **plot_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root,
+                f"pdf_{feature}.pdf",
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=feature,
+            ylabel="Probability density",
+            tight_layout=False,
+            save_show_close=save_show_close,
+        )
+
+    def plot_kde(
+        self,
+        feature: str,
+        ax=None,
+        imputed: bool = False,
+        figure_kwargs: Dict = None,
+        kdeplot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the kernel density estimation of a feature.
+
+        Parameters
+        ----------
+        feature
+            The investigated feature.
+        ax
+            ``matplotlib.axes.Axes``
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        kdeplot_kwargs
+            Arguments for ``seaborn.kdeplot``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        kdeplot_kwargs_ = update_defaults_by_kwargs(dict(), kdeplot_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+
+        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = df.loc[indices, :]
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        sns.kdeplot(data=df, x=feature, ax=ax, **kdeplot_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root,
+                f"kde_{feature}.pdf",
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=feature,
+            ylabel="Probability density",
             tight_layout=False,
             save_show_close=save_show_close,
         )
