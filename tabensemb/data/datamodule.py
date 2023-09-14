@@ -661,6 +661,12 @@ class DataModule:
         # _predict and predict.
         df = self.categories_inverse_transform(df)
 
+        if (
+            "augmented" in self.derived_data.keys()
+            and derived_data is not None
+            and "augmented" not in derived_data.keys()
+        ):
+            derived_data["augmented"] = np.zeros((len(df), 1))
         if derived_data is None or len(absent_derived_features) > 0:
             df, _, derived_data = self.derive(df)
         else:

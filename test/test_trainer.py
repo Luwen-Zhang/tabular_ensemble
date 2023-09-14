@@ -54,6 +54,14 @@ def pytest_configure_trainer():
                     },
                 ),
             ],
+            "data_processors": [
+                ["CategoricalOrdinalEncoder", {}],
+                ["NaNFeatureRemover", {}],
+                ["VarianceFeatureSelector", {"thres": 1}],
+                ["IQRRemover", {}],  # Note the remover here
+                ["SampleDataAugmentor", {}],  # Note the augmentor here
+                ["StandardScaler", {}],
+            ],
         },
     )
     trainer.load_data()
