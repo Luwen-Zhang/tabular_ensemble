@@ -2037,6 +2037,7 @@ class Trainer:
         ax=None,
         figure_kwargs: dict = None,
         imshow_kwargs: dict = None,
+        select_by_value_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2055,6 +2056,8 @@ class Trainer:
             Arguments for ``plt.figure``.
         imshow_kwargs
             Arguments for ``plt.imshow``.
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2075,7 +2078,9 @@ class Trainer:
             ax = plt.subplot(111)
         plt.sca(ax)
         plt.box(on=True)
-        corr = self.datamodule.cal_corr(imputed=imputed).values
+        corr = self.datamodule.cal_corr(
+            imputed=imputed, select_by_value_kwargs=select_by_value_kwargs
+        ).values
         im = ax.imshow(corr, **imshow_kwargs_)
         ax.set_xticks(np.arange(len(cont_feature_names)))
         ax.set_yticks(np.arange(len(cont_feature_names)))
@@ -2110,7 +2115,10 @@ class Trainer:
         return ax
 
     def plot_pairplot(
-        self, pairplot_kwargs: dict = None, save_show_close: bool = True
+        self,
+        pairplot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        save_show_close: bool = True,
     ) -> Union[None, sns.axisgrid.PairGrid]:
         """
         Plot ``seaborn.pairplot`` among features and label. Kernel Density Estimation plots are on the diagonal.
@@ -2119,6 +2127,8 @@ class Trainer:
         ----------
         pairplot_kwargs
             Arguments for ``seaborn.pairplot``.
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``seaborn.axisgrid.PairGrid``
             instance.
@@ -2126,11 +2136,15 @@ class Trainer:
         pairplot_kwargs_ = update_defaults_by_kwargs(
             dict(corner=True, diag_kind="kde"), pairplot_kwargs
         )
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
 
         df_all = pd.concat(
             [self.unscaled_feature_data, self.unscaled_label_data], axis=1
         )
-        grid = sns.pairplot(df_all, **pairplot_kwargs_)
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        grid = sns.pairplot(df_all.loc[indices, :], **pairplot_kwargs_)
 
         if save_show_close:
             self._after_plot(
@@ -2146,6 +2160,7 @@ class Trainer:
         ax=None,
         figure_kwargs: dict = None,
         boxplot_kwargs: dict = None,
+        select_by_value_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2161,6 +2176,8 @@ class Trainer:
             Arguments for ``plt.figure``
         boxplot_kwargs
             Arguments for ``seaborn.boxplot``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2173,6 +2190,10 @@ class Trainer:
             dict(orient="h", linewidth=1, fliersize=4, flierprops={"marker": "o"}),
             boxplot_kwargs,
         )
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
 
         # sns.reset_defaults()
         given_ax = ax is not None
@@ -2180,13 +2201,16 @@ class Trainer:
             plt.figure(**figure_kwargs_)
             ax = plt.subplot(111)
         plt.sca(ax)
-        bp = sns.boxplot(
-            data=self.feature_data
+        data = (
+            self.feature_data
             if imputed
             else self.datamodule.data_transform(
                 self.datamodule.get_not_imputed_df()[self.cont_feature_names],
                 scaler_only=True,
-            ),
+            )
+        )
+        bp = sns.boxplot(
+            data=data.loc[indices, :],
             ax=ax,
             **boxplot_kwargs_,
         )
@@ -2282,6 +2306,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2303,6 +2328,8 @@ class Trainer:
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2311,6 +2338,9 @@ class Trainer:
         matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
 
         given_ax = ax is not None
         if not given_ax:
@@ -2323,6 +2353,8 @@ class Trainer:
             if not imputed
             else self.df
         )
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        hist_data = hist_data.loc[indices, :]
         bar_kwargs_ = update_defaults_by_kwargs(
             dict(color="k", alpha=0.2, edgecolor=None), bar_kwargs
         )
@@ -2497,6 +2529,9 @@ class Trainer:
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
 
         given_ax = ax is not None
         if not given_ax:
@@ -2505,10 +2540,7 @@ class Trainer:
         plt.sca(ax)
 
         df = self.df if imputed else self.datamodule.get_not_imputed_df()
-        if select_by_value_kwargs is not None:
-            indices = self.datamodule.select_by_value(**select_by_value_kwargs)
-        else:
-            indices = df.index
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
 
         x = df.loc[indices, x_col].values.flatten()
         y = df.loc[indices, y_col].values.flatten()
