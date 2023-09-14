@@ -39,6 +39,12 @@ class FeatureValueSelector(AbstractProcessor):
         The feature that will be filtered.
     value: float
         The selected feature value.
+
+    Notes
+    -----
+    The ``FeatureValueSelector`` will not change anything in the upcoming dataset, which means that the value in the
+    upcoming set may exceed the range you expect. A typical error can be "IndexError: index out of range in self" from
+    ``torch.embedding`` because of categorical features.
     """
 
     def _required_kwargs(self):
@@ -47,21 +53,25 @@ class FeatureValueSelector(AbstractProcessor):
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         feature = self.kwargs["feature"]
         value = self.kwargs["value"]
-        where_value = data.index[np.where(data[feature] == value)[0]]
-        data = data.loc[where_value, :]
+        indices = datamodule.select_by_value(selection={feature: value}, df=data)
+        indices_retain_order = np.array([i for i in data.index if i in indices])
+        data = data.loc[indices_retain_order, :]
         self.feature, self.value = feature, value
         return data
 
     def _transform(self, data: pd.DataFrame, datamodule: DataModule):
+        indices = datamodule.select_by_value(
+            selection={self.feature: self.value}, df=data
+        )
+        indices_retain_order = np.array([i for i in data.index if i in indices])
         if datamodule.training:
-            if self.value not in list(data[self.feature]):
+            if len(indices) == 0:
                 raise Exception(
                     f"Value {self.value} not available for feature {self.feature}. Select from {data[self.feature].unique()}"
                 )
-            where_value = data.index[np.where(data[self.feature] == self.value)[0]]
-            data = data.loc[where_value, :]
+            data = data.loc[indices_retain_order, :]
         else:
-            if self.value not in list(data[self.feature]):
+            if len(indices) == 0:
                 warnings.warn(
                     f"Value {self.value} not available for feature {self.feature} selected by "
                     f"{self.__class__.__name__}."

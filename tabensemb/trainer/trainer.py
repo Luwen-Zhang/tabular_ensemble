@@ -1,7 +1,9 @@
 import os.path
 import matplotlib.figure
 import matplotlib.axes
+import matplotlib.legend
 import numpy as np
+import pandas as pd
 import tabensemb
 from tabensemb.utils import *
 from tabensemb.config import UserConfig
@@ -1271,8 +1273,6 @@ class Trainer:
             Whether the label data is in log scale.
         upper_lim
             The upper limit of x/y-axis.
-        fontsize
-            ``plt.rcParams["font.size"]``
         ax
             ``matplotlib.axes.Axes``
         figure_kwargs
@@ -1462,10 +1462,11 @@ class Trainer:
         program: str,
         model_name: str,
         method: str = "permutation",
-        clr=None,
+        clr: Iterable = None,
         ax=None,
-        figure_kwargs: dict = None,
-        bar_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        bar_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -1477,18 +1478,18 @@ class Trainer:
             The selected model base.
         model_name
             The selected model in the model base.
-        fig_size
-            The figure size.
         method
             The method to calculate feature importance. "permutation" or "shap".
         clr
-            A seaborn color palette. For example seaborn.color_palette("deep").
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         ax
             ``matplotlib.axes.Axes``
         figure_kwargs
             Arguments for ``plt.figure``
         bar_kwargs
             Arguments for ``seaborn.barplot``.
+        legend_kwargs
+            Arguments for ``plt.legend``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -1500,30 +1501,10 @@ class Trainer:
             program=program, model_name=model_name, method=method
         )
 
-        clr = sns.color_palette("deep") if clr is None else clr
         bar_kwargs_ = update_defaults_by_kwargs(
             dict(linewidth=1, edgecolor="k", orient="h"), bar_kwargs
         )
         figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(7, 4)), figure_kwargs)
-
-        # if feature type is not assigned in config files, the feature is from dataderiver.
-        pal = []
-        for key in names:
-            if key in self.cont_feature_names:
-                c = (
-                    clr[self.args["feature_names_type"][key]]
-                    if key in self.args["feature_names_type"].keys()
-                    else clr[self.args["feature_types"].index("Derived")]
-                )
-            elif key in self.cat_feature_names:
-                c = clr[self.args["feature_types"].index("Categorical")]
-            else:
-                c = clr[self.args["feature_types"].index("Derived")]
-            pal.append(c)
-
-        clr_map = dict()
-        for idx, feature_type in enumerate(self.args["feature_types"]):
-            clr_map[feature_type] = clr[idx]
 
         where_effective = np.abs(attr) > 1e-5
         effective_names = np.array(names)[where_effective]
@@ -1531,7 +1512,6 @@ class Trainer:
         if len(not_effective) > 0:
             print(f"Feature importance less than 1e-5: {not_effective}")
         attr = attr[where_effective]
-        pal = [pal[x] for x in np.where(where_effective)[0]]
 
         given_ax = ax is not None
         if not given_ax:
@@ -1542,7 +1522,6 @@ class Trainer:
         df = pd.DataFrame(columns=["feature", "attr", "clr"])
         df["feature"] = effective_names
         df["attr"] = np.abs(attr) / np.sum(np.abs(attr))
-        df["pal"] = pal
         df.sort_values(by="attr", inplace=True, ascending=False)
         df.reset_index(drop=True, inplace=True)
 
@@ -1550,7 +1529,8 @@ class Trainer:
         x = df["feature"].values
         y = df["attr"].values
 
-        palette = df["pal"]
+        clr = global_palette if clr is None else clr
+        palette = self._generate_feature_types_palette(clr=clr, features=x)
 
         # ax.set_facecolor((0.97,0.97,0.97))
         # plt.grid(axis='x')
@@ -1559,17 +1539,9 @@ class Trainer:
         sns.barplot(x=y, y=x, palette=palette, **bar_kwargs_)
         # ax.set_xlim([0, 1])
 
-        legend = ax.legend(
-            handles=[
-                Rectangle((0, 0), 1, 1, color=value, ec="k", label=key)
-                for key, value in clr_map.items()
-            ],
-            loc="lower right",
-            handleheight=2,
-            fancybox=False,
-            frameon=False,
+        legend = self._generate_feature_types_legends(
+            clr=clr, ax=ax, legend_kwargs=legend_kwargs
         )
-
         legend.get_frame().set_alpha(None)
         legend.get_frame().set_facecolor([1, 1, 1, 0.4])
 
@@ -2516,6 +2488,8 @@ class Trainer:
             Arguments for ``plt.scatter()``
         select_by_value_kwargs
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
         Returns
         -------
@@ -2555,6 +2529,180 @@ class Trainer:
                     tight_layout=False,
                 )
         return ax
+
+    def plot_presence_ratio(
+        self,
+        order="ratio",
+        ax=None,
+        clr: Iterable = None,
+        figure_kwargs: Dict = None,
+        barplot_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the ratio of presence of each feature.
+
+        Parameters
+        ----------
+        order
+            "ratio" or "type". If is "ratio", the labels will be sorted by the presence ratio. If is "type", the labels
+            will be sorted first by their feature types defined in the configuration, and then sorted by the presence
+            ratio.
+        ax
+            ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        barplot_kwargs
+            Arguments for ``seaborn.barplot``
+        legend_kwargs
+            Arguments for ``plt.legend``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        barplot_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                hue_order=self.args["feature_types"],
+                orient="h",
+                linewidth=1,
+                edgecolor="k",
+            ),
+            barplot_kwargs,
+        )
+        legend_kwargs_ = update_defaults_by_kwargs(
+            dict(frameon=True, fancybox=True), legend_kwargs
+        )
+        is_horizontal = barplot_kwargs_["orient"] == "h"
+
+        cont_mask = self.datamodule.cont_imputed_mask
+        cat_mask = self.datamodule.cat_imputed_mask
+        cont_presence_ratio = np.sum(1 - cont_mask) / cont_mask.shape[0]
+        cat_presence_ratio = np.sum(1 - cat_mask) / cat_mask.shape[0]
+        presence_ratio = pd.concat([cont_presence_ratio, cat_presence_ratio])
+        presence = pd.DataFrame(
+            {
+                "feature": presence_ratio.index,
+                "ratio": presence_ratio.values,
+                "types": self.datamodule.get_feature_types(list(presence_ratio.index)),
+            }
+        )
+        presence.sort_values(
+            by=["types", "ratio"] if order == "type" else "ratio", inplace=True
+        )
+
+        clr = global_palette if clr is None else clr
+        palette = self._generate_feature_types_palette(
+            clr=clr, features=presence["feature"]
+        )
+
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+
+        ax.set_axisbelow(True)
+        ax.grid(axis="x", linewidth=0.2)
+        sns.barplot(
+            data=presence,
+            x="ratio" if is_horizontal else "feature",
+            y="feature" if is_horizontal else "ratio",
+            ax=ax,
+            palette=palette,
+            **barplot_kwargs_,
+        )
+        getattr(ax, "set_xlim" if is_horizontal else "set_ylim")([0, 1])
+
+        legend = self._generate_feature_types_legends(
+            clr=clr, ax=ax, legend_kwargs=legend_kwargs_
+        )
+
+        if not given_ax:
+            getattr(ax, "set_xlabel" if is_horizontal else "set_ylabel")(
+                "Data presence ratio"
+            )
+            if save_show_close:
+                self._after_plot(
+                    fig_name=os.path.join(
+                        self.project_root,
+                        f"presence_ratio.pdf",
+                    ),
+                    tight_layout=False,
+                )
+        return ax
+
+    def _generate_feature_types_palette(
+        self, clr: Iterable, features: List[str]
+    ) -> List:
+        """
+        Generate color palette for each feature according to their types defined in the configuration.
+
+        Parameters
+        ----------
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        features
+            A list of features to be plotted.
+
+        Returns
+        -------
+        list
+            A list of colors for each feature. It can be used as the argument ``palette`` for seaborn functions.
+        """
+        type_idx = self.datamodule.get_feature_types_idx(
+            features=features, unknown_as_derived=True
+        )
+        palette = [clr[i] for i in type_idx]
+        return palette
+
+    def _generate_feature_types_legends(
+        self, clr, ax, legend_kwargs
+    ) -> matplotlib.legend.Legend:
+        """
+        Generate the legend for feature types defined in the configuration.
+
+        Parameters
+        ----------
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        ax
+            ``matplotlib.axes.Axes``
+        legend_kwargs
+            Arguments for ``plt.legend``
+
+        Returns
+        -------
+        matplotlib.legend.Legend
+        """
+        clr_map = dict()
+        for idx, feature_type in enumerate(self.args["feature_types"]):
+            clr_map[feature_type] = clr[idx]
+        legend_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                loc="lower right",
+                handleheight=2,
+                fancybox=False,
+                frameon=False,
+            ),
+            legend_kwargs,
+        )
+
+        legend = ax.legend(
+            handles=[
+                Rectangle((0, 0), 1, 1, color=value, ec="k", label=key)
+                for key, value in clr_map.items()
+            ],
+            **legend_kwargs_,
+        )
+
+        return legend
 
     def _bootstrap(
         self,

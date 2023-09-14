@@ -30,38 +30,32 @@ def pytest_configure_data():
     if getattr(pytest, "data_configure_excuted", False):
         return
     max_config = UserConfig("sample")
-    max_config.merge(
-        {
-            "data_processors": [
-                ["CategoricalOrdinalEncoder", {}],
-                ["NaNFeatureRemover", {}],
-                ["VarianceFeatureSelector", {"thres": 0.1}],
-                ["FeatureValueSelector", {"feature": "cat_1", "value": 0}],
-                ["CorrFeatureSelector", {"thres": 0.1}],
-                ["IQRRemover", {}],
-                ["StdRemover", {}],
-                ["SampleDataAugmentor", {}],
-                ["StandardScaler", {}],
-            ],
-        }
-    )
+    processors = [
+        ["CategoricalOrdinalEncoder", {}],
+        ["NaNFeatureRemover", {}],
+        ["VarianceFeatureSelector", {"thres": 0.1}],
+        ["FeatureValueSelector", {"feature": "cat_1", "value": 0}],
+        ["CorrFeatureSelector", {"thres": 0.1}],
+        ["IQRRemover", {}],
+        ["StdRemover", {}],
+        ["SampleDataAugmentor", {}],
+        ["StandardScaler", {}],
+    ]
+    relative_deriver_unstacked_kwargs = relative_deriver_kwargs.copy()
+    relative_deriver_unstacked_kwargs["stacked"] = False
+    relative_deriver_unstacked_kwargs["derived_name"] = "derived_cont_unstacked"
+    derivers = [
+        ("RelativeDeriver", relative_deriver_kwargs),
+        ("RelativeDeriver", relative_deriver_unstacked_kwargs),
+        ("SampleWeightDeriver", sample_weight_deriver_kwargs),
+        ("UnscaledDataDeriver", {"derived_name": "unscaled", "stacked": False}),
+    ]
+    max_config.merge({"data_processors": processors, "data_derivers": derivers})
 
     pytest.datamodule = DataModule(config=max_config)
 
     min_config = UserConfig("sample")
-    relative_deriver_unstacked_kwargs = relative_deriver_kwargs.copy()
-    relative_deriver_unstacked_kwargs["stacked"] = False
-    relative_deriver_unstacked_kwargs["derived_name"] = "derived_cont_unstacked"
-    min_config.merge(
-        {
-            "data_derivers": [
-                ("RelativeDeriver", relative_deriver_kwargs),
-                ("RelativeDeriver", relative_deriver_unstacked_kwargs),
-                ("SampleWeightDeriver", sample_weight_deriver_kwargs),
-                ("UnscaledDataDeriver", {"derived_name": "unscaled", "stacked": False}),
-            ]
-        }
-    )
+    min_config.merge({"data_derivers": derivers})
     pytest.min_datamodule = DataModule(config=min_config)
 
     np.random.seed(1)
@@ -206,8 +200,8 @@ def test_describe():
 @pytest.mark.order(before="test_set_feature_names")
 def test_get_not_imputed():
     pytest_configure_data()
-    not_imputed = pytest.min_datamodule.get_not_imputed_df()
-    mask = pytest.min_datamodule.cont_imputed_mask
+    not_imputed = pytest.datamodule.get_not_imputed_df()
+    mask = pytest.datamodule.cont_imputed_mask
     missing = np.where(mask.values == 1)
     assert all(
         [
@@ -223,11 +217,17 @@ def test_get_feature_by_type():
     datamodule = pytest.datamodule
     cont = datamodule.get_feature_names_by_type("Continuous")
     cont_idx = datamodule.get_feature_idx_by_type("Continuous")
-    assert all([real == got for real, got in zip(datamodule.cont_feature_names, cont)])
     assert all(
         [
-            real == got
-            for real, got in zip(range(len(datamodule.cont_feature_names)), cont_idx)
+            got in datamodule.cont_feature_names
+            and got not in datamodule.get_all_derived_stacked_feature_names()
+            for got in cont
+        ]
+    )
+    assert all(
+        [
+            datamodule.cont_feature_names.index(name) == idx
+            for name, idx in zip(cont, cont_idx)
         ]
     )
     cat = datamodule.get_feature_names_by_type("Categorical")
@@ -242,6 +242,80 @@ def test_get_feature_by_type():
     with pytest.raises(Exception) as err:
         datamodule.get_feature_names_by_type("TEST")
     assert "invalid" in err.value.args[0]
+
+
+@pytest.mark.order(before="test_set_feature_names")
+def test_get_feature_types():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
+    types = datamodule.get_feature_types(
+        [
+            datamodule.cont_feature_names[0],
+            datamodule.cat_feature_names[0],
+            "derived_cont",
+            "derived_cont_unstacked",
+        ]
+    )
+    assert (
+        "Continuous" == types[0]
+        and "Categorical" == types[1]
+        and "Derived" == types[2]
+        and "Derived" == types[3]
+    )
+
+    idxs = datamodule.get_feature_types_idx(
+        [
+            datamodule.cont_feature_names[0],
+            datamodule.cat_feature_names[0],
+            "derived_cont",
+            "derived_cont_unstacked",
+        ]
+    )
+    assert idxs[0] == 0 and idxs[1] == 1 and idxs[2] == 2 and idxs[3] == 2
+
+    with pytest.raises(Exception) as err:
+        datamodule.get_feature_types(
+            ["TEST", datamodule.cont_feature_names[0], datamodule.cat_feature_names[0]],
+            unknown_as_derived=False,
+        )
+    assert (
+        "TEST" in err.value.args[0]
+        and datamodule.cont_feature_names[0] not in err.value.args[0]
+        and datamodule.cat_feature_names[0] not in err.value.args[0]
+    )
+
+    types = datamodule.get_feature_types(
+        ["TEST"],
+        unknown_as_derived=True,
+    )
+    assert "Derived" == types[0]
+
+
+@pytest.mark.order(before="test_set_feature_names")
+def test_extract_names():
+    pytest_configure_data()
+    datamodule = pytest.datamodule
+    names = [datamodule.cont_feature_names[0], datamodule.cat_feature_names[0]]
+
+    assert len(datamodule.extract_derived_stacked_feature_names(names)) == 0
+
+    with_derived_cont = datamodule.extract_derived_stacked_feature_names(
+        ["derived_cont", "derived_cont_unstacked"] + names
+    )
+    assert len(with_derived_cont) == 1 and "derived_cont" in with_derived_cont
+
+    extract_cont = datamodule.extract_original_cont_feature_names(
+        ["derived_cont", "derived_cont_unstacked"] + names
+    )
+    assert len(extract_cont) == 1 and datamodule.cont_feature_names[0] in extract_cont
+
+    extract_cat = datamodule.extract_original_cat_feature_names(
+        ["derived_cont", "derived_cont_unstacked"] + names
+    )
+    assert len(extract_cat) == 1 and datamodule.cat_feature_names[0] in extract_cat
+
+    all_stacked = datamodule.get_all_derived_stacked_feature_names()
+    assert len(all_stacked) == 1 and "derived_cont" in all_stacked
 
 
 def test_set_feature_names():
@@ -353,8 +427,12 @@ def test_remove_features():
     )
     new_cont_names = datamodule.cont_feature_names.copy()
 
-    assert len(original_cont_names) == len(new_cont_names) + 1
-    assert original_cont_names[0] not in new_cont_names
+    # "cont_0" is removed and "derived_cont" is added back.
+    assert len(original_cont_names) == len(new_cont_names)
+    assert (
+        original_cont_names[0] not in new_cont_names
+        and "derived_cont" in new_cont_names
+    )
 
 
 def test_base_predictor():

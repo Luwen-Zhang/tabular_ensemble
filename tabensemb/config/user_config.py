@@ -289,7 +289,7 @@ class UserConfig(dict):
         cont_feature_names = []
         cat_feature_names = []
         label_name = []
-        for attr in dataset["attributes"]:
+        for attr in dataset["variables"]:
             if attr["role"] == "Feature":
                 if attr["type"] == "Continuous":
                     cont_feature_names.append(attr["name"])

@@ -87,6 +87,7 @@ class AbstractDeriver(AbstractRequireKwargs):
         super(AbstractDeriver, self).__init__(**kwargs)
         for arg_name in self._required_cols():
             self._check_arg(arg_name)
+        self.last_derived_col_names = []
 
     def _cls_required_kwargs(self):
         """
@@ -135,6 +136,7 @@ class AbstractDeriver(AbstractRequireKwargs):
             if "col_names" not in self.kwargs
             else self.kwargs["col_names"]
         )
+        self.last_derived_col_names = names
         return values, self.kwargs["derived_name"], names
 
     def _derive(

@@ -78,6 +78,8 @@ class DataModule:
         Indices of the training set in the entire dataset (:attr:`df`).
     training
         The training status of the :class:`DataModule`. See :meth:`set_status`.
+    unstacked_col_names
+        Names of columns of each derived unstacked feature.
     val_dataset
         The validation set of the entire ``torch.utils.data.Dataset``.
     val_indices
@@ -217,6 +219,7 @@ class DataModule:
         self.dataderivers = [
             get_data_deriver(name)(**kwargs) for name, kwargs in config
         ]
+        self.unstacked_col_names = {}
 
     def load_data(
         self,
@@ -267,10 +270,10 @@ class DataModule:
             self.df = pd.read_csv(data_path, **kwargs)
         self.data_path = data_path
 
-        cont_feature_names = self.extract_cont_feature_names(
+        cont_feature_names = self.extract_original_cont_feature_names(
             self.args["feature_names_type"].keys()
         )
-        cat_feature_names = self.extract_cat_feature_names(
+        cat_feature_names = self.extract_original_cat_feature_names(
             self.args["feature_names_type"].keys()
         )
         label_name = self.args["label_name"]
@@ -658,6 +661,12 @@ class DataModule:
         # _predict and predict.
         df = self.categories_inverse_transform(df)
 
+        if (
+            "augmented" in self.derived_data.keys()
+            and derived_data is not None
+            and "augmented" not in derived_data.keys()
+        ):
+            derived_data["augmented"] = np.zeros((len(df), 1))
         if derived_data is None or len(absent_derived_features) > 0:
             df, _, derived_data = self.derive(df)
         else:
@@ -728,9 +737,79 @@ class DataModule:
         """
         return self.extract_derived_stacked_feature_names(self.all_feature_names)
 
+    def get_feature_types(
+        self, features: List[str], unknown_as_derived: bool = False
+    ) -> List[str]:
+        """
+        Get the type defined in ``feature_types`` in the configuration for each feature, which is defined by
+        ``feature_names_type`` in the configuration. Derived unstacked features are supported.
+
+        Parameters
+        ----------
+        features
+            A list of features.
+        unknown_as_derived
+            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
+            found.
+
+        Returns
+        -------
+        list
+            The type of each feature
+
+        See Also
+        --------
+        :meth:`get_feature_types_idx`
+        """
+        invalid_features = [
+            feature
+            for feature in features
+            if feature not in self.args["feature_names_type"].keys()
+            and feature not in self.get_all_derived_stacked_feature_names()
+            and feature not in self.get_all_derived_unstacked_feature_names()
+        ]
+        if len(invalid_features) > 0 and not unknown_as_derived:
+            raise Exception(f"Unknown features: {invalid_features}")
+        return [
+            self.args["feature_types"][
+                self.args["feature_names_type"].get(
+                    i, self.args["feature_types"].index("Derived")
+                )
+            ]
+            for i in features
+        ]
+
+    def get_feature_types_idx(
+        self, features: List[str], unknown_as_derived: bool = False
+    ) -> List[str]:
+        """
+        Get the type defined in ``feature_types`` in the configuration for each feature by their index, which is defined
+        by ``feature_names_type`` in the configuration. Derived unstacked features are supported.
+
+        Parameters
+        ----------
+        features
+            A list of features.
+        unknown_as_derived
+            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
+            found.
+
+        Returns
+        -------
+        list
+            The index of the type for each feature
+
+        See Also
+        --------
+        :meth:`get_feature_types`
+        """
+        types = self.get_feature_types(features, unknown_as_derived=unknown_as_derived)
+        return [self.args["feature_types"].index(x) for x in types]
+
     def get_feature_names_by_type(self, typ: str) -> List[str]:
         """
-        Find features with the type given by ``feature_names_type`` and ``feature_types`` in the configuration.
+        Find features of the specified type defined by ``feature_names_type`` and ``feature_types`` in the configuration.
+        Derived unstacked features will not be included if ``typ="Derived"``.
 
         Parameters
         ----------
@@ -759,8 +838,8 @@ class DataModule:
 
     def get_feature_idx_by_type(self, typ: str) -> np.ndarray:
         """
-        Find features (by their index) with the type given by ``feature_names_type`` and ``feature_types`` in the
-        configuration.
+        Find features (by their index) of the specified type defined by ``feature_names_type`` and ``feature_types``
+        in the configuration. Derived unstacked features will not be included if ``typ="Derived"``.
 
         Parameters
         ----------
@@ -782,7 +861,9 @@ class DataModule:
         else:
             return np.array([self.cont_feature_names.index(name) for name in names])
 
-    def extract_cont_feature_names(self, all_feature_names: List[str]) -> List[str]:
+    def extract_original_cont_feature_names(
+        self, all_feature_names: List[str]
+    ) -> List[str]:
         """
         Get original continuous features specified in the configuration.
 
@@ -795,6 +876,10 @@ class DataModule:
         -------
         List
             Names of continuous original features both in the configuration and the input list.
+
+        See Also
+        --------
+        :meth:`extract_original_cat_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
             x
@@ -803,7 +888,9 @@ class DataModule:
             and x not in self.args["categorical_feature_names"]
         ]
 
-    def extract_cat_feature_names(self, all_feature_names: List[str]) -> List[str]:
+    def extract_original_cat_feature_names(
+        self, all_feature_names: List[str]
+    ) -> List[str]:
         """
         Get original categorical features specified in the configuration.
 
@@ -816,6 +903,10 @@ class DataModule:
         -------
         List
             Names of categorical original features that are both in the configuration and the input list.
+
+        See Also
+        --------
+        :meth:`extract_original_cont_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
             str(x)
@@ -841,17 +932,45 @@ class DataModule:
         -------
         List
             Names of stacked features in the input list.
+
+        See Also
+        --------
+        :meth:`extract_original_cont_feature_names`, :meth:`extract_original_cat_feature_names`
         """
         return [
             str(x)
-            for x in np.setdiff1d(
-                all_feature_names,
-                np.append(
-                    self.extract_cont_feature_names(all_feature_names),
-                    self.extract_cat_feature_names(all_feature_names),
-                ),
-            )
+            for x in all_feature_names
+            if x in self.get_all_derived_stacked_feature_names()
         ]
+
+    def get_all_derived_stacked_feature_names(self):
+        """
+        Get all derived stacked features (not intermediate) from arguments of :attr:`dataderivers`.
+
+        Returns
+        -------
+        List
+            Names of all derived stacked from the current data derivers.
+        """
+        names = []
+        for deriver in self.dataderivers:
+            if deriver.kwargs["stacked"] and not deriver.kwargs["intermediate"]:
+                names += deriver.last_derived_col_names
+        return names
+
+    def get_all_derived_unstacked_feature_names(self):
+        """
+        Get all derived unstacked features from :attr:`unstacked_col_names`.
+
+        Returns
+        -------
+        List
+            Names of all derived unstacked from the current data derivers.
+        """
+        names = []
+        for key, val in self.unstacked_col_names.items():
+            names += val
+        return names
 
     def set_feature_names(self, all_feature_names: List[str]):
         """
@@ -863,8 +982,8 @@ class DataModule:
             A subset of current features.
         """
         self.set_status(training=True)
-        cont_feature_names = self.extract_cont_feature_names(all_feature_names)
-        cat_feature_names = self.extract_cat_feature_names(all_feature_names)
+        cont_feature_names = self.extract_original_cont_feature_names(all_feature_names)
+        cat_feature_names = self.extract_original_cat_feature_names(all_feature_names)
         derived_stacked_features = self.extract_derived_stacked_feature_names(
             all_feature_names
         )
@@ -1178,17 +1297,20 @@ class DataModule:
         if not categorical_only:
             for deriver in self.dataderivers:
                 if not deriver.kwargs["stacked"]:
-                    value, name, _ = deriver.derive(df, datamodule=self)
+                    value, name, col_names = deriver.derive(df, datamodule=self)
                     derived_data[name] = value
+                    self.unstacked_col_names[name] = col_names
         if len(self.cat_feature_names) > 0:
             derived_data["categorical"] = self.categories_transform(
                 df[self.cat_feature_names]
             ).values
+            self.unstacked_col_names["categorical"] = self.cat_feature_names.copy()
         if len(self.augmented_indices) > 0:
             augmented = np.zeros((len(df), 1))
             if self.training:
                 augmented[self.augmented_indices - len(self.dropped_indices), 0] = 1
             derived_data["augmented"] = augmented
+            self.unstacked_col_names["augmented"] = ["augmented"]
         return derived_data
 
     def _data_process(
