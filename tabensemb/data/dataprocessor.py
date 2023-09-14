@@ -54,7 +54,8 @@ class FeatureValueSelector(AbstractProcessor):
         feature = self.kwargs["feature"]
         value = self.kwargs["value"]
         indices = datamodule.select_by_value(selection={feature: value}, df=data)
-        data = data.loc[indices, :]
+        indices_retain_order = np.array([i for i in data.index if i in indices])
+        data = data.loc[indices_retain_order, :]
         self.feature, self.value = feature, value
         return data
 
@@ -62,12 +63,13 @@ class FeatureValueSelector(AbstractProcessor):
         indices = datamodule.select_by_value(
             selection={self.feature: self.value}, df=data
         )
+        indices_retain_order = np.array([i for i in data.index if i in indices])
         if datamodule.training:
             if len(indices) == 0:
                 raise Exception(
                     f"Value {self.value} not available for feature {self.feature}. Select from {data[self.feature].unique()}"
                 )
-            data = data.loc[indices, :]
+            data = data.loc[indices_retain_order, :]
         else:
             if len(indices) == 0:
                 warnings.warn(

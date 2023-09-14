@@ -732,6 +732,10 @@ def test_plots():
             ],
         )
 
+        print(f"\n-- Presence ratio --\n")
+        trainer.plot_presence_ratio(order="type", barplot_kwargs={"orient": "h"})
+        trainer.plot_presence_ratio(order="ratio", barplot_kwargs={"orient": "v"})
+
         print(f"\n-- Correlation --\n")
         trainer.plot_corr(imputed=True)
         trainer.plot_corr(imputed=False)
