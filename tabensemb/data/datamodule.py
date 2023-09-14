@@ -78,6 +78,8 @@ class DataModule:
         Indices of the training set in the entire dataset (:attr:`df`).
     training
         The training status of the :class:`DataModule`. See :meth:`set_status`.
+    unstacked_col_names
+        Names of columns of each derived unstacked feature.
     val_dataset
         The validation set of the entire ``torch.utils.data.Dataset``.
     val_indices
@@ -217,6 +219,7 @@ class DataModule:
         self.dataderivers = [
             get_data_deriver(name)(**kwargs) for name, kwargs in config
         ]
+        self.unstacked_col_names = {}
 
     def load_data(
         self,
@@ -748,6 +751,7 @@ class DataModule:
             for feature in features
             if feature not in self.args["feature_names_type"].keys()
             and feature not in self.get_all_derived_stacked_feature_names()
+            and feature not in self.get_all_derived_unstacked_feature_names()
         ]
         if len(invalid_features) > 0:
             raise Exception(f"Unknown features: {invalid_features}")
@@ -897,6 +901,20 @@ class DataModule:
         for deriver in self.dataderivers:
             if deriver.kwargs["stacked"] and not deriver.kwargs["intermediate"]:
                 names += deriver.last_derived_col_names
+        return names
+
+    def get_all_derived_unstacked_feature_names(self):
+        """
+        Get all derived unstacked features from :attr:`unstacked_col_names`.
+
+        Returns
+        -------
+        List
+            Names of all derived unstacked from the current data derivers.
+        """
+        names = []
+        for key, val in self.unstacked_col_names.items():
+            names += val
         return names
 
     def set_feature_names(self, all_feature_names: List[str]):
@@ -1224,17 +1242,20 @@ class DataModule:
         if not categorical_only:
             for deriver in self.dataderivers:
                 if not deriver.kwargs["stacked"]:
-                    value, name, _ = deriver.derive(df, datamodule=self)
+                    value, name, col_names = deriver.derive(df, datamodule=self)
                     derived_data[name] = value
+                    self.unstacked_col_names[name] = col_names
         if len(self.cat_feature_names) > 0:
             derived_data["categorical"] = self.categories_transform(
                 df[self.cat_feature_names]
             ).values
+            self.unstacked_col_names["categorical"] = self.cat_feature_names.copy()
         if len(self.augmented_indices) > 0:
             augmented = np.zeros((len(df), 1))
             if self.training:
                 augmented[self.augmented_indices - len(self.dropped_indices), 0] = 1
             derived_data["augmented"] = augmented
+            self.unstacked_col_names["augmented"] = ["augmented"]
         return derived_data
 
     def _data_process(

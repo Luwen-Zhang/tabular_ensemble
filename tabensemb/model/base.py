@@ -1671,12 +1671,9 @@ class TorchModel(AbstractModel):
         importance_names = cp(cont_feature_names)
         for key_idx, key in enumerate(derived_data.keys()):
             importance_names += (
-                [
-                    f"{key} (dim {i})" if dims[key_idx][-1] > 1 else key
-                    for i in range(dims[key_idx][-1])
-                ]
-                if key != "categorical"
-                else cat_feature_names
+                custom_datamodule.unstacked_col_names[key]
+                if key in custom_datamodule.unstacked_col_names.keys()
+                else trainer_datamodule.unstacked_col_names[key]
             )
         return attr, importance_names
 

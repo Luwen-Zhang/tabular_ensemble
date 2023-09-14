@@ -253,10 +253,14 @@ def test_get_feature_types():
             datamodule.cont_feature_names[0],
             datamodule.cat_feature_names[0],
             "derived_cont",
+            "derived_cont_unstacked",
         ]
     )
     assert (
-        "Continuous" == types[0] and "Categorical" == types[1] and "Derived" == types[2]
+        "Continuous" == types[0]
+        and "Categorical" == types[1]
+        and "Derived" == types[2]
+        and "Derived" == types[3]
     )
 
     with pytest.raises(Exception) as err:
