@@ -1294,11 +1294,7 @@ class Trainer:
             legend_kwargs,
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         prediction = self.get_modelbase(program)._predict_model(
             model_name=model_name, test_data_only=False
@@ -1513,11 +1509,7 @@ class Trainer:
             print(f"Feature importance less than 1e-5: {not_effective}")
         attr = attr[where_effective]
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         df = pd.DataFrame(columns=["feature", "attr", "clr"])
         df["feature"] = effective_names
@@ -1721,11 +1713,7 @@ class Trainer:
             dict(alpha=0.4, color="k", edgecolor=None), fill_between_kwargs
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         def transform(value):
             if log_trans:
@@ -1967,11 +1955,7 @@ class Trainer:
         low_err_data = feature_data.loc[np.where(err <= thres)[0], :]
         low_err = err[np.where(err <= thres)[0]]
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         ax.scatter(
             high_err_data[feature].values,
@@ -2072,11 +2056,7 @@ class Trainer:
 
         cont_feature_names = self.cont_feature_names + self.label_name
         # sns.reset_defaults()
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
         plt.box(on=True)
         corr = self.datamodule.cal_corr(
             imputed=imputed, select_by_value_kwargs=select_by_value_kwargs
@@ -2196,11 +2176,7 @@ class Trainer:
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
 
         # sns.reset_defaults()
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
         data = (
             self.feature_data
             if imputed
@@ -2342,11 +2318,7 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         hist_data = (
             self.datamodule.categories_transform(self.datamodule.get_not_imputed_df())
@@ -2462,11 +2434,7 @@ class Trainer:
         legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
         meth_fix_kwargs_ = update_defaults_by_kwargs(dict(), meth_fix_kwargs)
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         plt.rcParams["font.size"] = fontsize
         if isinstance(meth_name, str):
@@ -2533,11 +2501,7 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         df = self.df if imputed else self.datamodule.get_not_imputed_df()
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
@@ -2634,11 +2598,7 @@ class Trainer:
             clr=clr, features=presence["feature"]
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         ax.set_axisbelow(True)
         ax.grid(axis="x", linewidth=0.2)
@@ -2735,6 +2695,17 @@ class Trainer:
         )
 
         return legend
+
+    def _plot_action_init_ax(
+        self, ax=None, figure_kwargs: Dict = None
+    ) -> Tuple[matplotlib.axes.Axes, bool]:
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+        return ax, given_ax
 
     def _bootstrap(
         self,
