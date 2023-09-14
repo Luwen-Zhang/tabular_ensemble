@@ -265,13 +265,20 @@ def test_get_feature_types():
 
     with pytest.raises(Exception) as err:
         datamodule.get_feature_types(
-            ["TEST", datamodule.cont_feature_names[0], datamodule.cat_feature_names[0]]
+            ["TEST", datamodule.cont_feature_names[0], datamodule.cat_feature_names[0]],
+            unknown_as_derived=False,
         )
     assert (
         "TEST" in err.value.args[0]
         and datamodule.cont_feature_names[0] not in err.value.args[0]
         and datamodule.cat_feature_names[0] not in err.value.args[0]
     )
+
+    types = datamodule.get_feature_types(
+        ["TEST"],
+        unknown_as_derived=True,
+    )
+    assert "Derived" == types[0]
 
 
 @pytest.mark.order(before="test_set_feature_names")

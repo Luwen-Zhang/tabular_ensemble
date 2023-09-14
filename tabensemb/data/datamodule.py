@@ -731,7 +731,9 @@ class DataModule:
         """
         return self.extract_derived_stacked_feature_names(self.all_feature_names)
 
-    def get_feature_types(self, features: List[str]) -> List[str]:
+    def get_feature_types(
+        self, features: List[str], unknown_as_derived: bool = False
+    ) -> List[str]:
         """
         Get the type of each feature in ``features``, which is defined by ``feature_names_type`` and ``feature_types``
         in the configuration.
@@ -740,6 +742,9 @@ class DataModule:
         ----------
         features
             A list of features.
+        unknown_as_derived
+            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
+            found.
 
         Returns
         -------
@@ -753,7 +758,7 @@ class DataModule:
             and feature not in self.get_all_derived_stacked_feature_names()
             and feature not in self.get_all_derived_unstacked_feature_names()
         ]
-        if len(invalid_features) > 0:
+        if len(invalid_features) > 0 and not unknown_as_derived:
             raise Exception(f"Unknown features: {invalid_features}")
         return [
             self.args["feature_types"][
