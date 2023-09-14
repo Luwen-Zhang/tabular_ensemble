@@ -200,8 +200,8 @@ def test_describe():
 @pytest.mark.order(before="test_set_feature_names")
 def test_get_not_imputed():
     pytest_configure_data()
-    not_imputed = pytest.min_datamodule.get_not_imputed_df()
-    mask = pytest.min_datamodule.cont_imputed_mask
+    not_imputed = pytest.datamodule.get_not_imputed_df()
+    mask = pytest.datamodule.cont_imputed_mask
     missing = np.where(mask.values == 1)
     assert all(
         [
