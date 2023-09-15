@@ -2788,6 +2788,67 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def plot_fill_rating(
+        self,
+        ax=None,
+        figure_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the histogram of data point rating which is the percentage of filled features.
+
+        Parameters
+        ----------
+        ax
+            ``matplotlib.axes.Axes``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        hist_kwargs
+            Arguments for ``plt.hist``.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+
+        References
+        ----------
+        Zhang, Zian, and Zhiping Xu. “Fatigue Database of Additively Manufactured Alloys.” Scientific Data 10, no. 1 (May 2, 2023): 249.
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        hist_kwargs_ = update_defaults_by_kwargs(
+            dict(linewidth=1, edgecolor="k", facecolor=global_palette[0], density=True),
+            hist_kwargs,
+        )
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        cont_mask = self.datamodule.cont_imputed_mask.values
+        cat_mask = self.datamodule.cat_imputed_mask.values
+        cont_presence_features = np.sum(1 - cont_mask, axis=1)
+        cat_presence_features = np.sum(1 - cat_mask, axis=1)
+        rating = (cont_presence_features + cat_presence_features) / len(
+            self.all_feature_names
+        )
+        ax.hist(rating, **hist_kwargs_)
+        ax.set_xlim([0, 1])
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="Fill rating",
+            ylabel="Density",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
     def _plot_action_generate_feature_types_palette(
         self, clr: Iterable, features: List[str]
     ) -> List:
