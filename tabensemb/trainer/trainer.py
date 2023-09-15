@@ -1096,7 +1096,7 @@ class Trainer:
                 self.get_approx_cv_leaderboard(df_leaderboard, save=True)
         return df_leaderboard
 
-    def _plot_subplots(
+    def _plot_action_subplots(
         self,
         ls: List[str],
         ls_kwarg_name: str,
@@ -1105,9 +1105,9 @@ class Trainer:
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
-        get_figsize_kwargs: dict = None,
-        figure_kwargs: dict = None,
-        meth_fix_kwargs: dict = None,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        meth_fix_kwargs: Dict = None,
     ):
         """
         Iterate over a list to plot subplots.
@@ -1169,33 +1169,13 @@ class Trainer:
 
         return fig
 
-    def _after_plot(self, fig_name, tight_layout=False, savefig_kwargs: dict = None):
-        """
-        Set the layout, save the current figure, show the figure if in a notebook, and close the figure.
-
-        Parameters
-        ----------
-        fig_name
-            The path to save the figure.
-        tight_layout
-            If True, ``plt.tight_layout`` is called.
-        savefig_kwargs
-            Arguments for ``plt.savefig``.
-        """
-        savefig_kwargs_ = update_defaults_by_kwargs(dict(), savefig_kwargs)
-        if tight_layout:
-            plt.tight_layout()
-        plt.savefig(fig_name, **savefig_kwargs_)
-        if is_notebook():
-            plt.show()
-        plt.close()
-
     def plot_truth_pred_all(
         self,
         program: str,
         fontsize=14,
-        get_figsize_kwargs: dict = None,
-        figure_kwargs: dict = None,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
@@ -1212,6 +1192,8 @@ class Trainer:
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
         figure_kwargs
             Arguments for ``plt.figure()``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
@@ -1226,7 +1208,7 @@ class Trainer:
         modelbase = self.get_modelbase(program)
         model_names = modelbase.get_model_names()
 
-        fig = self._plot_subplots(
+        fig = self._plot_action_subplots(
             ls=model_names,
             ls_kwarg_name="model_name",
             meth_name="plot_truth_pred",
@@ -1239,13 +1221,13 @@ class Trainer:
             figure_kwargs=figure_kwargs,
         )
 
-        return (
-            self._after_plot(
-                fig_name=os.path.join(self.project_root, program, f"truth_pred.pdf"),
-                tight_layout=False,
-            )
-            if save_show_close
-            else fig
+        return self._plot_action_after_plot(
+            disable=False,
+            ax_or_fig=fig,
+            fig_name=os.path.join(self.project_root, program, f"truth_pred.pdf"),
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
         )
 
     def plot_truth_pred(
@@ -1255,9 +1237,10 @@ class Trainer:
         log_trans: bool = True,
         upper_lim=9,
         ax=None,
-        figure_kwargs: dict = None,
-        scatter_kwargs: dict = None,
-        legend_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -1281,6 +1264,8 @@ class Trainer:
             Arguments for ``plt.scatter()``
         legend_kwargs
             Arguments for ``plt.legend()``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -1294,11 +1279,7 @@ class Trainer:
             legend_kwargs,
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         prediction = self.get_modelbase(program)._predict_model(
             model_name=model_name, test_data_only=False
@@ -1376,18 +1357,20 @@ class Trainer:
 
         ax.legend(**legend_kwargs_)
 
-        if not given_ax:
-            ax.set_xlabel("Ground truth")
-            ax.set_ylabel("Prediction")
-            s = model_name.replace("/", "_")
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root, program, f"{s}_truth_pred.pdf"
-                    ),
-                    tight_layout=False,
-                )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root,
+                program,
+                f"{model_name.replace('/', '_')}_truth_pred.pdf",
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="Ground truth",
+            ylabel="Prediction",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def cal_feature_importance(
         self, program: str, model_name: str, method: str = "permutation", **kwargs
@@ -1467,6 +1450,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         bar_kwargs: Dict = None,
         legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -1490,6 +1474,8 @@ class Trainer:
             Arguments for ``seaborn.barplot``.
         legend_kwargs
             Arguments for ``plt.legend``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -1513,11 +1499,7 @@ class Trainer:
             print(f"Feature importance less than 1e-5: {not_effective}")
         attr = attr[where_effective]
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         df = pd.DataFrame(columns=["feature", "attr", "clr"])
         df["feature"] = effective_names
@@ -1530,7 +1512,7 @@ class Trainer:
         y = df["attr"].values
 
         clr = global_palette if clr is None else clr
-        palette = self._generate_feature_types_palette(clr=clr, features=x)
+        palette = self._plot_action_generate_feature_types_palette(clr=clr, features=x)
 
         # ax.set_facecolor((0.97,0.97,0.97))
         # plt.grid(axis='x')
@@ -1539,36 +1521,40 @@ class Trainer:
         sns.barplot(x=y, y=x, palette=palette, **bar_kwargs_)
         # ax.set_xlim([0, 1])
 
-        legend = self._generate_feature_types_legends(
+        legend = self._plot_action_generate_feature_types_legends(
             clr=clr, ax=ax, legend_kwargs=legend_kwargs
         )
         legend.get_frame().set_alpha(None)
         legend.get_frame().set_facecolor([1, 1, 1, 0.4])
 
-        if not given_ax:
-            if method == "permutation":
-                ax.set_xlabel("Permutation feature importance")
-            elif method == "shap":
-                ax.set_xlabel("SHAP feature importance")
-            else:
-                ax.set_xlabel("Feature importance")
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root,
-                        f"feature_importance_{program}_{model_name}_{method}.png",
-                    ),
-                    tight_layout=True,
-                )
-        return ax
+        if method == "permutation":
+            xlabel = "Permutation feature importance"
+        elif method == "shap":
+            xlabel = "SHAP feature importance"
+        else:
+            xlabel = "Feature importance"
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root,
+                f"feature_importance_{program}_{model_name}_{method}.png",
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=xlabel,
+            ylabel=None,
+            tight_layout=True,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_partial_dependence_all(
         self,
         program: str,
         model_name: str,
         fontsize=12,
-        figure_kwargs: dict = None,
-        get_figsize_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        get_figsize_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
@@ -1587,6 +1573,8 @@ class Trainer:
             Arguments for ``plt.figure``.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
@@ -1598,7 +1586,7 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_subplots(
+        fig = self._plot_action_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_dependence",
@@ -1610,15 +1598,15 @@ class Trainer:
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
-        return (
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
-                ),
-                tight_layout=False,
-            )
-            if save_show_close
-            else fig
+        return self._plot_action_after_plot(
+            disable=False,
+            ax_or_fig=fig,
+            fig_name=os.path.join(
+                self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
+            ),
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
         )
 
     def plot_partial_dependence(
@@ -1635,11 +1623,12 @@ class Trainer:
         grid_size: int = 30,
         CI: float = 0.95,
         verbose: bool = True,
-        figure_kwargs: dict = None,
-        plot_kwargs: dict = None,
-        fill_between_kwargs: dict = None,
-        bar_kwargs: dict = None,
-        hist_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        plot_kwargs: Dict = None,
+        fill_between_kwargs: Dict = None,
+        bar_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -1681,6 +1670,8 @@ class Trainer:
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -1721,11 +1712,7 @@ class Trainer:
             dict(alpha=0.4, color="k", edgecolor=None), fill_between_kwargs
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         def transform(value):
             if log_trans:
@@ -1784,18 +1771,19 @@ class Trainer:
             ax2.set_ylim([0, 1])
             ax2.set_yticks([])
 
-        if not given_ax:
-            ax.set_ylabel("Predicted target")
-            ax.set_xlabel(feature + r" ($10\%$-$90\%$ percentile)")
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root,
-                        f"partial_dependence_{program}_{model_name}_{feature}.pdf",
-                    ),
-                    tight_layout=False,
-                )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root,
+                f"partial_dependence_{program}_{model_name}_{feature}.pdf",
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=feature + r" ($10\%$-$90\%$ percentile)",
+            ylabel="Predicted target",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def cal_partial_dependence(
         self, feature_subset: List[str] = None, **kwargs
@@ -1848,8 +1836,9 @@ class Trainer:
         program: str,
         model_name: str,
         fontsize=12,
-        figure_kwargs: dict = None,
-        get_figsize_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        get_figsize_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
@@ -1869,6 +1858,8 @@ class Trainer:
             Arguments for ``plt.figure``.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
@@ -1880,7 +1871,7 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_subplots(
+        fig = self._plot_action_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_err",
@@ -1892,15 +1883,15 @@ class Trainer:
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
-        return (
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root, f"partial_err_{program}_{model_name}.pdf"
-                ),
-                tight_layout=False,
-            )
-            if save_show_close
-            else fig
+        return self._plot_action_after_plot(
+            disable=False,
+            ax_or_fig=fig,
+            fig_name=os.path.join(
+                self.project_root, f"partial_err_{program}_{model_name}.pdf"
+            ),
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
         )
 
     def plot_partial_err(
@@ -1910,9 +1901,10 @@ class Trainer:
         feature,
         thres=0.8,
         ax=None,
-        figure_kwargs: dict = None,
-        scatter_kwargs: dict = None,
-        hist_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -1937,6 +1929,8 @@ class Trainer:
             Arguments for ``ax.scatter()``
         hist_kwargs
             Arguments for ``ax.hist()``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -1967,11 +1961,7 @@ class Trainer:
         low_err_data = feature_data.loc[np.where(err <= thres)[0], :]
         low_err = err[np.where(err <= thres)[0]]
 
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         ax.scatter(
             high_err_data[feature].values,
@@ -2017,26 +2007,28 @@ class Trainer:
         # ax2.set_xlim([np.min(x_values_list[idx]), np.max(x_values_list[idx])])
         ax2.set_yticks([])
 
-        if not given_ax:
-            ax.set_ylabel("Prediction absolute error")
-            ax.set_xlabel(feature)
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root,
-                        f"partial_err_{program}_{model_name}_{feature}.pdf",
-                    ),
-                    tight_layout=False,
-                )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"partial_err_{program}_{model_name}_{feature}.pdf"
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=feature,
+            ylabel="Prediction absolute error",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_corr(
         self,
         fontsize: Any = 10,
         imputed=False,
         ax=None,
-        figure_kwargs: dict = None,
-        imshow_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        imshow_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2055,6 +2047,10 @@ class Trainer:
             Arguments for ``plt.figure``.
         imshow_kwargs
             Arguments for ``plt.imshow``.
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2069,13 +2065,11 @@ class Trainer:
 
         cont_feature_names = self.cont_feature_names + self.label_name
         # sns.reset_defaults()
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
         plt.box(on=True)
-        corr = self.datamodule.cal_corr(imputed=imputed).values
+        corr = self.datamodule.cal_corr(
+            imputed=imputed, select_by_value_kwargs=select_by_value_kwargs
+        ).values
         im = ax.imshow(corr, **imshow_kwargs_)
         ax.set_xticks(np.arange(len(cont_feature_names)))
         ax.set_yticks(np.arange(len(cont_feature_names)))
@@ -2100,17 +2094,23 @@ class Trainer:
                     fontsize=fontsize,
                 )
 
-        if not given_ax and save_show_close:
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root, f"corr{'_imputed' if imputed else ''}.pdf"
-                ),
-                tight_layout=True,
-            )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"corr{'_imputed' if imputed else ''}.pdf"
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            tight_layout=True,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_pairplot(
-        self, pairplot_kwargs: dict = None, save_show_close: bool = True
+        self,
+        pairplot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
     ) -> Union[None, sns.axisgrid.PairGrid]:
         """
         Plot ``seaborn.pairplot`` among features and label. Kernel Density Estimation plots are on the diagonal.
@@ -2119,6 +2119,10 @@ class Trainer:
         ----------
         pairplot_kwargs
             Arguments for ``seaborn.pairplot``.
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``seaborn.axisgrid.PairGrid``
             instance.
@@ -2126,26 +2130,33 @@ class Trainer:
         pairplot_kwargs_ = update_defaults_by_kwargs(
             dict(corner=True, diag_kind="kde"), pairplot_kwargs
         )
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
 
         df_all = pd.concat(
             [self.unscaled_feature_data, self.unscaled_label_data], axis=1
         )
-        grid = sns.pairplot(df_all, **pairplot_kwargs_)
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        grid = sns.pairplot(df_all.loc[indices, :], **pairplot_kwargs_)
 
-        if save_show_close:
-            self._after_plot(
-                fig_name=os.path.join(self.project_root, "pair.jpg"),
-                tight_layout=True,
-            )
-        else:
-            return grid
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, "pair.jpg"),
+            disable=False,
+            ax_or_fig=grid,
+            tight_layout=True,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_feature_box(
         self,
         imputed: bool = False,
         ax=None,
-        figure_kwargs: dict = None,
-        boxplot_kwargs: dict = None,
+        figure_kwargs: Dict = None,
+        boxplot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2161,6 +2172,10 @@ class Trainer:
             Arguments for ``plt.figure``
         boxplot_kwargs
             Arguments for ``seaborn.boxplot``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2173,20 +2188,23 @@ class Trainer:
             dict(orient="h", linewidth=1, fliersize=4, flierprops={"marker": "o"}),
             boxplot_kwargs,
         )
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
 
         # sns.reset_defaults()
-        given_ax = ax is not None
-        if not given_ax:
-            plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
-        bp = sns.boxplot(
-            data=self.feature_data
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+        data = (
+            self.feature_data
             if imputed
             else self.datamodule.data_transform(
                 self.datamodule.get_not_imputed_df()[self.cont_feature_names],
                 scaler_only=True,
-            ),
+            )
+        )
+        bp = sns.boxplot(
+            data=data.loc[indices, :],
             ax=ax,
             **boxplot_kwargs_,
         )
@@ -2205,17 +2223,18 @@ class Trainer:
         plt.grid(linewidth=0.4, axis="x")
         ax.set_axisbelow(True)
         # ax.tick_params(axis='x', rotation=90)
-        if not given_ax:
-            plt.ylabel("Values (Scaled)")
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root,
-                        f"feature_box{'_imputed' if imputed else ''}.pdf",
-                    ),
-                    tight_layout=True,
-                )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"feature_box{'_imputed' if imputed else ''}.pdf"
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="Values (Scaled)",
+            ylabel=None,
+            tight_layout=True,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_hist_all(
         self,
@@ -2223,9 +2242,10 @@ class Trainer:
         fontsize=12,
         get_figsize_kwargs: Dict = None,
         figure_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
         **kwargs,
-    ) -> Union[None, matplotlib.figure.Figure]:
+    ) -> matplotlib.figure.Figure:
         """
         Plot histograms of the tabular data.
 
@@ -2239,6 +2259,8 @@ class Trainer:
             ``plt.rcParams["font.size"]``
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
@@ -2250,7 +2272,7 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_subplots(
+        fig = self._plot_action_subplots(
             ls=self.all_feature_names + self.label_name,
             ls_kwarg_name="feature",
             meth_name="plot_hist",
@@ -2262,15 +2284,15 @@ class Trainer:
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
-        return (
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
-                ),
-                tight_layout=False,
-            )
-            if save_show_close
-            else fig
+        return self._plot_action_after_plot(
+            disable=False,
+            ax_or_fig=fig,
+            fig_name=os.path.join(
+                self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
+            ),
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
         )
 
     def plot_hist(
@@ -2282,6 +2304,8 @@ class Trainer:
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2303,6 +2327,10 @@ class Trainer:
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2311,18 +2339,19 @@ class Trainer:
         matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         hist_data = (
             self.datamodule.categories_transform(self.datamodule.get_not_imputed_df())
             if not imputed
             else self.df
         )
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        hist_data = hist_data.loc[indices, :]
         bar_kwargs_ = update_defaults_by_kwargs(
             dict(color="k", alpha=0.2, edgecolor=None), bar_kwargs
         )
@@ -2365,18 +2394,18 @@ class Trainer:
             ax.set_ylim([0, 1])
             ax.set_yticks([])
 
-        if not given_ax:
-            ax.set_ylabel("Density")
-            ax.set_xlabel(feature)
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root,
-                        f"hist{'_imputed' if imputed else ''}_{feature}.pdf",
-                    ),
-                    tight_layout=False,
-                )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"hist{'_imputed' if imputed else ''}_{feature}.pdf"
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=feature,
+            ylabel="Density",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_on_one_axes(
         self,
@@ -2386,11 +2415,12 @@ class Trainer:
         xlabel: str = None,
         ylabel: str = None,
         ax=None,
-        meth_fix_kwargs: dict = None,
+        meth_fix_kwargs: Dict = None,
         figure_kwargs: Dict = None,
         legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
-        fig_name: str = None,
+        legend: bool = False,
     ) -> matplotlib.axes.Axes:
         """
         Plot multiple items on one ``matplotlib.axes.Axes``.
@@ -2417,10 +2447,12 @@ class Trainer:
             Arguments for ``plt.figure``.
         legend_kwargs
             Arguments for ``plt.legend()``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
-        fig_name
-            The path to save the figure.
+        legend
+            Whether to show the legend.
 
         Returns
         -------
@@ -2430,11 +2462,7 @@ class Trainer:
         legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
         meth_fix_kwargs_ = update_defaults_by_kwargs(dict(), meth_fix_kwargs)
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         plt.rcParams["font.size"] = fontsize
         if isinstance(meth_name, str):
@@ -2444,19 +2472,17 @@ class Trainer:
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        ax.legend(**legend_kwargs_)
+        if legend:
+            ax.legend(**legend_kwargs_)
 
-        if not given_ax and save_show_close:
-            self._after_plot(
-                fig_name=os.path.join(
-                    self.project_root,
-                    "plot_on_one_axes.pdf",
-                )
-                if fig_name is None
-                else fig_name,
-                tight_layout=False,
-            )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, "plot_on_one_axes.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_scatter(
         self,
@@ -2467,6 +2493,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         scatter_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2488,6 +2515,8 @@ class Trainer:
             Arguments for ``plt.scatter()``
         select_by_value_kwargs
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2497,18 +2526,14 @@ class Trainer:
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         df = self.df if imputed else self.datamodule.get_not_imputed_df()
-        if select_by_value_kwargs is not None:
-            indices = self.datamodule.select_by_value(**select_by_value_kwargs)
-        else:
-            indices = df.index
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
 
         x = df.loc[indices, x_col].values.flatten()
         y = df.loc[indices, y_col].values.flatten()
@@ -2517,18 +2542,147 @@ class Trainer:
 
         ax.scatter(x[notna], y[notna], **scatter_kwargs_)
 
-        if not given_ax:
-            ax.set_ylabel(y_col)
-            ax.set_xlabel(x_col)
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root,
-                        f"scatter_{x_col}_{y_col}.pdf",
-                    ),
-                    tight_layout=False,
-                )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"scatter_{x_col}_{y_col}.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=x_col,
+            ylabel=y_col,
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
+    def plot_pdf(
+        self,
+        feature: str,
+        dist: st.rv_continuous = st.norm,
+        ax=None,
+        imputed: bool = False,
+        figure_kwargs: Dict = None,
+        plot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the probability density function of a feature.
+
+        Parameters
+        ----------
+        feature
+            The investigated feature.
+        dist
+            The distribution to fit. It should be an instance of ``scipy.stats.rv_continuous`` that has ``fit`` and
+            ``pdf`` methods.
+        ax
+            ``matplotlib.axes.Axes``
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        plot_kwargs
+            Arguments for ``plt.plot``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        plot_kwargs_ = update_defaults_by_kwargs(dict(), plot_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+
+        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = df.loc[indices, :]
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        values = df[feature].values.flatten()
+        x = np.linspace(np.nanmin(values), np.nanmax(values), 200)
+        pdf = dist.pdf(x, *dist.fit(values[np.isfinite(values)]))
+        ax.plot(x, pdf, **plot_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"pdf_{feature}.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=feature,
+            ylabel="Probability density",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
+    def plot_kde(
+        self,
+        feature: str,
+        ax=None,
+        imputed: bool = False,
+        figure_kwargs: Dict = None,
+        kdeplot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the kernel density estimation of a feature.
+
+        Parameters
+        ----------
+        feature
+            The investigated feature.
+        ax
+            ``matplotlib.axes.Axes``
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        kdeplot_kwargs
+            Arguments for ``seaborn.kdeplot``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        kdeplot_kwargs_ = update_defaults_by_kwargs(dict(), kdeplot_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+
+        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = df.loc[indices, :]
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        sns.kdeplot(data=df, x=feature, ax=ax, **kdeplot_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"kde_{feature}.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=feature,
+            ylabel="Probability density",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_presence_ratio(
         self,
@@ -2538,6 +2692,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         barplot_kwargs: Dict = None,
         legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -2559,6 +2714,8 @@ class Trainer:
             Arguments for ``seaborn.barplot``
         legend_kwargs
             Arguments for ``plt.legend``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -2598,15 +2755,11 @@ class Trainer:
         )
 
         clr = global_palette if clr is None else clr
-        palette = self._generate_feature_types_palette(
+        palette = self._plot_action_generate_feature_types_palette(
             clr=clr, features=presence["feature"]
         )
 
-        given_ax = ax is not None
-        if not given_ax:
-            fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         ax.set_axisbelow(True)
         ax.grid(axis="x", linewidth=0.2)
@@ -2620,25 +2773,22 @@ class Trainer:
         )
         getattr(ax, "set_xlim" if is_horizontal else "set_ylim")([0, 1])
 
-        legend = self._generate_feature_types_legends(
+        legend = self._plot_action_generate_feature_types_legends(
             clr=clr, ax=ax, legend_kwargs=legend_kwargs_
         )
 
-        if not given_ax:
-            getattr(ax, "set_xlabel" if is_horizontal else "set_ylabel")(
-                "Data presence ratio"
-            )
-            if save_show_close:
-                self._after_plot(
-                    fig_name=os.path.join(
-                        self.project_root,
-                        f"presence_ratio.pdf",
-                    ),
-                    tight_layout=False,
-                )
-        return ax
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="Data presence ratio" if is_horizontal else "",
+            ylabel="Data presence ratio" if not is_horizontal else "",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
-    def _generate_feature_types_palette(
+    def _plot_action_generate_feature_types_palette(
         self, clr: Iterable, features: List[str]
     ) -> List:
         """
@@ -2662,7 +2812,7 @@ class Trainer:
         palette = [clr[i] for i in type_idx]
         return palette
 
-    def _generate_feature_types_legends(
+    def _plot_action_generate_feature_types_legends(
         self, clr, ax, legend_kwargs
     ) -> matplotlib.legend.Legend:
         """
@@ -2703,6 +2853,76 @@ class Trainer:
         )
 
         return legend
+
+    def _plot_action_init_ax(
+        self, ax=None, figure_kwargs: Dict = None
+    ) -> Tuple[matplotlib.axes.Axes, bool]:
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111)
+        plt.sca(ax)
+        return ax, given_ax
+
+    def _plot_action_after_plot(
+        self,
+        fig_name,
+        disable: bool,
+        ax_or_fig=None,
+        xlabel: str = None,
+        ylabel: str = None,
+        save_show_close: bool = True,
+        tight_layout=False,
+        savefig_kwargs: Dict = None,
+    ) -> Union[matplotlib.axes.Axes, matplotlib.figure.Figure, Any]:
+        """
+        Set the labels of x/y-axis, set the layout, save the current figure, show the figure if in a notebook, and
+        close the figure.
+
+        Parameters
+        ----------
+        fig_name
+            The path to save the figure. Can be updated by ``savefig_kwargs`` using the key ``fname``
+        ax_or_fig
+            ``matplotlib.axes.Axes`` or ``matplotlib.figure.Figure``. If is a ``matplotlib.axes.Axes``, x/y-axis labels
+            will be set using ``xlabel`` and ``ylabel``.
+        disable
+            True to disable the action. ``ax_or_fig`` is still returned.
+        xlabel
+            The label of the x-axis. Will be set only when ``ax_or_fig`` is a ``matplotlib.axes.Axes``.
+        ylabel
+            The label of the y-axis. Will be set only when ``ax_or_fig`` is a ``matplotlib.axes.Axes``.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+        tight_layout
+            If True, ``plt.tight_layout`` is called.
+        savefig_kwargs
+            Arguments for ``plt.savefig``.
+
+        Returns
+        -------
+        matplotlib.axes.Axes or matplotlib.figure.Figure
+            Just the input ``ax_or_fig``
+        """
+        if not disable:
+            if ax_or_fig is not None:
+                if isinstance(ax_or_fig, matplotlib.axes.Axes):
+                    if xlabel is not None:
+                        ax_or_fig.set_xlabel(xlabel)
+                    if ylabel is not None:
+                        ax_or_fig.set_ylabel(ylabel)
+            if save_show_close:
+                savefig_kwargs_ = update_defaults_by_kwargs(
+                    dict(fname=fig_name), savefig_kwargs
+                )
+                if tight_layout:
+                    plt.tight_layout()
+                plt.savefig(**savefig_kwargs_)
+                if is_notebook():
+                    plt.show()
+                plt.close()
+        return ax_or_fig
 
     def _bootstrap(
         self,

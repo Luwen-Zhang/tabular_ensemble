@@ -723,13 +723,25 @@ def test_plots():
         trainer.plot_on_one_axes(
             meth_name="plot_scatter",
             meth_kwargs_ls=[
-                dict(x_col="cont_1", y_col="cont_2"),
+                dict(x_col="cont_1", y_col="cont_2", scatter_kwargs={"label": "all"}),
                 dict(
                     x_col="cont_1",
                     y_col="cont_2",
                     select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
+                    scatter_kwargs={"label": "cat_1=1,2,3"},
                 ),
             ],
+            legend=True,
+        )
+
+        print(f"\n-- PDF --\n")
+        trainer.plot_pdf(
+            feature="cont_1", select_by_value_kwargs={"selection": {"cat_1": [1, 2]}}
+        )
+
+        print(f"\n-- KDE --\n")
+        trainer.plot_kde(
+            feature="cont_2", select_by_value_kwargs={"selection": {"cat_1": [1, 2]}}
         )
 
         print(f"\n-- Presence ratio --\n")

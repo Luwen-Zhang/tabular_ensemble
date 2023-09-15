@@ -615,7 +615,7 @@ class DataModule:
         return loss
 
     def prepare_new_data(
-        self, df: pd.DataFrame, derived_data: dict = None, ignore_absence=False
+        self, df: pd.DataFrame, derived_data: Dict = None, ignore_absence=False
     ) -> Tuple[pd.DataFrame, dict]:
         """
         Prepare the new tabular dataset for predictions using :meth:`~tabensemb.model.AbstractModel._predict`
@@ -1958,7 +1958,10 @@ class DataModule:
         return tabular_dataset, cont_feature_names, cat_feature_names, label_name
 
     def cal_corr(
-        self, imputed: bool = False, features_only: bool = False
+        self,
+        imputed: bool = False,
+        features_only: bool = False,
+        select_by_value_kwargs: Dict = None,
     ) -> pd.DataFrame:
         """
         Calculate Pearson correlation coefficients among continuous features.
@@ -1970,6 +1973,8 @@ class DataModule:
             missing values.
         features_only
             If False, the target is also considered.
+        select_by_value_kwargs
+            Arguments for :meth:`select_by_value`.
 
         Returns
         -------
@@ -1981,11 +1986,15 @@ class DataModule:
             if features_only
             else self.cont_feature_names + self.label_name
         )
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+        indices = self.select_by_value(**select_by_value_kwargs_)
         if not imputed:
             not_imputed_df = self.get_not_imputed_df()
-            return not_imputed_df[subset].corr()
+            return not_imputed_df.loc[indices, subset].corr()
         else:
-            return self.df[subset].corr()
+            return self.df.loc[indices, subset].corr()
 
     def get_not_imputed_df(self) -> pd.DataFrame:
         """
@@ -2135,7 +2144,7 @@ class DataModule:
 
     def select_by_value(
         self,
-        selection: Dict[str, Union[str, int, float, List, Tuple]],
+        selection: Dict[str, Union[str, int, float, List, Tuple]] = None,
         df: pd.DataFrame = None,
         partition: str = None,
         eps: float = None,
@@ -2169,6 +2178,8 @@ class DataModule:
             part = self._get_indices(partition)
         else:
             part = np.array(df.index)
+        if selection is None:
+            return np.sort(part)
         col_res_ls = []
         for col, val in selection.items():
             if isinstance(val, list):
