@@ -1864,7 +1864,11 @@ class DataModule:
         return mode, cnt_mode, mode_percent
 
     def pca(
-        self, feature_names: List[str] = None, feature_idx: List[int] = None, **kwargs
+        self,
+        feature_names: List[str] = None,
+        feature_idx: List[int] = None,
+        indices: np.ndarray = None,
+        **kwargs,
     ) -> PCA:
         """
         Perform ``sklearn.decomposition.PCA``
@@ -1873,6 +1877,10 @@ class DataModule:
         ----------
         feature_names
             A list of names of continuous features.
+        feature_idx
+            Indices in :attr:`cont_feature_names` of continuous features.
+        indices
+            Indices of investigated data points. If is None, :attr:`train_indices` is used.
         **kwargs
             Arguments of sklearn.decomposition.PCA.
 
@@ -1881,17 +1889,18 @@ class DataModule:
         sklearn.decomposition.PCA
             A ``sklearn.decomposition.PCA`` instance.
         """
+        indices = self.train_indices if indices is None else indices
         pca = PCA(**kwargs)
         if feature_names is not None:
-            pca.fit(self.feature_data.loc[self.train_indices, feature_names])
+            pca.fit(self.feature_data.loc[indices, feature_names])
         elif feature_idx is not None:
             pca.fit(
                 self.feature_data.loc[
-                    self.train_indices, np.array(self.cont_feature_names)[feature_idx]
+                    indices, np.array(self.cont_feature_names)[feature_idx]
                 ]
             )
         else:
-            pca.fit(self.feature_data.loc[self.train_indices, :])
+            pca.fit(self.feature_data.loc[indices, :])
         return pca
 
     def divide_from_tabular_dataset(
