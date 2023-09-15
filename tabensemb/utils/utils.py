@@ -57,6 +57,8 @@ global_palette = [
     "#CEF7A0",
 ]
 
+global_marker = ["o", "v", "^", "<", ">", "s", "p", "P", "*", "h", "H", "D", "d"]
+
 
 def is_notebook() -> bool:
     """

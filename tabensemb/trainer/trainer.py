@@ -2849,6 +2849,97 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def plot_pca_2d_visual(
+        self,
+        ax=None,
+        category: str = None,
+        features: List[str] = None,
+        pca_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Fit a ``sklearn.decomposition.PCA`` on a set of features, and plot its first two principal components as
+        scatters.
+
+        Parameters
+        ----------
+        ax
+            ``matplotlib.axes.Axes``
+        category
+            The category to classify data points with different colors and markers.
+        features
+            A subset of continuous features to fit the PCA.
+        pca_kwargs
+            Arguments for ``sklearn.decomposition.PCA.fit``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        scatter_kwargs
+            Arguments for ``plt.scatter``
+        legend_kwargs
+            Arguments for ``plt.legend``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        features = self.cont_feature_names if features is None else features
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        pca_kwargs_ = update_defaults_by_kwargs(dict(), pca_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+        legend_kwargs_ = update_defaults_by_kwargs(dict(title=category), legend_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = self.datamodule.scaled_df.loc[indices, :].copy().reset_index(drop=True)
+        pca = self.datamodule.pca(
+            feature_names=features, indices=indices, **pca_kwargs_
+        )
+        low_dim_rep = pca.transform(df[features])
+        x, y = low_dim_rep[:, 0], low_dim_rep[:, 1]
+
+        if category is None:
+            ax.scatter(x, y, **scatter_kwargs_)
+        else:
+            df = self.datamodule.categories_inverse_transform(df)
+            for idx, cat in enumerate(np.sort(np.unique(df[category]))):
+                colored_scatter_kwargs_ = scatter_kwargs_.copy()
+                colored_scatter_kwargs_.update(
+                    {
+                        "color": global_palette[idx % len(global_palette)],
+                        "marker": global_marker[idx % len(global_marker)],
+                    }
+                )
+                cat_indices = np.array(df[df[category] == cat].index)
+                ax.scatter(
+                    x[cat_indices], y[cat_indices], label=cat, **colored_scatter_kwargs_
+                )
+            ax.legend(**legend_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"pca_2d_visual_{category}.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="1st principal component",
+            ylabel="2nd principal component",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
     def _plot_action_generate_feature_types_palette(
         self, clr: Iterable, features: List[str]
     ) -> List:

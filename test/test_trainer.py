@@ -751,6 +751,10 @@ def test_plots():
         print(f"\n-- fill rating --\n")
         trainer.plot_fill_rating()
 
+        print(f"\n-- PCA 2d --\n")
+        trainer.plot_pca_2d_visual()
+        trainer.plot_pca_2d_visual(category="cat_4")
+
         print(f"\n-- Correlation --\n")
         trainer.plot_corr(imputed=True)
         trainer.plot_corr(imputed=False)
