@@ -735,10 +735,14 @@ def test_plots():
         )
 
         print(f"\n-- PDF --\n")
-        trainer.plot_pdf(feature="cont_1", select_by_value_kwargs={"cat_1": [1, 2]})
+        trainer.plot_pdf(
+            feature="cont_1", select_by_value_kwargs={"selection": {"cat_1": [1, 2]}}
+        )
 
         print(f"\n-- KDE --\n")
-        trainer.plot_kde(feature="cont_2", select_by_value_kwargs={"cat_1": [1, 2]})
+        trainer.plot_kde(
+            feature="cont_2", select_by_value_kwargs={"selection": {"cat_1": [1, 2]}}
+        )
 
         print(f"\n-- Presence ratio --\n")
         trainer.plot_presence_ratio(order="type", barplot_kwargs={"orient": "h"})
