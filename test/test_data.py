@@ -608,9 +608,11 @@ def test_pca():
         feature_idx=list(np.arange(len(datamodule.cont_feature_names)))
     )
     pca3 = datamodule.pca()
+    pca4 = datamodule.pca(indices=datamodule.test_indices)
 
     assert np.allclose(pca1.components_, pca2.components_)
     assert np.allclose(pca1.components_, pca3.components_)
+    assert not np.allclose(pca1.components_, pca4.components_)
 
 
 def test_abstract_deriver():

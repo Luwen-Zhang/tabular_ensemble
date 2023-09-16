@@ -1237,6 +1237,7 @@ class Trainer:
         log_trans: bool = True,
         upper_lim=9,
         ax=None,
+        clr: Iterable = None,
         figure_kwargs: Dict = None,
         scatter_kwargs: Dict = None,
         legend_kwargs: Dict = None,
@@ -1258,6 +1259,8 @@ class Trainer:
             The upper limit of x/y-axis.
         ax
             ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         figure_kwargs
             Arguments for ``plt.figure()``
         scatter_kwargs
@@ -1273,6 +1276,7 @@ class Trainer:
         -------
         matplotlib.axes.Axes
         """
+        clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(
             dict(loc="upper left", markerscale=1.5, handlelength=0.2, handleheight=0.9),
@@ -1754,14 +1758,19 @@ class Trainer:
 
         if np.min(x_values) < np.max(x_values):
             ax2 = ax.twinx()
-            hist_kwargs_ = update_defaults_by_kwargs(dict(bins=x_values), hist_kwargs)
+            hist_kwargs_ = update_defaults_by_kwargs(
+                dict(bins=x_values, alpha=0.2, color="k"), hist_kwargs
+            )
+            bar_kwargs_ = update_defaults_by_kwargs(
+                dict(alpha=0.2, color="k"), bar_kwargs
+            )
             self.plot_hist(
                 feature=feature,
                 ax=ax2,
                 imputed=False,
                 x_values=x_values,
                 hist_kwargs=hist_kwargs_,
-                bar_kwargs=bar_kwargs,
+                bar_kwargs=bar_kwargs_,
             )
             ax2.set_yticks([])
         else:
@@ -1901,6 +1910,7 @@ class Trainer:
         feature,
         thres=0.8,
         ax=None,
+        clr: Iterable = None,
         figure_kwargs: Dict = None,
         scatter_kwargs: Dict = None,
         hist_kwargs: Dict = None,
@@ -1923,6 +1933,8 @@ class Trainer:
             The absolute error threshold to identify high-error samples and low-error samples.
         ax
             ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         figure_kwargs
             Arguments for ``plt.figure``.
         scatter_kwargs
@@ -1938,6 +1950,7 @@ class Trainer:
         -------
         matplotlib.axes.Axes
         """
+        clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         scatter_kwargs_ = update_defaults_by_kwargs(dict(s=1), scatter_kwargs)
         hist_kwargs_ = update_defaults_by_kwargs(
@@ -2128,7 +2141,7 @@ class Trainer:
             instance.
         """
         pairplot_kwargs_ = update_defaults_by_kwargs(
-            dict(corner=True, diag_kind="kde"), pairplot_kwargs
+            dict(corner=True, diag_kind="kde", palette=global_palette), pairplot_kwargs
         )
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
@@ -2153,6 +2166,7 @@ class Trainer:
         self,
         imputed: bool = False,
         ax=None,
+        clr: Iterable = None,
         figure_kwargs: Dict = None,
         boxplot_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
@@ -2168,6 +2182,8 @@ class Trainer:
             Whether the imputed dataset should be considered.
         ax
             ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         figure_kwargs
             Arguments for ``plt.figure``
         boxplot_kwargs
@@ -2183,9 +2199,16 @@ class Trainer:
         -------
         matplotlib.axes.Axes
         """
+        clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(6, 6)), figure_kwargs)
         boxplot_kwargs_ = update_defaults_by_kwargs(
-            dict(orient="h", linewidth=1, fliersize=4, flierprops={"marker": "o"}),
+            dict(
+                orient="h",
+                linewidth=1,
+                fliersize=4,
+                flierprops={"marker": "o"},
+                color=clr[0],
+            ),
             boxplot_kwargs,
         )
         select_by_value_kwargs_ = update_defaults_by_kwargs(
@@ -2215,10 +2238,8 @@ class Trainer:
             if isinstance(x, matplotlib.patches.PathPatch):
                 boxes.append(x)
 
-        color = "#639FFF"
-
         for patch in boxes:
-            patch.set_facecolor(color)
+            patch.set_facecolor(clr[0])
 
         plt.grid(linewidth=0.4, axis="x")
         ax.set_axisbelow(True)
@@ -2299,6 +2320,7 @@ class Trainer:
         self,
         feature: str,
         ax=None,
+        clr: Iterable = None,
         imputed=False,
         x_values=None,
         figure_kwargs: Dict = None,
@@ -2317,6 +2339,8 @@ class Trainer:
             The selected feature.
         ax
             ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
         x_values
@@ -2338,6 +2362,7 @@ class Trainer:
         -------
         matplotlib.axes.Axes
         """
+        clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
@@ -2353,10 +2378,10 @@ class Trainer:
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         hist_data = hist_data.loc[indices, :]
         bar_kwargs_ = update_defaults_by_kwargs(
-            dict(color="k", alpha=0.2, edgecolor=None), bar_kwargs
+            dict(color=clr[0], edgecolor=None), bar_kwargs
         )
         hist_kwargs_ = update_defaults_by_kwargs(
-            dict(density=True, color="k", alpha=0.2, rwidth=0.95), hist_kwargs
+            dict(density=True, color=clr[0], rwidth=0.95), hist_kwargs
         )
         x_values = (
             np.sort(np.unique(hist_data[feature].values.flatten()))
@@ -2489,6 +2514,7 @@ class Trainer:
         x_col: str,
         y_col: str,
         ax=None,
+        clr: Iterable = None,
         imputed: bool = False,
         figure_kwargs: Dict = None,
         scatter_kwargs: Dict = None,
@@ -2507,6 +2533,8 @@ class Trainer:
             The column for the y-axis.
         ax
             ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
         figure_kwargs
@@ -2524,8 +2552,9 @@ class Trainer:
         -------
         matplotlib.axes.Axes
         """
+        clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
-        scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(dict(color=clr[0]), scatter_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
         )
@@ -2558,6 +2587,7 @@ class Trainer:
         feature: str,
         dist: st.rv_continuous = st.norm,
         ax=None,
+        clr: Iterable = None,
         imputed: bool = False,
         figure_kwargs: Dict = None,
         plot_kwargs: Dict = None,
@@ -2577,6 +2607,8 @@ class Trainer:
             ``pdf`` methods.
         ax
             ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
         figure_kwargs
@@ -2594,8 +2626,9 @@ class Trainer:
         -------
         matplotlib.axes.Axes
         """
+        clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
-        plot_kwargs_ = update_defaults_by_kwargs(dict(), plot_kwargs)
+        plot_kwargs_ = update_defaults_by_kwargs(dict(color=clr[0]), plot_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
         )
@@ -2626,6 +2659,7 @@ class Trainer:
         self,
         feature: str,
         ax=None,
+        clr: Iterable = None,
         imputed: bool = False,
         figure_kwargs: Dict = None,
         kdeplot_kwargs: Dict = None,
@@ -2642,6 +2676,8 @@ class Trainer:
             The investigated feature.
         ax
             ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
         figure_kwargs
@@ -2659,8 +2695,9 @@ class Trainer:
         -------
         matplotlib.axes.Axes
         """
+        clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
-        kdeplot_kwargs_ = update_defaults_by_kwargs(dict(), kdeplot_kwargs)
+        kdeplot_kwargs_ = update_defaults_by_kwargs(dict(color=clr[0]), kdeplot_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
         )
@@ -2783,6 +2820,166 @@ class Trainer:
             ax_or_fig=ax,
             xlabel="Data presence ratio" if is_horizontal else "",
             ylabel="Data presence ratio" if not is_horizontal else "",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
+    def plot_fill_rating(
+        self,
+        ax=None,
+        clr: Iterable = None,
+        figure_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the histogram of data point rating which is the percentage of filled features.
+
+        Parameters
+        ----------
+        ax
+            ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        hist_kwargs
+            Arguments for ``plt.hist``.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+
+        References
+        ----------
+        Zhang, Zian, and Zhiping Xu. “Fatigue Database of Additively Manufactured Alloys.” Scientific Data 10, no. 1 (May 2, 2023): 249.
+        """
+        clr = global_palette if clr is None else clr
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        hist_kwargs_ = update_defaults_by_kwargs(
+            dict(linewidth=1, edgecolor="k", facecolor=clr[0], density=True),
+            hist_kwargs,
+        )
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        cont_mask = self.datamodule.cont_imputed_mask.values
+        cat_mask = self.datamodule.cat_imputed_mask.values
+        cont_presence_features = np.sum(1 - cont_mask, axis=1)
+        cat_presence_features = np.sum(1 - cat_mask, axis=1)
+        rating = (cont_presence_features + cat_presence_features) / len(
+            self.all_feature_names
+        )
+        ax.hist(rating, **hist_kwargs_)
+        ax.set_xlim([0, 1])
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="Fill rating",
+            ylabel="Density",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
+    def plot_pca_2d_visual(
+        self,
+        ax=None,
+        category: str = None,
+        clr: Iterable = None,
+        features: List[str] = None,
+        pca_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Fit a ``sklearn.decomposition.PCA`` on a set of features, and plot its first two principal components as
+        scatters.
+
+        Parameters
+        ----------
+        ax
+            ``matplotlib.axes.Axes``
+        category
+            The category to classify data points with different colors and markers.
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        features
+            A subset of continuous features to fit the PCA.
+        pca_kwargs
+            Arguments for ``sklearn.decomposition.PCA.fit``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        scatter_kwargs
+            Arguments for ``plt.scatter``
+        legend_kwargs
+            Arguments for ``plt.legend``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        clr = global_palette if clr is None else clr
+        features = self.cont_feature_names if features is None else features
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        pca_kwargs_ = update_defaults_by_kwargs(dict(), pca_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+        legend_kwargs_ = update_defaults_by_kwargs(dict(title=category), legend_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = self.datamodule.scaled_df.loc[indices, :].copy().reset_index(drop=True)
+        pca = self.datamodule.pca(
+            feature_names=features, indices=indices, **pca_kwargs_
+        )
+        low_dim_rep = pca.transform(df[features])
+        x, y = low_dim_rep[:, 0], low_dim_rep[:, 1]
+
+        if category is None:
+            ax.scatter(x, y, **scatter_kwargs_)
+        else:
+            df = self.datamodule.categories_inverse_transform(df)
+            for idx, cat in enumerate(np.sort(np.unique(df[category]))):
+                colored_scatter_kwargs_ = scatter_kwargs_.copy()
+                colored_scatter_kwargs_.update(
+                    {
+                        "color": clr[idx % len(clr)],
+                        "marker": global_marker[idx % len(global_marker)],
+                    }
+                )
+                cat_indices = np.array(df[df[category] == cat].index)
+                ax.scatter(
+                    x[cat_indices], y[cat_indices], label=cat, **colored_scatter_kwargs_
+                )
+            ax.legend(**legend_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"pca_2d_visual_{category}.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="1st principal component",
+            ylabel="2nd principal component",
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
