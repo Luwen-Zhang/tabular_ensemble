@@ -87,7 +87,9 @@ class IQRRemover(AbstractProcessor):
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         print(f"Removing outliers by IQR. Original size: {len(data)}, ", end="")
-        for feature in list(datamodule.args["feature_names_type"].keys()):
+        for feature in datamodule.extract_original_cont_feature_names(
+            datamodule.cont_feature_names
+        ):
             if pd.isna(data[feature]).all():
                 raise Exception(f"All values of {feature} are NaN.")
             Q1 = np.percentile(data[feature].dropna(axis=0), 25, method="midpoint")
@@ -114,7 +116,9 @@ class StdRemover(AbstractProcessor):
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         print(f"Removing outliers by std. Original size: {len(data)}, ", end="")
-        for feature in list(datamodule.args["feature_names_type"].keys()):
+        for feature in datamodule.extract_original_cont_feature_names(
+            datamodule.cont_feature_names
+        ):
             if pd.isna(data[feature]).all():
                 raise Exception(f"All values of {feature} are NaN.")
             m = np.mean(data[feature].dropna(axis=0))

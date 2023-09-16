@@ -75,6 +75,32 @@ def test_cmd_arguments(mocker):
     assert all([x == y for x, y in zip(cfg["split_ratio"], [0.3, 0.1, 0.6])])
 
 
+def test_getitem():
+    config = UserConfig()
+    config.merge(
+        {
+            "continuous_feature_names": ["test_cont"],
+            "categorical_feature_names": ["test_cat"],
+        }
+    )
+    types = config["feature_types"]
+    assert types["test_cont"] == "Continuous" and types["test_cat"] == "Categorical"
+    unique = config["unique_feature_types"]
+    assert unique[0] == "Categorical" and unique[1] == "Continuous"
+
+    config.merge({"feature_types": {"test_cont": "TEST"}})
+    types = config["feature_types"]
+    assert types["test_cont"] == "TEST" and types["test_cat"] == "Categorical"
+    unique = config["unique_feature_types"]
+    assert unique[0] == "Categorical" and unique[1] == "TEST"
+
+    config.merge({"feature_types": {"test_cont": "TEST_CONT", "test_cat": "TEST_CAT"}})
+    types = config["feature_types"]
+    assert types["test_cont"] == "TEST_CONT" and types["test_cat"] == "TEST_CAT"
+    unique = config["unique_feature_types"]
+    assert unique[0] == "TEST_CAT" and unique[1] == "TEST_CONT"
+
+
 def test_from_uci():
     os.makedirs("temp_data", exist_ok=True)
     with tabensemb.utils.global_setting({"default_data_path": "temp_data"}):

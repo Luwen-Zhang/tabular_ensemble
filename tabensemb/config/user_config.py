@@ -387,8 +387,8 @@ class UserConfig(dict):
                 inferred_task = "binary"
             else:
                 inferred_task = "multiclass"
-        feature_names_type = {
-            name: 0 if name in cont_feature_names else 1
+        feature_types = {
+            name: "Continuous" if name in cont_feature_names else "Categorical"
             for name in cont_feature_names + cat_feature_names
         }
         cfg = UserConfig()
@@ -396,9 +396,9 @@ class UserConfig(dict):
             {
                 "database": csv_name,
                 "task": inferred_task,
-                "feature_types": ["Continuous", "Categorical", "Derived"],
-                "feature_names_type": feature_names_type,
+                "feature_types": feature_types,
                 "categorical_feature_names": cat_feature_names,
+                "continuous_feature_names": cont_feature_names,
                 "label_name": label_name,
             }
         )
@@ -440,3 +440,18 @@ class UserConfig(dict):
             return "py"
         else:
             return None
+
+    def __getitem__(self, item):
+        if item == "feature_types":
+            val = super(UserConfig, self).__getitem__(item)
+            for cont in self["continuous_feature_names"]:
+                if cont not in val.keys():
+                    val[cont] = "Continuous"
+            for cat in self["categorical_feature_names"]:
+                if cat not in val.keys():
+                    val[cat] = "Categorical"
+            return val
+        elif item == "unique_feature_types":
+            return list(sorted(set(self["feature_types"].values())))
+        else:
+            return super(UserConfig, self).__getitem__(item)

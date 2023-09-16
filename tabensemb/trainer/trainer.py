@@ -2765,7 +2765,7 @@ class Trainer:
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         barplot_kwargs_ = update_defaults_by_kwargs(
             dict(
-                hue_order=self.args["feature_types"],
+                hue_order=self.args["unique_feature_types"],
                 orient="h",
                 linewidth=1,
                 edgecolor="k",
@@ -2786,7 +2786,9 @@ class Trainer:
             {
                 "feature": presence_ratio.index,
                 "ratio": presence_ratio.values,
-                "types": self.datamodule.get_feature_types(list(presence_ratio.index)),
+                "types": self.datamodule.get_feature_types(
+                    list(presence_ratio.index), allow_unknown=True
+                ),
             }
         )
         presence.sort_values(
@@ -3006,7 +3008,7 @@ class Trainer:
             A list of colors for each feature. It can be used as the argument ``palette`` for seaborn functions.
         """
         type_idx = self.datamodule.get_feature_types_idx(
-            features=features, unknown_as_derived=True
+            features=features, allow_unknown=True
         )
         palette = [clr[i] for i in type_idx]
         return palette
@@ -3031,7 +3033,7 @@ class Trainer:
         matplotlib.legend.Legend
         """
         clr_map = dict()
-        for idx, feature_type in enumerate(self.args["feature_types"]):
+        for idx, feature_type in enumerate(self.args["unique_feature_types"]):
             clr_map[feature_type] = clr[idx]
         legend_kwargs_ = update_defaults_by_kwargs(
             dict(

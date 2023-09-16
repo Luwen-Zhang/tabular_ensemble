@@ -216,7 +216,7 @@ def test_get_feature_by_type():
     pytest_configure_data()
     datamodule = pytest.datamodule
     cont = datamodule.get_feature_names_by_type("Continuous")
-    cont_idx = datamodule.get_feature_idx_by_type("Continuous")
+    cont_idx = datamodule.get_feature_idx_by_type("Continuous", var_type="continuous")
     assert all(
         [
             got in datamodule.cont_feature_names
@@ -231,7 +231,7 @@ def test_get_feature_by_type():
         ]
     )
     cat = datamodule.get_feature_names_by_type("Categorical")
-    cat_idx = datamodule.get_feature_idx_by_type("Categorical")
+    cat_idx = datamodule.get_feature_idx_by_type("Categorical", var_type="categorical")
     assert all([real == got for real, got in zip(datamodule.cat_feature_names, cat)])
     assert all(
         [
@@ -254,13 +254,14 @@ def test_get_feature_types():
             datamodule.cat_feature_names[0],
             "derived_cont",
             "derived_cont_unstacked",
-        ]
+        ],
+        allow_unknown=True,
     )
     assert (
         "Continuous" == types[0]
         and "Categorical" == types[1]
-        and "Derived" == types[2]
-        and "Derived" == types[3]
+        and "Unknown" == types[2]
+        and "Unknown" == types[3]
     )
 
     idxs = datamodule.get_feature_types_idx(
@@ -269,14 +270,20 @@ def test_get_feature_types():
             datamodule.cat_feature_names[0],
             "derived_cont",
             "derived_cont_unstacked",
-        ]
+        ],
+        allow_unknown=True,
     )
-    assert idxs[0] == 0 and idxs[1] == 1 and idxs[2] == 2 and idxs[3] == 2
+    assert (
+        idxs[0] == datamodule.args["unique_feature_types"].index("Continuous")
+        and idxs[1] == datamodule.args["unique_feature_types"].index("Categorical")
+        and idxs[2] == 2
+        and idxs[3] == 2
+    )
 
     with pytest.raises(Exception) as err:
         datamodule.get_feature_types(
             ["TEST", datamodule.cont_feature_names[0], datamodule.cat_feature_names[0]],
-            unknown_as_derived=False,
+            allow_unknown=False,
         )
     assert (
         "TEST" in err.value.args[0]
@@ -286,9 +293,9 @@ def test_get_feature_types():
 
     types = datamodule.get_feature_types(
         ["TEST"],
-        unknown_as_derived=True,
+        allow_unknown=True,
     )
-    assert "Derived" == types[0]
+    assert "Unknown" == types[0]
 
 
 @pytest.mark.order(before="test_set_feature_names")

@@ -270,12 +270,8 @@ class DataModule:
             self.df = pd.read_csv(data_path, **kwargs)
         self.data_path = data_path
 
-        cont_feature_names = self.extract_original_cont_feature_names(
-            self.args["feature_names_type"].keys()
-        )
-        cat_feature_names = self.extract_original_cat_feature_names(
-            self.args["feature_names_type"].keys()
-        )
+        cont_feature_names = self.args["continuous_feature_names"]
+        cat_feature_names = self.args["categorical_feature_names"]
         label_name = self.args["label_name"]
 
         self.set_data(self.df, cont_feature_names, cat_feature_names, label_name)
@@ -727,8 +723,8 @@ class DataModule:
     @property
     def derived_stacked_features(self) -> List[str]:
         """
-        Find derived features in ``all_feature_names`` derived by data derivers whose argument "stacked" is set to True,
-        i.e. the stacked data.
+        Find derived features in :attr:`all_feature_names` derived by data derivers whose argument "stacked" is set to
+        True, i.e. the stacked data.
 
         Returns
         -------
@@ -738,18 +734,17 @@ class DataModule:
         return self.extract_derived_stacked_feature_names(self.all_feature_names)
 
     def get_feature_types(
-        self, features: List[str], unknown_as_derived: bool = False
+        self, features: List[str], allow_unknown: bool = False
     ) -> List[str]:
         """
-        Get the type defined in ``feature_types`` in the configuration for each feature, which is defined by
-        ``feature_names_type`` in the configuration. Derived unstacked features are supported.
+        Get the type defined in ``feature_types`` in the configuration for each feature.
 
         Parameters
         ----------
         features
             A list of features.
-        unknown_as_derived
-            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
+        allow_unknown
+            Regard unknown features as "Unknown" features. If False, an error will be raised if unknown features are
             found.
 
         Returns
@@ -764,35 +759,31 @@ class DataModule:
         invalid_features = [
             feature
             for feature in features
-            if feature not in self.args["feature_names_type"].keys()
-            and feature not in self.get_all_derived_stacked_feature_names()
-            and feature not in self.get_all_derived_unstacked_feature_names()
+            if feature not in self.args["feature_types"].keys()
         ]
-        if len(invalid_features) > 0 and not unknown_as_derived:
+        if len(invalid_features) > 0 and not allow_unknown:
             raise Exception(f"Unknown features: {invalid_features}")
         return [
-            self.args["feature_types"][
-                self.args["feature_names_type"].get(
-                    i, self.args["feature_types"].index("Derived")
-                )
-            ]
+            self.args["feature_types"][i]
+            if i in self.args["feature_types"].keys()
+            else "Unknown"
             for i in features
         ]
 
     def get_feature_types_idx(
-        self, features: List[str], unknown_as_derived: bool = False
+        self, features: List[str], allow_unknown: bool = False
     ) -> List[str]:
         """
-        Get the type defined in ``feature_types`` in the configuration for each feature by their index, which is defined
-        by ``feature_names_type`` in the configuration. Derived unstacked features are supported.
+        For each feature, get the index in ``unique_feature_types`` of its type defined in ``feature_types`` in the
+        configuration.
 
         Parameters
         ----------
         features
             A list of features.
-        unknown_as_derived
-            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
-            found.
+        allow_unknown
+            Regard unknown features as "Unknown" features (whose index is the number of known feature types). If False,
+            an error will be raised if unknown features are found.
 
         Returns
         -------
@@ -803,18 +794,22 @@ class DataModule:
         --------
         :meth:`get_feature_types`
         """
-        types = self.get_feature_types(features, unknown_as_derived=unknown_as_derived)
-        return [self.args["feature_types"].index(x) for x in types]
+        types = self.get_feature_types(features, allow_unknown=allow_unknown)
+        return [
+            self.args["unique_feature_types"].index(x)
+            if x != "Unknown"
+            else len(self.args["unique_feature_types"])
+            for x in types
+        ]
 
     def get_feature_names_by_type(self, typ: str) -> List[str]:
         """
-        Find features of the specified type defined by ``feature_names_type`` and ``feature_types`` in the configuration.
-        Derived unstacked features will not be included if ``typ="Derived"``.
+        Find features of the specified type defined by ``feature_types`` in the configuration.
 
         Parameters
         ----------
         typ
-            One type of features defined in ``feature_types`` in the configuration.
+            One type of features defined in ``unique_feature_types`` in the configuration.
 
         Returns
         -------
@@ -824,27 +819,35 @@ class DataModule:
         See Also
         --------
         :meth:`get_feature_idx_by_type`
+
+        Notes
+        -----
+        The key "Unknown" returned by :meth:`get_feature_types` is not a real key defined in ``unique_feature_types``.
+        It is a reserved type representing unknown features.
         """
-        if typ not in self.args["feature_types"]:
+        if typ not in self.args["unique_feature_types"]:
             raise Exception(
-                f"Feature type {typ} is invalid (among {self.args['feature_types']})"
+                f"Feature type {typ} is invalid (among {self.args['unique_feature_types']})"
             )
         return [
-            name
-            for name, type_idx in self.args["feature_names_type"].items()
-            if type_idx == self.args["feature_types"].index(typ)
-            and name in self.all_feature_names
+            feature
+            for feature, t in self.args["feature_types"].items()
+            if t == typ and feature in self.all_feature_names
         ]
 
-    def get_feature_idx_by_type(self, typ: str) -> np.ndarray:
+    def get_feature_idx_by_type(self, typ: str, var_type: str = "any") -> np.ndarray:
         """
-        Find features (by their index) of the specified type defined by ``feature_names_type`` and ``feature_types``
-        in the configuration. Derived unstacked features will not be included if ``typ="Derived"``.
+        Find features (by their index) of the specified type defined by ``feature_types`` in the configuration. This is
+        used to determine the indices of specific features after they are transformed into ``torch.Tensor``.
 
         Parameters
         ----------
         typ
-            One type of features in ``feature_types`` in the configuration.
+            One type of features in ``unique_feature_types`` in the configuration.
+        var_type
+            "continuous", "categorical", or "any". If is "continuous", only indices of :attr:`cont_feature_names` of
+            continuous features will be returned. If is "categorical", indices of :attr:`cat_feature_names` of
+            categorical features will be returned. If is "any", indices of :attr:`all_feature_names` will be returned.
 
         Returns
         -------
@@ -856,10 +859,12 @@ class DataModule:
         :meth:`get_feature_names_by_type`
         """
         names = self.get_feature_names_by_type(typ=typ)
-        if typ == "Categorical":
-            return np.array([self.cat_feature_names.index(name) for name in names])
-        else:
-            return np.array([self.cont_feature_names.index(name) for name in names])
+        name_list = {
+            "categorical": self.cat_feature_names,
+            "continuous": self.cont_feature_names,
+            "any": self.all_feature_names,
+        }[var_type]
+        return np.array([name_list.index(name) for name in names if name in name_list])
 
     def extract_original_cont_feature_names(
         self, all_feature_names: List[str]
@@ -882,10 +887,7 @@ class DataModule:
         :meth:`extract_original_cat_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
-            x
-            for x in all_feature_names
-            if x in self.args["feature_names_type"].keys()
-            and x not in self.args["categorical_feature_names"]
+            x for x in all_feature_names if x in self.args["continuous_feature_names"]
         ]
 
     def extract_original_cat_feature_names(
@@ -909,11 +911,7 @@ class DataModule:
         :meth:`extract_original_cont_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
-            str(x)
-            for x in np.intersect1d(
-                list(all_feature_names),
-                self.args["categorical_feature_names"],
-            )
+            x for x in all_feature_names if x in self.args["categorical_feature_names"]
         ]
 
     def extract_derived_stacked_feature_names(

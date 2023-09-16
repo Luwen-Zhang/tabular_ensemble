@@ -39,8 +39,9 @@ cfg = {
         ("StandardScaler", {}),
     ],
     "data_derivers": [],
-    "feature_names_type": {},
     "categorical_feature_names": [],
-    "feature_types": ["Continuous", "Categorical", "Derived"],
+    "continuous_feature_names": [],
+    "feature_types": {},  # Will be automatically filled if not given.
+    "unique_feature_types": [],  # Will be automatically over-written.
     "label_name": ["target"],
 }
