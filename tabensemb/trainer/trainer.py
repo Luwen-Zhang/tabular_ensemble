@@ -1494,7 +1494,7 @@ class Trainer:
         )
 
         bar_kwargs_ = update_defaults_by_kwargs(
-            dict(linewidth=1, edgecolor="k", orient="h"), bar_kwargs
+            dict(linewidth=1, edgecolor="k", orient="h", saturation=1), bar_kwargs
         )
         figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(7, 4)), figure_kwargs)
 
@@ -2210,6 +2210,7 @@ class Trainer:
                 fliersize=4,
                 flierprops={"marker": "o"},
                 color=clr[0],
+                saturation=1,
             ),
             boxplot_kwargs,
         )
@@ -2769,6 +2770,7 @@ class Trainer:
                 orient="h",
                 linewidth=1,
                 edgecolor="k",
+                saturation=1,
             ),
             barplot_kwargs,
         )
