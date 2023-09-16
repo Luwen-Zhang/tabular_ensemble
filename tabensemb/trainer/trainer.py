@@ -3417,4 +3417,6 @@ def load_trainer(path: Union[os.PathLike, str]) -> Trainer:
     trainer.set_path(root, verbose=False)
     for modelbase in trainer.modelbases:
         modelbase.set_path(os.path.join(root, modelbase.program))
+        modelbase.trainer = trainer
+    trainer.datamodule.args = trainer.args
     return trainer
