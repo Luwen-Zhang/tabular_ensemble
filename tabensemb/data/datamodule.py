@@ -1619,12 +1619,15 @@ class DataModule:
             A tensor of continuous features, a list of tensors of derived_unstacked data, and a tensor of the target.
         """
         X = torch.tensor(
-            scaled_df[self.cont_feature_names].values.astype(np.float64),
+            scaled_df[self.cont_feature_names].values.astype(np.float32),
             dtype=torch.float32,
         )
-        D = [torch.tensor(value.astype(np.float64)) for value in derived_data.values()]
+        D = [
+            torch.tensor(value.astype(np.float32), dtype=torch.float32)
+            for value in derived_data.values()
+        ]
         y = torch.tensor(
-            scaled_df[self.label_name].values.astype(np.float64),
+            scaled_df[self.label_name].values.astype(np.float32),
             dtype=torch.float32,
         )
         return X, D, y
