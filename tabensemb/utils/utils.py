@@ -31,7 +31,6 @@ from typing import Dict
 from sklearn.metrics import *
 from io import StringIO
 
-clr = sns.color_palette("deep")
 sns.reset_defaults()
 # matplotlib.use("Agg")
 if find_executable("latex") and tabensemb.setting["matplotlib_usetex"]:
@@ -39,6 +38,8 @@ if find_executable("latex") and tabensemb.setting["matplotlib_usetex"]:
 plt.rcParams["font.family"] = "serif"
 plt.rcParams["font.serif"] = "Times New Roman"
 plt.rcParams["figure.autolayout"] = True
+
+global_sns_palette = sns.color_palette("deep")
 
 global_palette = [
     "#FF3E41",
