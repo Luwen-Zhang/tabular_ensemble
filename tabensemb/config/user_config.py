@@ -60,9 +60,9 @@ class UserConfig(dict):
         super(UserConfig, self).update(d)
 
     @staticmethod
-    def from_parser() -> Dict:
+    def parse() -> Dict:
         """
-        Try to parse the configuration using ``argparse`` and merge it into defaults.
+        Try to parse the configuration using ``argparse``.
 
         Returns
         -------
@@ -92,6 +92,19 @@ class UserConfig(dict):
                 parser.set_defaults(**{key: base_config[key]})
         parse_res = parser.parse_known_args()[0].__dict__
         return parse_res
+
+    @staticmethod
+    def from_parser() -> Dict:
+        """
+        Try to parse the configuration using ``argparse`` and merge it into defaults.
+
+        Returns
+        -------
+        dict
+            The parsed configuration dictionary.
+        """
+        d = UserConfig.parse()
+        return UserConfig.from_dict(d)
 
     @staticmethod
     def from_dict(cfg: Dict) -> "UserConfig":

@@ -279,12 +279,14 @@ class Trainer:
             elif is_notebook() or input_config:
                 parse_res = {"base": config}
             else:  # not notebook and config is None
-                parse_res = UserConfig.from_parser()
+                parse_res = UserConfig.parse()
             self.configfile = parse_res["base"]
             config = UserConfig(path=self.configfile)
             # Then, several args can be modified using other arguments like --lr, --weight_decay
             # only when a config file is not given so that configs depend on input arguments.
             if not is_notebook() and not input_config:
+                # If the argument is not given in the command, the item will be None and will not be merged into
+                # `config` using the `merge` method.
                 config.merge(parse_res)
             if manual_config is not None:
                 config.merge(manual_config)
