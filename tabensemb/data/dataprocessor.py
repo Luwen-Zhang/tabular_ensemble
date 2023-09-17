@@ -365,7 +365,8 @@ class CategoricalOrdinalEncoder(AbstractTransformer):
     def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         datamodule.cat_feature_mapping = cp(self.record_feature_mapping)
         try:
-            res = self.transformer.transform(data[datamodule.cat_feature_names])
+            input_data = data[datamodule.cat_feature_names].copy()
+            res = self.transformer.transform(input_data)
             for idx, cat_feature in enumerate(datamodule.cat_feature_names):
                 res[:, idx] = np.nan_to_num(
                     res[:, idx],
