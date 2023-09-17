@@ -24,15 +24,22 @@ class AbstractDataStep:
             self._check_arg(key)
         self.record_cont_features = None
         self.record_cat_features = None
+        self.record_cat_dtypes = {}
 
     def _record_features(self, input_data: pd.DataFrame, datamodule: DataModule):
         self.record_cont_features = cp(datamodule.cont_feature_names)
         self.record_cat_features = cp(datamodule.cat_feature_names)
+        self.record_cat_dtypes = {
+            feature: type(input_data[feature].values[0])
+            for feature in datamodule.cat_feature_names
+        }
 
     def _restore_features(self, input_data: pd.DataFrame, datamodule: DataModule):
         if not getattr(datamodule, "_force_features", False):
             datamodule.cont_feature_names = cp(self.record_cont_features)
             datamodule.cat_feature_names = cp(self.record_cat_features)
+        for feature, dtype in self.record_cat_dtypes.items():
+            input_data[feature] = input_data[feature].values.astype(dtype)
         return input_data
 
     def _defaults(self) -> Dict:
