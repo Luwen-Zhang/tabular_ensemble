@@ -6,11 +6,11 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 
 
-class AbstractRequireKwargs:
+class AbstractDataStep:
     """
     By inheriting this class, the input kwargs will be used to update default values defined in
-    :meth:`~AbstractRequireKwargs._defaults`. The requirements defined in
-    :meth:`~AbstractRequireKwargs._cls_required_kwargs` and :meth:`~AbstractRequireKwargs._required_kwargs` will be
+    :meth:`~AbstractDataStep._defaults`. The requirements defined in
+    :meth:`~AbstractDataStep._cls_required_kwargs` and :meth:`~AbstractDataStep._required_kwargs` will be
     checked. The final kwargs will be stored as ``self.kwargs``.
     """
 
@@ -24,8 +24,8 @@ class AbstractRequireKwargs:
 
     def _defaults(self) -> Dict:
         """
-        Defaults values for arguments defined in :meth:`~AbstractRequireKwargs._cls_required_kwargs` and
-        :meth:`~AbstractRequireKwargs._required_kwargs`
+        Defaults values for arguments defined in :meth:`~AbstractDataStep._cls_required_kwargs` and
+        :meth:`~AbstractDataStep._required_kwargs`
 
         Returns
         -------
@@ -41,7 +41,7 @@ class AbstractRequireKwargs:
         Returns
         -------
         List
-            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            A list of names of arguments that should be defined either in :meth:`~AbstractDataStep._defaults` or
             in the configuration file.
         """
         return []
@@ -53,7 +53,7 @@ class AbstractRequireKwargs:
         Returns
         -------
         List
-            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            A list of names of arguments that should be defined either in :meth:`~AbstractDataStep._defaults` or
             in the configuration file.
         """
         return []
@@ -61,7 +61,7 @@ class AbstractRequireKwargs:
     def _check_arg(self, name: str):
         """
         Check whether the required parameter is specified in the configuration file or in
-        :meth:`~AbstractRequireKwargs._defaults`.
+        :meth:`~AbstractDataStep._defaults`.
 
         Parameters
         ----------
@@ -72,7 +72,7 @@ class AbstractRequireKwargs:
             raise Exception(f"{self.__class__.__name__}: {name} should be specified.")
 
 
-class AbstractDeriver(AbstractRequireKwargs):
+class AbstractDeriver(AbstractDataStep):
     def __init__(self, **kwargs):
         """
         The base class for all data-derivers, which will derive new features based on the input DataFrame and return
@@ -96,7 +96,7 @@ class AbstractDeriver(AbstractRequireKwargs):
         Returns
         -------
         List
-            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            A list of names of arguments that should be defined either in :meth:`~AbstractDataStep._defaults` or
             in the configuration file.
         """
         return ["stacked", "intermediate", "derived_name"]
@@ -242,7 +242,7 @@ class AbstractDeriver(AbstractRequireKwargs):
             )
 
 
-class AbstractImputer(AbstractRequireKwargs):
+class AbstractImputer(AbstractDataStep):
     """
     The base class for all data-imputers. Data-imputers replace NaNs in the input tabular dataset.
     """
@@ -429,7 +429,7 @@ class AbstractSklearnImputer(AbstractImputer):
         raise NotImplementedError
 
 
-class AbstractProcessor(AbstractRequireKwargs):
+class AbstractProcessor(AbstractDataStep):
     """
     The base class for data-processors that change the content of the tabular dataset. The class is only directly used
     for those who reduce the number of data points.
