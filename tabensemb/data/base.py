@@ -4,6 +4,7 @@ from typing import *
 from .datamodule import DataModule
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
+import numbers
 
 
 class AbstractDataStep:
@@ -21,6 +22,18 @@ class AbstractDataStep:
             self._check_arg(key)
         for key in self._required_kwargs():
             self._check_arg(key)
+        self.record_cont_features = None
+        self.record_cat_features = None
+
+    def _record_features(self, input_data: pd.DataFrame, datamodule: DataModule):
+        self.record_cont_features = cp(datamodule.cont_feature_names)
+        self.record_cat_features = cp(datamodule.cat_feature_names)
+
+    def _restore_features(self, input_data: pd.DataFrame, datamodule: DataModule):
+        if not getattr(datamodule, "_force_features", False):
+            datamodule.cont_feature_names = cp(self.record_cont_features)
+            datamodule.cat_feature_names = cp(self.record_cat_features)
+        return input_data
 
     def _defaults(self) -> Dict:
         """
@@ -249,7 +262,6 @@ class AbstractImputer(AbstractDataStep):
 
     def __init__(self, **kwargs):
         super(AbstractImputer, self).__init__(**kwargs)
-        self.record_cont_features = None
         self.record_imputed_features = None
 
     def fit_transform(
@@ -273,9 +285,11 @@ class AbstractImputer(AbstractDataStep):
             A transformed tabular dataset.
         """
         data = input_data.copy()
-        self.record_cont_features = cp(datamodule.cont_feature_names)
-        self.record_cat_features = cp(datamodule.cat_feature_names)
-        data[self.record_cat_features] = data[self.record_cat_features].fillna("UNK")
+        self._record_features(input_data=input_data, datamodule=datamodule)
+        for feature, dtype in self.record_cat_dtypes.items():
+            data[feature] = data[feature].fillna(
+                -1 if issubclass(dtype, numbers.Number) else "UNK"
+            )
         return (
             self._fit_transform(data, datamodule)
             if len(self.record_cont_features) > 0
@@ -302,12 +316,11 @@ class AbstractImputer(AbstractDataStep):
             A transformed tabular dataset.
         """
         data = input_data.copy()
-        if not getattr(datamodule, "_force_features", False):
-            datamodule.cont_feature_names = cp(self.record_cont_features)
-            datamodule.cat_feature_names = cp(self.record_cat_features)
-        data[datamodule.cat_feature_names] = data[datamodule.cat_feature_names].fillna(
-            "UNK"
-        )
+        data = self._restore_features(input_data=data, datamodule=datamodule)
+        for feature, dtype in self.record_cat_dtypes.items():
+            data[feature] = data[feature].fillna(
+                -1 if issubclass(dtype, numbers.Number) else "UNK"
+            )
         return (
             self._transform(data, datamodule)
             if len(self.record_cont_features) > 0
@@ -442,11 +455,6 @@ class AbstractProcessor(AbstractDataStep):
     recording feature names and restoring them.
     """
 
-    def __init__(self, **kwargs):
-        super(AbstractProcessor, self).__init__(**kwargs)
-        self.record_cont_features = None
-        self.record_cat_features = None
-
     def fit_transform(
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
@@ -468,10 +476,8 @@ class AbstractProcessor(AbstractDataStep):
             A transformed tabular dataset.
         """
         data = input_data.copy()
-        res = self._fit_transform(data, datamodule)
-        self.record_cont_features = cp(datamodule.cont_feature_names)
-        self.record_cat_features = cp(datamodule.cat_feature_names)
-        return res
+        self._record_features(input_data, datamodule)
+        return self._fit_transform(data, datamodule)
 
     def transform(
         self, input_data: pd.DataFrame, datamodule: DataModule
@@ -493,10 +499,8 @@ class AbstractProcessor(AbstractDataStep):
         pd.DataFrame
             A transformed tabular dataset.
         """
-        if not getattr(datamodule, "_force_features", False):
-            datamodule.cont_feature_names = cp(self.record_cont_features)
-            datamodule.cat_feature_names = cp(self.record_cat_features)
         data = input_data.copy()
+        data = self._restore_features(input_data=data, datamodule=datamodule)
         return self._transform(data, datamodule)
 
     def _fit_transform(
