@@ -502,6 +502,19 @@ def test_categorical_transform():
         )
     )
 
+    return_inversed = datamodule.categories_inverse_transform(
+        test_df[["derived_cat_1"]]
+    )
+    assert (
+        return_inversed.loc[0, "derived_cat_1"]
+        == datamodule.cat_feature_mapping["derived_cat_1"][
+            test_df.loc[0, "derived_cat_1"]
+        ]
+    )
+
+    return_encoded = datamodule.categories_transform(return_inversed)
+    assert np.all(np.equal(test_df[["derived_cat_1"]].values, return_encoded.values))
+
     returned_same = datamodule.categories_inverse_transform(returned[["derived_cat_1"]])
     assert all([x == y for x, y in zip(returned_same, returned[["derived_cat_1"]])])
 

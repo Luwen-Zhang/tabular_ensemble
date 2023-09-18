@@ -205,7 +205,7 @@ class OrdinalEncoder:
 
     def _transform(self, df: pd.DataFrame):
         input_df = df.copy()
-        transformed = [False for feature in self.features]
+        transformed = [True for feature in self.features]
         for idx, feature in enumerate(self.features):
             if feature not in df.columns:
                 continue
@@ -233,6 +233,7 @@ class OrdinalEncoder:
                 [str_int_in_encoded(val) for val in known_values]
             ):
                 # The input is already transformed.
+                transformed[idx] = False
                 continue
 
             transformed_values = np.zeros_like(values, dtype=int)
@@ -241,12 +242,11 @@ class OrdinalEncoder:
                     unknown_val if val in unknown_values else val
                 )
             df[feature] = transformed_values.astype(int)
-            transformed[idx] = True
         return input_df if not all(transformed) else df
 
     def _inverse_transform(self, df: pd.DataFrame):
         input_df = df.copy()
-        transformed = [False for feature in self.features]
+        transformed = [True for feature in self.features]
         for idx, feature in enumerate(self.features):
             if feature not in df.columns:
                 continue
@@ -277,6 +277,7 @@ class OrdinalEncoder:
             if any(
                 [dtype(val) in self.mapping[feature] for val in unknown_values]
             ) and all([dtype(val) in self.mapping[feature] for val in known_values]):
+                transformed[idx] = False
                 continue
 
             if not all([is_int(x) for x in unique_values]):
@@ -293,5 +294,4 @@ class OrdinalEncoder:
                     else self.mapping[feature][int(val)]
                 )
             df[feature] = transformed_values.astype(self.dtypes[feature])
-            transformed[idx] = True
         return input_df if not all(transformed) else df
