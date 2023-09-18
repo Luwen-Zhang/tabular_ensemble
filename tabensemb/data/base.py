@@ -466,6 +466,10 @@ class AbstractProcessor(AbstractDataStep):
     recording feature names and restoring them.
     """
 
+    def __init__(self, **kwargs):
+        super(AbstractProcessor, self).__init__(**kwargs)
+        self.fitted = False
+
     def fit_transform(
         self, input_data: pd.DataFrame, datamodule: DataModule
     ) -> pd.DataFrame:
@@ -488,7 +492,9 @@ class AbstractProcessor(AbstractDataStep):
         """
         data = input_data.copy()
         self._record_features(input_data, datamodule)
-        return self._fit_transform(data, datamodule)
+        res = self._fit_transform(data, datamodule)
+        self.fitted = True
+        return res
 
     def transform(
         self, input_data: pd.DataFrame, datamodule: DataModule

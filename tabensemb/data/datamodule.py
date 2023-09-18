@@ -1550,6 +1550,10 @@ class DataModule:
             raise Exception(f"Both skip_scaler and scaler_only are True.")
         data = input_data.copy()
         for processor in self.dataprocessors:
+            # First reset the status of the processor.
+            # If scaler_only == True, we may want to fit the scaler separately and do not change the status of others.
+            if not scaler_only and not warm_start:
+                processor.fitted = False
             if skip_scaler and isinstance(processor, AbstractScaler):
                 continue
             if skip_selector and isinstance(processor, AbstractFeatureSelector):
@@ -1557,7 +1561,8 @@ class DataModule:
             if scaler_only and not isinstance(processor, AbstractScaler):
                 continue
             if warm_start:
-                data = processor.transform(data, self)
+                if processor.fitted:
+                    data = processor.transform(data, self)
             else:
                 data = processor.fit_transform(data, self)
         return data
@@ -1565,8 +1570,7 @@ class DataModule:
     def data_transform(
         self,
         input_data: pd.DataFrame,
-        skip_scaler: bool = False,
-        scaler_only: bool = False,
+        **kwargs,
     ):
         """
         Transform the input tabular dataset using fitted data processors.
@@ -1575,22 +1579,15 @@ class DataModule:
         ----------
         input_data
             The tabular dataset.
-        skip_scaler
-            True to skip scaling (the last processor).
-        scaler_only
-            True to only perform scaling (the last processor).
+        **kwargs
+            Other arguments for :meth:`_data_preprocess`, except for ``warm_start``.
 
         Returns
         -------
         pd.DataFrame
             The transformed tabular dataset.
         """
-        return self._data_preprocess(
-            input_data.copy(),
-            warm_start=True,
-            skip_scaler=skip_scaler,
-            scaler_only=scaler_only,
-        )
+        return self._data_preprocess(input_data.copy(), warm_start=True, **kwargs)
 
     def update_dataset(self):
         """
