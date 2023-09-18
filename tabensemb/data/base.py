@@ -113,7 +113,8 @@ class AbstractDeriver(AbstractDataStep):
 
     def _cls_required_kwargs(self):
         """
-        kwargs required by the class. "stacked", "intermediate", and "derived_name" are required for all data derivers.
+        kwargs required by the class. "stacked", "intermediate", "derived_name", and "is_continuous" are required for
+        all data derivers.
 
         Returns
         -------
@@ -121,7 +122,7 @@ class AbstractDeriver(AbstractDataStep):
             A list of names of arguments that should be defined either in :meth:`~AbstractDataStep._defaults` or
             in the configuration file.
         """
-        return ["stacked", "intermediate", "derived_name"]
+        return ["stacked", "intermediate", "derived_name", "is_continuous"]
 
     def derive(
         self,

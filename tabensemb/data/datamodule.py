@@ -404,33 +404,45 @@ class DataModule:
             )
 
         make_imputation()
-        (
-            self.df,
-            cont_feature_names,
-        ) = self.derive_stacked(self.df)
+        self.df, cont_feature_names, cat_feature_names = self.derive_stacked(self.df)
         if derived_stacked_features is not None:
-            current_derived_stacked_features = (
+            current_derived_stacked_cont_features = (
                 self.extract_derived_stacked_feature_names(cont_feature_names)
             )
-            removed = list(
-                np.setdiff1d(current_derived_stacked_features, derived_stacked_features)
+            removed_cont = list(
+                np.setdiff1d(
+                    current_derived_stacked_cont_features, derived_stacked_features
+                )
             )
-            cont_feature_names = [x for x in cont_feature_names if x not in removed]
+            cont_feature_names = [
+                x for x in cont_feature_names if x not in removed_cont
+            ]
+            current_derived_stacked_cat_features = (
+                self.extract_derived_stacked_feature_names(cat_feature_names)
+            )
+            removed_cat = list(
+                np.setdiff1d(
+                    current_derived_stacked_cat_features, derived_stacked_features
+                )
+            )
+            cat_feature_names = [x for x in cat_feature_names if x not in removed_cat]
         self.cont_feature_names = cont_feature_names
+        self.cat_feature_names = cat_feature_names
         # There may exist nan in stacked features.
         self._cont_imputed_mask = pd.concat(
             [
                 self._cont_imputed_mask,
-                pd.DataFrame(
-                    columns=self.derived_stacked_features,
-                    data=np.isnan(self.df[self.derived_stacked_features].values).astype(
-                        int
-                    ),
-                    index=np.arange(len(self.df)),
-                ),
+                self.df[self.derived_stacked_cont_features].isna().astype(int),
             ],
             axis=1,
         )[self.cont_feature_names]
+        self._cat_imputed_mask = pd.concat(
+            [
+                self._cat_imputed_mask,
+                self.df[self.derived_stacked_cat_features].isna().astype(int),
+            ],  # How to find invalid values in object columns (after they are turned into "nan")?
+            axis=1,
+        )[self.cat_feature_names]
         make_imputation()
 
         self._data_process(
@@ -672,7 +684,7 @@ class DataModule:
         ):
             derived_data["augmented"] = np.zeros((len(df), 1))
         if derived_data is None or len(absent_derived_features) > 0:
-            df, _, derived_data = self.derive(df)
+            df, _, _, derived_data = self.derive(df)
         else:
             absent_keys = [
                 key
@@ -740,6 +752,32 @@ class DataModule:
             A list of feature names.
         """
         return self.extract_derived_stacked_feature_names(self.all_feature_names)
+
+    @property
+    def derived_stacked_cont_features(self) -> List[str]:
+        """
+        Find derived features in :attr:`cont_feature_names` derived by data derivers whose argument "stacked" is set to
+        True, i.e. the stacked data.
+
+        Returns
+        -------
+        List
+            A list of feature names.
+        """
+        return self.extract_derived_stacked_feature_names(self.cont_feature_names)
+
+    @property
+    def derived_stacked_cat_features(self) -> List[str]:
+        """
+        Find derived features in :attr:`cat_feature_names` derived by data derivers whose argument "stacked" is set to
+        True, i.e. the stacked data.
+
+        Returns
+        -------
+        List
+            A list of feature names.
+        """
+        return self.extract_derived_stacked_feature_names(self.cat_feature_names)
 
     def get_feature_types(
         self, features: List[str], allow_unknown: bool = False
@@ -1155,7 +1193,7 @@ class DataModule:
 
     def derive(
         self, df: pd.DataFrame
-    ) -> Tuple[pd.DataFrame, List[str], Dict[str, np.ndarray]]:
+    ) -> Tuple[pd.DataFrame, List[str], List[str], Dict[str, np.ndarray]]:
         """
         Derive both stacked and unstacked features using the input dataframe.
 
@@ -1170,6 +1208,8 @@ class DataModule:
             The tabular dataset with derived stacked features.
         List
             Continuous feature names with derived stacked features.
+        List
+            Categorical feature names with derived stacked features.
         dict
             The derived unstacked data.
 
@@ -1177,12 +1217,14 @@ class DataModule:
         --------
         :meth:`.derive_stacked`, :meth:`.derive_unstacked`.
         """
-        df_tmp, cont_feature_names = self.derive_stacked(df)
+        df_tmp, cont_feature_names, cat_feature_names = self.derive_stacked(df)
         derived_data = self.derive_unstacked(df_tmp)
 
-        return df_tmp, cont_feature_names, derived_data
+        return df_tmp, cont_feature_names, cat_feature_names, derived_data
 
-    def derive_stacked(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+    def derive_stacked(
+        self, df: pd.DataFrame
+    ) -> Tuple[pd.DataFrame, List[str], List[str]]:
         """
         Derive stacked features using the input dataframe. Calculated using data derivers whose argument "stacked" is
         set to True.
@@ -1198,20 +1240,33 @@ class DataModule:
             The tabular dataset with derived stacked features.
         List
             Continuous feature names with derived stacked features.
+        List
+            Categorical feature names with derived stacked features.
         """
         df_tmp = df.copy()
         cont_feature_names = cp(self.cont_feature_names)
+        cat_feature_names = cp(self.cat_feature_names)
         for deriver in self.dataderivers:
             if deriver.kwargs["stacked"]:
                 value, col_names = deriver.derive(df_tmp, datamodule=self)
                 if not deriver.kwargs["intermediate"]:
                     for col_name in col_names:
-                        if col_name not in cont_feature_names:
+                        if (
+                            deriver.kwargs["is_continuous"]
+                            and col_name not in cont_feature_names
+                        ):
                             cont_feature_names.append(col_name)
                             if self.training:
                                 self.cont_feature_names.append(col_name)
+                        if (
+                            not deriver.kwargs["is_continuous"]
+                            and col_name not in cat_feature_names
+                        ):
+                            cat_feature_names.append(col_name)
+                            if self.training:
+                                self.cat_feature_names.append(col_name)
                 df_tmp[col_names] = value
-        return df_tmp, cont_feature_names
+        return df_tmp, cont_feature_names, cat_feature_names
 
     def derive_unstacked(
         self, df: pd.DataFrame, categorical_only=False

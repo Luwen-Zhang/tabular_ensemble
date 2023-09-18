@@ -4,6 +4,8 @@ import tabensemb
 import numpy as np
 from tabensemb.trainer import Trainer, load_trainer, save_trainer
 from tabensemb.model import *
+from tabensemb.data import AbstractDeriver
+from tabensemb.data.dataderiver import deriver_mapping
 from tabensemb.utils import HiddenPltShow
 from tabensemb.config import UserConfig
 from tabensemb.data.datasplitter import RandomSplitter
@@ -12,6 +14,37 @@ import pytest
 import matplotlib
 import shutil
 from torch import nn
+
+
+class TrainerCategoricalDeriver(AbstractDeriver):
+    """
+    This is an example of deriving categorical features.
+    """
+
+    def _required_cols(self):
+        return []
+
+    def _required_kwargs(self):
+        return []
+
+    def _defaults(self):
+        return dict(stacked=True, intermediate=False, is_continuous=False)
+
+    def _derived_names(self):
+        return ["derived_cat_0", "derived_cat_1"]
+
+    def _derive(self, df, datamodule):
+        col_0 = df[datamodule.cont_feature_names[0]].values.flatten().reshape(-1, 1)
+        if datamodule.training:
+            self.mean = np.nanmean(col_0)
+        derived_cat_0 = (col_0 > self.mean).astype(int)
+        derived_cat_1 = np.array(
+            [f"category_{i}" for i in derived_cat_0.flatten()]
+        ).reshape(-1, 1)
+        return np.concatenate([derived_cat_0, derived_cat_1], axis=-1)
+
+
+deriver_mapping["TrainerCategoricalDeriver"] = TrainerCategoricalDeriver
 
 
 def pytest_configure_trainer():
@@ -51,6 +84,14 @@ def pytest_configure_trainer():
                         "stacked": True,
                         "intermediate": False,
                         "derived_name": "sample_weight",
+                    },
+                ),
+                (
+                    "TrainerCategoricalDeriver",
+                    {
+                        "stacked": True,
+                        "intermediate": False,
+                        "derived_name": "derived_cat",
                     },
                 ),
             ],
