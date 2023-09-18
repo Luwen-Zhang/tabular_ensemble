@@ -109,6 +109,7 @@ class AbstractDeriver(AbstractDataStep):
         for arg_name in self._required_cols():
             self._check_arg(arg_name)
         self.last_derived_col_names = []
+        self.derived_dtype = None
 
     def _cls_required_kwargs(self):
         """
@@ -152,6 +153,10 @@ class AbstractDeriver(AbstractDataStep):
             self._check_exist(df, arg_name)
         values = self._derive(df, datamodule)
         self._check_values(values)
+        if self.derived_dtype is None:
+            self.derived_dtype = values.dtype
+        else:
+            values = values.astype(self.derived_dtype)
         names = (
             self._generate_col_names(values.shape[-1])
             if "col_names" not in self.kwargs
