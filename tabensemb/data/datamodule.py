@@ -1260,7 +1260,7 @@ class DataModule:
         cont_feature_names = cp(self.cont_feature_names)
         for deriver in self.dataderivers:
             if deriver.kwargs["stacked"]:
-                value, name, col_names = deriver.derive(df_tmp, datamodule=self)
+                value, col_names = deriver.derive(df_tmp, datamodule=self)
                 if not deriver.kwargs["intermediate"]:
                     for col_name in col_names:
                         if col_name not in cont_feature_names:
@@ -1295,7 +1295,8 @@ class DataModule:
         if not categorical_only:
             for deriver in self.dataderivers:
                 if not deriver.kwargs["stacked"]:
-                    value, name, col_names = deriver.derive(df, datamodule=self)
+                    value, col_names = deriver.derive(df, datamodule=self)
+                    name = deriver.kwargs["derived_name"]
                     derived_data[name] = value
                     self.unstacked_col_names[name] = col_names
         if len(self.cat_feature_names) > 0:

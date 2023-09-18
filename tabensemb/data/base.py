@@ -127,7 +127,7 @@ class AbstractDeriver(AbstractDataStep):
         self,
         df: pd.DataFrame,
         datamodule: DataModule,
-    ) -> Tuple[np.ndarray, str, List]:
+    ) -> Tuple[np.ndarray, List]:
         """
         The method automatically checks input column names and the DataFrame, calls the :meth:`._derive` method, and
         checks the output of the derived data.
@@ -144,8 +144,6 @@ class AbstractDeriver(AbstractDataStep):
         -------
         np.ndarray
             A ndarray of derived data
-        str
-            The name of the derived feature
         List
             Names of each column in the derived data.
         """
@@ -163,7 +161,7 @@ class AbstractDeriver(AbstractDataStep):
             else self.kwargs["col_names"]
         )
         self.last_derived_col_names = names
-        return values, self.kwargs["derived_name"], names
+        return values, names
 
     def _derive(
         self,
