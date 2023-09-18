@@ -918,13 +918,15 @@ def test_infer_task():
             )
         assert "is not consistent with" in err.value.args[0]
 
-    with pytest.warns(UserWarning):
-        _ = test_once(
-            {
-                "label_name": ["target"],
-                "task": "binary",
-            }
-        )
+    with pytest.raises(Exception) as err:
+        with pytest.warns(UserWarning):
+            _ = test_once(
+                {
+                    "label_name": ["target"],
+                    "task": "binary",
+                }
+            )
+    assert "The inferred task is regression" in err.value.args[0]
 
     with pytest.raises(Exception) as err:
         with pytest.warns(UserWarning):

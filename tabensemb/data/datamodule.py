@@ -561,6 +561,11 @@ class DataModule:
                         f"The inferred task {infer_task} is not consistent with the selected task {task}. Using the "
                         f"selected task."
                     )
+                    if infer_task == "regression":
+                        raise Exception(
+                            f"The inferred task is regression because the targets are not integers, but the selected "
+                            f"task is {task}, which will make categorical ordinal encoder unhappy."
+                        )
                     return task
             else:
                 return task
