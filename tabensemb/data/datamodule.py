@@ -271,7 +271,8 @@ class DataModule:
         self.data_path = data_path
 
         cont_feature_names = self.args["continuous_feature_names"]
-        cat_feature_names = self.args["categorical_feature_names"]
+        # The order of categorical features affect all results.
+        cat_feature_names = list(sorted(self.args["categorical_feature_names"]))
         label_name = self.args["label_name"]
 
         self.set_data(self.df, cont_feature_names, cat_feature_names, label_name)
