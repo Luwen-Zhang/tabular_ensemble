@@ -224,7 +224,7 @@ class AbstractModel:
         self.trainer.set_status(training=True)
         trainer_state = cp(self.trainer)
         self.trainer.datamodule.set_data(
-            df,
+            self.trainer.datamodule.categories_inverse_transform(df),
             cont_feature_names=cont_feature_names,
             cat_feature_names=cat_feature_names,
             label_name=label_name,

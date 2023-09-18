@@ -150,7 +150,7 @@ def test_train_binary():
     df.loc[:, "target_binary"] = np.array([f"test_{x}" for x in df["target_binary"]])
     trainer.clear_modelbase()
     trainer.datamodule.set_data(
-        df,
+        trainer.datamodule.categories_inverse_transform(df),
         cont_feature_names=trainer.cont_feature_names,
         cat_feature_names=trainer.cat_feature_names,
         label_name=trainer.label_name,
@@ -210,7 +210,7 @@ def test_train_multiclass():
     )
     trainer.clear_modelbase()
     trainer.datamodule.set_data(
-        df,
+        trainer.datamodule.categories_inverse_transform(df),
         cont_feature_names=trainer.cont_feature_names,
         cat_feature_names=trainer.cat_feature_names,
         label_name=trainer.label_name,
@@ -687,7 +687,7 @@ def test_finetune():
     with pytest.warns(UserWarning, match=r"AutoGluon does not support warm_start.*?"):
         for model in models:
             model.fit(
-                trainer.df,
+                trainer.datamodule.categories_inverse_transform(trainer.df),
                 trainer.cont_feature_names,
                 trainer.cat_feature_names,
                 trainer.label_name,

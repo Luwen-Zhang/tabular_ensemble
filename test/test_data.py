@@ -506,7 +506,7 @@ def test_illegal_cont_feature():
     # "cat_0" is object and cannot be converted
     with pytest.raises(Exception) as err:
         datamodule.set_data(
-            datamodule.df,
+            datamodule.categories_inverse_transform(datamodule.df),
             cont_feature_names=["cont_0", "cat_0"],
             cat_feature_names=[],
             label_name=datamodule.label_name,
@@ -516,7 +516,7 @@ def test_illegal_cont_feature():
     df = datamodule.df.copy()
     df["cat_1"] = df["cat_1"].values.astype(object)
     datamodule.set_data(
-        df,
+        datamodule.categories_inverse_transform(df),
         cont_feature_names=["cont_0", "cat_1"],
         cat_feature_names=[],
         label_name=datamodule.label_name,

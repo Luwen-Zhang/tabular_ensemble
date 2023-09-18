@@ -257,7 +257,7 @@ def test_exceptions(capfd):
     assert "Run fit() before predict()" in err.value.args[0]
 
     models[0].fit(
-        trainer.df,
+        trainer.datamodule.categories_inverse_transform(trainer.df),
         cont_feature_names=trainer.cont_feature_names,
         cat_feature_names=trainer.cat_feature_names,
         label_name=trainer.label_name,

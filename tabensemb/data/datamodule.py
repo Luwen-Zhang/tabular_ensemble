@@ -49,7 +49,8 @@ class DataModule:
     derived_data
         The derived unstacked data calculated using :attr:`dataderivers` whose argument "stacked" is set to False.
     df
-        The unscaled processed dataset.
+        The unscaled processed dataset. It is already ordinal-encoded if a
+        :class:`tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` is used.
     dropped_indices
         Indices of data points that are removed from the original dataset.
     label_name
@@ -307,7 +308,8 @@ class DataModule:
         Parameters
         ----------
         df
-            The tabular dataset.
+            The tabular dataset. Note that if a ``DataModule.df`` is passed here, it should be inverse-transformed
+            first using :meth:`categories_inverse_transform`.
         cont_feature_names
             A list of continuous features in the tabular dataset.
         cat_feature_names
@@ -993,7 +995,7 @@ class DataModule:
         )
         has_indices = hasattr(self, "train_indices")
         self.set_data(
-            self.df,
+            self.categories_inverse_transform(self.df),
             cont_feature_names,
             cat_feature_names,
             self.label_name,
