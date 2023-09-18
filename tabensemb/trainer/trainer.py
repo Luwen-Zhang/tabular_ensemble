@@ -2143,7 +2143,7 @@ class Trainer:
             instance.
         """
         pairplot_kwargs_ = update_defaults_by_kwargs(
-            dict(corner=True, diag_kind="kde", palette=global_palette), pairplot_kwargs
+            dict(corner=True, diag_kind="kde"), pairplot_kwargs
         )
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
@@ -2429,7 +2429,7 @@ class Trainer:
             disable=given_ax,
             ax_or_fig=ax,
             xlabel=feature,
-            ylabel="Density",
+            ylabel="Density" if hist_kwargs_["density"] else "Frequency",
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
