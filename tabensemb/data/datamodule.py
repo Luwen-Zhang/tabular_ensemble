@@ -394,9 +394,9 @@ class DataModule:
 
         def make_imputation():
             train_val_indices = list(self.train_indices) + list(self.val_indices)
-            self.df.loc[train_val_indices, :] = self.dataimputer.fit_transform(
-                self.df.loc[train_val_indices, :], datamodule=self
-            )
+            self.df.loc[train_val_indices, :] = getattr(
+                self.dataimputer, "fit_transform" if not warm_start else "transform"
+            )(self.df.loc[train_val_indices, :], datamodule=self)
             self.df.loc[self.test_indices, :] = self.dataimputer.transform(
                 self.df.loc[self.test_indices, :], datamodule=self
             )
