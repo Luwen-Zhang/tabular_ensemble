@@ -12,7 +12,7 @@ tabensemb.data
 .. autosummary::
     :toctree: generated/
 
-    AbstractRequireKwargs
+    AbstractDataStep
 
 .. currentmodule:: tabensemb.data.datamodule
 
@@ -70,4 +70,15 @@ Data Splitting
 
     AbstractSplitter
     datasplitter
+
+Utils
+-----------------------------
+
+.. currentmodule:: tabensemb.data
+
+.. autosummary::
+    :toctree: generated/
+
+    utils
+
 

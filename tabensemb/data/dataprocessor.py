@@ -343,7 +343,7 @@ class StandardScaler(AbstractScaler):
 class CategoricalOrdinalEncoder(AbstractTransformer):
     """
     A categorical feature encoder that transforms string values to unique integer values.
-    See :class:`tabensemb.data.utils.OrdinalEncoder` for details.
+    See :class:`~tabensemb.data.utils.OrdinalEncoder` for details.
     """
 
     def __init__(self, **kwargs):
