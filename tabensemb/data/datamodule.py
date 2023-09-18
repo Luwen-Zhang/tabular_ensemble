@@ -13,9 +13,9 @@ from sklearn.decomposition import PCA
 import sklearn.pipeline
 import sklearn.ensemble
 from collections.abc import Iterable
-from sklearn.preprocessing import OrdinalEncoder
 import scipy.stats as st
 from functools import reduce
+from .utils import OrdinalEncoder
 
 
 class DataModule:
@@ -490,7 +490,9 @@ class DataModule:
                 len(np.unique(self.label_data[col])) for col in self.label_name
             ]
             self.label_ordinal_encoder = OrdinalEncoder()
-            res = self.label_ordinal_encoder.fit_transform(self.label_data).astype(int)
+            res = self.label_ordinal_encoder.fit(self.label_data).transform(
+                self.label_data
+            )
             self.df[self.label_name] = res
             self.scaled_df[self.label_name] = res
         else:
@@ -1028,9 +1030,9 @@ class DataModule:
                     tmp_derived_data[key] = derived_data[key]
             return tmp_derived_data
 
-    def _get_categorical_ordinal_encoder(self):
+    def get_categorical_ordinal_encoder(self) -> Union[OrdinalEncoder, None]:
         """
-        Find and return the :class:`~tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` in data processors..
+        Find and return the :class:`~tabensemb.data.utils.OrdinalEncoder` in data processors..
 
         Returns
         -------
@@ -1040,11 +1042,8 @@ class DataModule:
 
         for processor in self.dataprocessors:
             if isinstance(processor, CategoricalOrdinalEncoder):
-                encoder = processor.transformer
-                cat_features = processor.record_cat_features
-                if len(cat_features) == 0:
-                    return None
-                return encoder, cat_features
+                transformer = processor.transformer
+                return transformer if transformer.fitted else None
         else:
             return None
 
@@ -1063,13 +1062,11 @@ class DataModule:
         pd.DataFrame
             The inverse-transformed data.
         """
-        encoder_features = self._get_categorical_ordinal_encoder()
-        if encoder_features is None:
+        encoder = self.get_categorical_ordinal_encoder()
+        if encoder is None:
             return X.copy()
         else:
-            encoder, cat_features = encoder_features
-        X = self._ordinal_encoder_transform(encoder, X, cat_features, transform=False)
-        return X
+            return encoder.inverse_transform(X)
 
     def categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1086,13 +1083,11 @@ class DataModule:
         pd.DataFrame
             The transformed data.
         """
-        encoder_features = self._get_categorical_ordinal_encoder()
-        if encoder_features is None:
+        encoder = self.get_categorical_ordinal_encoder()
+        if encoder is None:
             return X.copy()
         else:
-            encoder, cat_features = encoder_features
-        X = self._ordinal_encoder_transform(encoder, X, cat_features, transform=True)
-        return X
+            return encoder.transform(X)
 
     def label_categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1108,11 +1103,7 @@ class DataModule:
         pd.DataFrame
             The transformed data.
         """
-        res = self._ordinal_encoder_transform(
-            self.label_ordinal_encoder, X, self.label_name, transform=True
-        )
-        res[self.label_name] = res[self.label_name].astype(int)
-        return res
+        return self.label_ordinal_encoder.transform(X)
 
     def label_categories_inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1128,61 +1119,7 @@ class DataModule:
         pd.DataFrame
             The transformed data.
         """
-        return self._ordinal_encoder_transform(
-            self.label_ordinal_encoder, X, self.label_name, transform=False
-        )
-
-    @staticmethod
-    def _ordinal_encoder_transform(
-        encoder: OrdinalEncoder,
-        X: pd.DataFrame,
-        cat_features: List[str],
-        transform: bool,
-    ) -> pd.DataFrame:
-        """
-        For :meth:`categories_inverse_transform`, :meth:`categories_transform`,
-        :meth:`label_categories_transform`, and :meth:`label_categories_inverse_transform`, make the input legal
-        including getting ready for missing columns, return the input if it is already transformed, etc.
-
-        Parameters
-        ----------
-        encoder
-            A categorical ordinal encoder that has methods ``fit_transform`` and ``transform``.
-        X
-            The data to be transformed.
-        cat_features
-            Encoded categorical features (or targets).
-        transform
-            True if doing transform and False if doing inverse transform.
-
-        Returns
-        -------
-        pd.DataFrame
-            The transformed data.
-        """
-        X = X.copy()
-        missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
-        if len(missing_cols) > 0:
-            X[missing_cols] = -1
-        X.columns = X.columns.astype(str)
-        try:
-            if transform:
-                X[cat_features] = encoder.transform(X[cat_features].copy()).astype(int)
-            else:
-                X[cat_features] = encoder.inverse_transform(X[cat_features].copy())
-        except:
-            try:
-                if transform:
-                    encoder.inverse_transform(X[cat_features].copy())
-                else:
-                    encoder.transform(X[cat_features].copy())
-            except:
-                raise Exception(
-                    f"Categorical features are not compatible with the fitted OrdinalEncoder."
-                )
-        for col in missing_cols:
-            del X[col]
-        return X
+        return self.label_ordinal_encoder.inverse_transform(X)
 
     def save_data(self, path: str):
         """

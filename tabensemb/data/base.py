@@ -4,7 +4,7 @@ from typing import *
 from .datamodule import DataModule
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
-import numbers
+from .utils import fill_cat_nan
 
 
 class AbstractDataStep:
@@ -30,7 +30,7 @@ class AbstractDataStep:
         self.record_cont_features = cp(datamodule.cont_feature_names)
         self.record_cat_features = cp(datamodule.cat_feature_names)
         self.record_cat_dtypes = {
-            feature: type(input_data[feature].values[0])
+            feature: input_data[feature].values.dtype
             for feature in datamodule.cat_feature_names
         }
 
@@ -268,7 +268,10 @@ class AbstractDeriver(AbstractDataStep):
 
 class AbstractImputer(AbstractDataStep):
     """
-    The base class for all data-imputers. Data-imputers replace NaNs in the input tabular dataset.
+    The base class for all data-imputers. Data-imputers replace NaNs in the input tabular dataset. For categorical
+    features that are all numerical (integers or ``np.nan``), the column will be transformed to the dtype "int" after
+    filling NaNs with ``tabensemb.data.utils.number_unknown_value``. Other categorical features will be transformed to
+    the dtype "str" after filling NaNs with ``tabensemb.data.utils.object_unknown_value``.
     """
 
     def __init__(self, **kwargs):
@@ -297,10 +300,7 @@ class AbstractImputer(AbstractDataStep):
         """
         data = input_data.copy()
         self._record_features(input_data=input_data, datamodule=datamodule)
-        for feature, dtype in self.record_cat_dtypes.items():
-            data[feature] = data[feature].fillna(
-                -1 if issubclass(dtype, numbers.Number) else "UNK"
-            )
+        data = fill_cat_nan(data, self.record_cat_dtypes)
         return (
             self._fit_transform(data, datamodule)
             if len(self.record_cont_features) > 0
@@ -328,10 +328,7 @@ class AbstractImputer(AbstractDataStep):
         """
         data = input_data.copy()
         data = self._restore_features(input_data=data, datamodule=datamodule)
-        for feature, dtype in self.record_cat_dtypes.items():
-            data[feature] = data[feature].fillna(
-                -1 if issubclass(dtype, numbers.Number) else "UNK"
-            )
+        data = fill_cat_nan(data, self.record_cat_dtypes)
         return (
             self._transform(data, datamodule)
             if len(self.record_cont_features) > 0
