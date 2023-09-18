@@ -85,7 +85,7 @@ class CatEmbed(TorchModel):
             [("CategoricalOrdinalEncoder", {}), ("StandardScaler", {})]
         )
         datamodule.set_data(
-            base.df,
+            base.categories_inverse_transform(base.df),
             cont_feature_names=base.cont_feature_names,
             cat_feature_names=base.cat_feature_names,
             label_name=base.label_name,

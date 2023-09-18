@@ -4,8 +4,9 @@ from import_utils import *
 import tabensemb
 from tabensemb.config import UserConfig
 from tabensemb.data import *
-from tabensemb.data.dataderiver import RelativeDeriver
+from tabensemb.data.dataderiver import RelativeDeriver, deriver_mapping
 from tabensemb.data.dataimputer import get_data_imputer
+from tabensemb.data.utils import OrdinalEncoder
 from tabensemb.utils.utils import global_setting
 import numpy as np
 import pandas as pd
@@ -24,6 +25,39 @@ sample_weight_deriver_kwargs = {
     "intermediate": True,
     "derived_name": "sample_weight",
 }
+categorical_deriver_kwargs = {
+    "stacked": True,
+    "intermediate": False,
+    "derived_name": "derived_cat",
+}
+
+
+class DataCategoricalDeriver(AbstractDeriver):
+    """
+    This is an example of deriving categorical features.
+    """
+
+    def _required_cols(self):
+        return []
+
+    def _required_kwargs(self):
+        return []
+
+    def _defaults(self):
+        return dict(stacked=True, intermediate=False, is_continuous=False)
+
+    def _derived_names(self):
+        return ["derived_cat_0", "derived_cat_1"]
+
+    def _derive(self, df, datamodule):
+        derived_cat_0 = df[["cat_1"]].values.flatten().reshape(-1, 1)
+        derived_cat_1 = np.array(
+            [f"category_{i}" for i in derived_cat_0.flatten()]
+        ).reshape(-1, 1)
+        return np.concatenate([derived_cat_0, derived_cat_1], axis=-1)
+
+
+deriver_mapping["DataCategoricalDeriver"] = DataCategoricalDeriver
 
 
 def pytest_configure_data():
@@ -48,6 +82,7 @@ def pytest_configure_data():
         ("RelativeDeriver", relative_deriver_kwargs),
         ("RelativeDeriver", relative_deriver_unstacked_kwargs),
         ("SampleWeightDeriver", sample_weight_deriver_kwargs),
+        ("DataCategoricalDeriver", categorical_deriver_kwargs),
         ("UnscaledDataDeriver", {"derived_name": "unscaled", "stacked": False}),
     ]
     max_config.merge({"data_processors": processors, "data_derivers": derivers})
@@ -184,6 +219,8 @@ def test_data_deriver():
     datamodule = pytest.min_datamodule
     assert "derived_cont" in datamodule.cont_feature_names
     assert "derived_cont_unstacked" not in datamodule.cont_feature_names
+    assert "derived_cat_0" in datamodule.cat_feature_names
+    assert "derived_cat_1" in datamodule.cat_feature_names
     assert "derived_cont_unstacked" in datamodule.derived_data.keys()
     assert "sample_weight" in datamodule.df.columns
     assert "sample_weight" not in datamodule.cont_feature_names
@@ -201,12 +238,21 @@ def test_describe():
 def test_get_not_imputed():
     pytest_configure_data()
     not_imputed = pytest.datamodule.get_not_imputed_df()
-    mask = pytest.datamodule.cont_imputed_mask
-    missing = np.where(mask.values == 1)
+    cont_mask = pytest.datamodule.cont_imputed_mask
+    cont_missing = np.where(cont_mask.values == 1)
     assert all(
         [
-            np.isnan(not_imputed.values[missing[0][i], missing[1][i]])
-            for i in range(len(missing[0]))
+            np.isnan(not_imputed.values[cont_missing[0][i], cont_missing[1][i]])
+            for i in range(len(cont_missing[0]))
+        ]
+    )
+
+    cat_mask = pytest.datamodule.cat_imputed_mask
+    cat_missing = np.where(cat_mask.values == 1)
+    assert all(
+        [
+            np.isnan(not_imputed.values[cat_missing[0][i], cat_missing[1][i]])
+            for i in range(len(cat_missing[0]))
         ]
     )
 
@@ -216,7 +262,7 @@ def test_get_feature_by_type():
     pytest_configure_data()
     datamodule = pytest.datamodule
     cont = datamodule.get_feature_names_by_type("Continuous")
-    cont_idx = datamodule.get_feature_idx_by_type("Continuous")
+    cont_idx = datamodule.get_feature_idx_by_type("Continuous", var_type="continuous")
     assert all(
         [
             got in datamodule.cont_feature_names
@@ -231,7 +277,7 @@ def test_get_feature_by_type():
         ]
     )
     cat = datamodule.get_feature_names_by_type("Categorical")
-    cat_idx = datamodule.get_feature_idx_by_type("Categorical")
+    cat_idx = datamodule.get_feature_idx_by_type("Categorical", var_type="categorical")
     assert all([real == got for real, got in zip(datamodule.cat_feature_names, cat)])
     assert all(
         [
@@ -254,13 +300,19 @@ def test_get_feature_types():
             datamodule.cat_feature_names[0],
             "derived_cont",
             "derived_cont_unstacked",
-        ]
+            "derived_cat_0",
+        ],
+        allow_unknown=True,
     )
+    assert (
+        "derived_cont" not in datamodule.cont_feature_names
+    )  # Removed by CorrFeatureSelector
     assert (
         "Continuous" == types[0]
         and "Categorical" == types[1]
-        and "Derived" == types[2]
-        and "Derived" == types[3]
+        and "Unknown" == types[2]
+        and "Unknown" == types[3]
+        and "Derived" == types[4]
     )
 
     idxs = datamodule.get_feature_types_idx(
@@ -269,14 +321,23 @@ def test_get_feature_types():
             datamodule.cat_feature_names[0],
             "derived_cont",
             "derived_cont_unstacked",
-        ]
+            "derived_cat_0",
+        ],
+        allow_unknown=True,
     )
-    assert idxs[0] == 0 and idxs[1] == 1 and idxs[2] == 2 and idxs[3] == 2
+    assert (
+        idxs[0] == datamodule.unique_feature_types_with_derived().index("Continuous")
+        and idxs[1]
+        == datamodule.unique_feature_types_with_derived().index("Categorical")
+        and idxs[2] == 3
+        and idxs[3] == 3
+        and idxs[4] == datamodule.unique_feature_types_with_derived().index("Derived")
+    )
 
     with pytest.raises(Exception) as err:
         datamodule.get_feature_types(
             ["TEST", datamodule.cont_feature_names[0], datamodule.cat_feature_names[0]],
-            unknown_as_derived=False,
+            allow_unknown=False,
         )
     assert (
         "TEST" in err.value.args[0]
@@ -286,9 +347,9 @@ def test_get_feature_types():
 
     types = datamodule.get_feature_types(
         ["TEST"],
-        unknown_as_derived=True,
+        allow_unknown=True,
     )
-    assert "Derived" == types[0]
+    assert "Unknown" == types[0]
 
 
 @pytest.mark.order(before="test_set_feature_names")
@@ -299,23 +360,32 @@ def test_extract_names():
 
     assert len(datamodule.extract_derived_stacked_feature_names(names)) == 0
 
-    with_derived_cont = datamodule.extract_derived_stacked_feature_names(
-        ["derived_cont", "derived_cont_unstacked"] + names
+    with_derived = datamodule.extract_derived_stacked_feature_names(
+        ["derived_cont", "derived_cont_unstacked", "derived_cat_0"] + names
     )
-    assert len(with_derived_cont) == 1 and "derived_cont" in with_derived_cont
+    assert (
+        len(with_derived) == 2
+        and "derived_cont" in with_derived
+        and "derived_cat_0" in with_derived
+    )
 
     extract_cont = datamodule.extract_original_cont_feature_names(
-        ["derived_cont", "derived_cont_unstacked"] + names
+        ["derived_cont", "derived_cont_unstacked", "derived_cat_0"] + names
     )
     assert len(extract_cont) == 1 and datamodule.cont_feature_names[0] in extract_cont
 
     extract_cat = datamodule.extract_original_cat_feature_names(
-        ["derived_cont", "derived_cont_unstacked"] + names
+        ["derived_cont", "derived_cont_unstacked", "derived_cat_0"] + names
     )
     assert len(extract_cat) == 1 and datamodule.cat_feature_names[0] in extract_cat
 
     all_stacked = datamodule.get_all_derived_stacked_feature_names()
-    assert len(all_stacked) == 1 and "derived_cont" in all_stacked
+    assert (
+        len(all_stacked) == 3
+        and "derived_cont" in all_stacked
+        and "derived_cat_0" in all_stacked
+        and "derived_cat_1" in all_stacked
+    )
 
 
 def test_set_feature_names():
@@ -327,16 +397,66 @@ def test_set_feature_names():
     no_cont_datamodule.set_feature_names(datamodule.cat_feature_names)
     assert len(no_cont_datamodule.cont_feature_names) == 0
 
+    # set without categorical features
     no_cat_datamodule = copy.deepcopy(datamodule)
     no_cat_datamodule.set_feature_names(datamodule.cont_feature_names)
     assert len(no_cat_datamodule.cat_feature_names) == 0
 
-    datamodule.set_feature_names(datamodule.cont_feature_names[:2])
+    # Prepare new data after set feature names
+
+    def test_one_datamodule(datamodule, expected_cont, expected_cat):
+        df, derived_data = datamodule.prepare_new_data(datamodule.df)
+        assert (
+            len(datamodule.cont_feature_names) == expected_cont
+            and len(datamodule.cat_feature_names) == expected_cat
+            and len(datamodule.label_name) == 1
+        ), "set_feature_names is not functional when prepare_new_data."
+        assert np.allclose(
+            df[datamodule.all_feature_names + datamodule.label_name].values,
+            datamodule.df[datamodule.all_feature_names + datamodule.label_name].values,
+        ), (
+            "Stacked features from prepare_new_data after set_feature_names for the set dataframe does not get "
+            "consistent results"
+        )
+        assert len(derived_data) == len(datamodule.derived_data), (
+            "The number of unstacked features after set_feature_names from "
+            "prepare_new_data is not consistent"
+        )
+        for key, value in datamodule.derived_data.items():
+            if key != "augmented":
+                assert np.allclose(value, derived_data[key]), (
+                    f"Unstacked feature `{key}` after set_feature_names from prepare_new_data for the set "
+                    "dataframe does not get consistent results"
+                )
+
+    no_cont_datamodule = copy.deepcopy(datamodule)
+    no_cont_datamodule.set_feature_names(
+        datamodule.cat_feature_names[:1] + ["derived_cat_0"]
+    )
+    test_one_datamodule(no_cont_datamodule, expected_cont=0, expected_cat=2)
+
+    no_cat_datamodule = copy.deepcopy(datamodule)
+    no_cat_datamodule.set_feature_names(datamodule.cont_feature_names[:2])
+    test_one_datamodule(no_cat_datamodule, expected_cont=2, expected_cat=0)
+
+    # Remove feature
+    df = no_cat_datamodule.df.copy()
+    original_cont_names = no_cat_datamodule.cont_feature_names.copy()
+    df[no_cat_datamodule.cont_feature_names[0]] = 1.0
+    no_cat_datamodule.set_data(
+        no_cat_datamodule.categories_inverse_transform(df),
+        cont_feature_names=no_cat_datamodule.cont_feature_names,
+        cat_feature_names=no_cat_datamodule.cat_feature_names,
+        label_name=no_cat_datamodule.label_name,
+    )
+    new_cont_names = no_cat_datamodule.cont_feature_names.copy()
+
+    # "cont_0" is removed and "derived_cont" is added back.
+    assert len(original_cont_names) == len(new_cont_names)
     assert (
-        len(datamodule.cont_feature_names) == 2
-        and len(datamodule.cat_feature_names) == 0
-        and len(datamodule.label_name) == 1
-    ), "set_feature_names is not functioning."
+        original_cont_names[0] not in new_cont_names
+        and "derived_cont" in new_cont_names
+    )
 
 
 def test_sort_derived_data():
@@ -368,76 +488,98 @@ def test_categorical_transform():
     test_df = datamodule.df[datamodule.cat_feature_names]
     returned = datamodule.categories_inverse_transform(test_df)
     assert (
-        returned.loc[0, "cat_0"]
-        == datamodule.cat_feature_mapping["cat_0"][test_df.loc[0, "cat_0"]]
+        returned.loc[0, "derived_cat_1"]
+        == datamodule.cat_feature_mapping["derived_cat_1"][
+            test_df.loc[0, "derived_cat_1"]
+        ]
     )
     assert np.all(
         np.equal(
-            test_df[datamodule.cat_feature_names[1:]].values,
-            returned[datamodule.cat_feature_names[1:]].values,
+            test_df[
+                datamodule.cat_feature_names[1:-2]
+            ].values,  # The last two are derived
+            returned[datamodule.cat_feature_names[1:-2]].values,
         )
     )
 
-    returned_same = datamodule.categories_inverse_transform(returned[["cat_0"]])
-    assert all([x == y for x, y in zip(returned_same, returned[["cat_0"]])])
-
-
-@pytest.mark.order(after="test_set_feature_names")
-def test_after_set_feature_names():
-    pytest_configure_data()
-    datamodule = pytest.datamodule
-    print(f"\n-- Prepare new data after set feature names --\n")
-    df, derived_data = datamodule.prepare_new_data(datamodule.df)
+    return_inversed = datamodule.categories_inverse_transform(
+        test_df[["derived_cat_1"]]
+    )
     assert (
-        len(datamodule.cont_feature_names) == 2
-        and len(datamodule.cat_feature_names) == 0
-        and len(datamodule.label_name) == 1
-    ), "set_feature_names is not functional when prepare_new_data."
-    assert np.allclose(
-        df[datamodule.all_feature_names + datamodule.label_name].values,
-        datamodule.df[datamodule.all_feature_names + datamodule.label_name].values,
-    ), (
-        "Stacked features from prepare_new_data after set_feature_names for the set dataframe does not get "
-        "consistent results"
+        return_inversed.loc[0, "derived_cat_1"]
+        == datamodule.cat_feature_mapping["derived_cat_1"][
+            test_df.loc[0, "derived_cat_1"]
+        ]
     )
-    assert len(derived_data) == len(datamodule.derived_data), (
-        "The number of unstacked features after set_feature_names from "
-        "prepare_new_data is not consistent"
-    )
-    for key, value in datamodule.derived_data.items():
-        if key != "augmented":
-            assert np.allclose(value, derived_data[key]), (
-                f"Unstacked feature `{key}` after set_feature_names from prepare_new_data for the set "
-                "dataframe does not get consistent results"
-            )
+
+    return_encoded = datamodule.categories_transform(return_inversed)
+    assert np.all(np.equal(test_df[["derived_cat_1"]].values, return_encoded.values))
+
+    returned_same = datamodule.categories_inverse_transform(returned[["derived_cat_1"]])
+    assert all([x == y for x, y in zip(returned_same, returned[["derived_cat_1"]])])
 
 
-@pytest.mark.order(after="test_set_feature_names")
-def test_remove_features():
-    pytest_configure_data()
-    datamodule = pytest.datamodule
-    df = datamodule.df.copy()
-    original_cont_names = datamodule.cont_feature_names.copy()
-    df[datamodule.cont_feature_names[0]] = 1.0
-    datamodule.set_data(
-        df,
-        cont_feature_names=datamodule.cont_feature_names,
-        cat_feature_names=datamodule.cat_feature_names,
-        label_name=datamodule.label_name,
+def test_ordinal_encoder():
+    df = pd.DataFrame(
+        {"col1": [1, 2, np.nan, 4], "col2": ["cat_1", "cat_2", 3, np.nan]}
     )
-    new_cont_names = datamodule.cont_feature_names.copy()
+    df_test = pd.DataFrame(
+        {
+            "col1": [1, 2, np.nan, 4, 5],
+            "col2": ["cat_1", "cat_2", 3, np.nan, "cat_4"],
+        }
+    )
+    oe = OrdinalEncoder()
+    oe.fit(df)
+    res_trans = oe.transform(df_test)
+    assert np.issubdtype(res_trans.values.dtype, int)
+    # assert res_trans.loc[2, "col1"] == tabensemb.data.utils.number_unknown_value
+    # assert res_trans.loc[3, "col2"] == tabensemb.data.utils.object_unknown_value
+    assert len(np.unique(res_trans["col1"])) == 4
+    assert len(np.unique(res_trans["col2"])) == 4
 
-    # "cont_0" is removed and "derived_cont" is added back.
-    assert len(original_cont_names) == len(new_cont_names)
-    assert (
-        original_cont_names[0] not in new_cont_names
-        and "derived_cont" in new_cont_names
+    res_inv_trans = oe.inverse_transform(res_trans)
+    assert res_inv_trans.loc[0, "col1"] == 1
+    assert res_inv_trans.loc[1, "col1"] == 2
+    assert res_inv_trans.loc[2, "col1"] == tabensemb.data.utils.number_unknown_value
+    assert res_inv_trans.loc[3, "col1"] == 4
+    assert res_inv_trans.loc[4, "col1"] == tabensemb.data.utils.number_unknown_value
+
+    assert res_inv_trans.loc[0, "col2"] == "cat_1"
+    assert res_inv_trans.loc[1, "col2"] == "cat_2"
+    assert res_inv_trans.loc[2, "col2"] == "3"
+    assert res_inv_trans.loc[3, "col2"] == tabensemb.data.utils.object_unknown_value
+    assert res_inv_trans.loc[4, "col2"] == tabensemb.data.utils.object_unknown_value
+
+    res_inv_trans_same = oe.inverse_transform(df_test[["col1"]])
+    assert len(res_inv_trans_same.columns) == 1
+    assert res_inv_trans_same.loc[0, "col1"] == 1
+    assert res_inv_trans_same.loc[1, "col1"] == 2
+    assert np.isnan(res_inv_trans_same.loc[2, "col1"])
+    assert res_inv_trans_same.loc[3, "col1"] == 4
+    assert res_inv_trans_same.loc[4, "col1"] == 5
+
+    res_inv_trans_same = oe.inverse_transform(df_test[["col2"]])
+    assert len(res_inv_trans_same.columns) == 1
+    assert res_inv_trans_same.loc[0, "col2"] == "cat_1"
+    assert res_inv_trans_same.loc[1, "col2"] == "cat_2"
+    assert res_inv_trans_same.loc[2, "col2"] == 3
+    assert np.isnan(res_inv_trans_same.loc[3, "col2"])
+    assert res_inv_trans_same.loc[4, "col2"] == "cat_4"
+
+    df_test_not_int = pd.DataFrame(
+        {
+            "col1": [1, 2, 1.1, np.nan],
+        }
     )
+    with pytest.raises(Exception) as err:
+        oe.inverse_transform(df_test_not_int)
+    assert "is not integeral" in err.value.args[0]
 
 
 def test_base_predictor():
     pytest_configure_data()
-    datamodule = pytest.datamodule
+    datamodule = pytest.min_datamodule
     predictor = datamodule.get_base_predictor(categorical=True, n_estimators=2)
     predictor.fit(
         datamodule.df[datamodule.all_feature_names],
@@ -499,7 +641,7 @@ def test_illegal_cont_feature():
     # "cat_0" is object and cannot be converted
     with pytest.raises(Exception) as err:
         datamodule.set_data(
-            datamodule.df,
+            datamodule.categories_inverse_transform(datamodule.df),
             cont_feature_names=["cont_0", "cat_0"],
             cat_feature_names=[],
             label_name=datamodule.label_name,
@@ -509,7 +651,7 @@ def test_illegal_cont_feature():
     df = datamodule.df.copy()
     df["cat_1"] = df["cat_1"].values.astype(object)
     datamodule.set_data(
-        df,
+        datamodule.categories_inverse_transform(df),
         cont_feature_names=["cont_0", "cat_1"],
         cat_feature_names=[],
         label_name=datamodule.label_name,
@@ -624,11 +766,16 @@ def test_abstract_deriver():
             return []
 
     with pytest.raises(Exception) as err:
-        # "stacked", "intermediate", and "derived_name" is not specified.
+        # "stacked", "intermediate", "derived_name", and "is_continuous" is not specified.
         _ = NotImplementedDeriver()
     assert "stacked" in err.value.args[0]
     deriver = NotImplementedDeriver(
-        **{"stacked": True, "intermediate": False, "derived_name": "TEST_DERIVED"}
+        **{
+            "stacked": True,
+            "intermediate": False,
+            "derived_name": "TEST_DERIVED",
+            "is_continuous": True,
+        }
     )
     with pytest.raises(NotImplementedError):
         deriver._derive(datamodule.df, datamodule)
@@ -911,13 +1058,15 @@ def test_infer_task():
             )
         assert "is not consistent with" in err.value.args[0]
 
-    with pytest.warns(UserWarning):
-        _ = test_once(
-            {
-                "label_name": ["target"],
-                "task": "binary",
-            }
-        )
+    with pytest.raises(Exception) as err:
+        with pytest.warns(UserWarning):
+            _ = test_once(
+                {
+                    "label_name": ["target"],
+                    "task": "binary",
+                }
+            )
+    assert "The inferred task is regression" in err.value.args[0]
 
     with pytest.raises(Exception) as err:
         with pytest.warns(UserWarning):

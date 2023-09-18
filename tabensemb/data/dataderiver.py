@@ -22,7 +22,7 @@ class RelativeDeriver(AbstractDeriver):
         return []
 
     def _defaults(self):
-        return dict(stacked=True, intermediate=False)
+        return dict(stacked=True, intermediate=False, is_continuous=True)
 
     def _derive(self, df, datamodule):
         absolute_col = self.kwargs["absolute_col"]
@@ -53,7 +53,7 @@ class SampleWeightDeriver(AbstractDeriver):
         return []
 
     def _defaults(self):
-        return dict(stacked=False, intermediate=False)
+        return dict(stacked=False, intermediate=False, is_continuous=True)
 
     def _derive(self, df, datamodule):
         if datamodule.training:
@@ -155,7 +155,7 @@ class UnscaledDataDeriver(AbstractDeriver):
         return []
 
     def _defaults(self):
-        return dict(stacked=False, intermediate=False)
+        return dict(stacked=False, intermediate=False, is_continuous=True)
 
     def _derive(self, df, datamodule):
         if self.kwargs["stacked"]:

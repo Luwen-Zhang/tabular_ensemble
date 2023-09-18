@@ -13,9 +13,9 @@ from sklearn.decomposition import PCA
 import sklearn.pipeline
 import sklearn.ensemble
 from collections.abc import Iterable
-from sklearn.preprocessing import OrdinalEncoder
 import scipy.stats as st
 from functools import reduce
+from .utils import OrdinalEncoder
 
 
 class DataModule:
@@ -49,7 +49,8 @@ class DataModule:
     derived_data
         The derived unstacked data calculated using :attr:`dataderivers` whose argument "stacked" is set to False.
     df
-        The unscaled processed dataset.
+        The unscaled processed dataset. It is already ordinal-encoded if a
+        :class:`tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` is used.
     dropped_indices
         Indices of data points that are removed from the original dataset.
     label_name
@@ -270,12 +271,9 @@ class DataModule:
             self.df = pd.read_csv(data_path, **kwargs)
         self.data_path = data_path
 
-        cont_feature_names = self.extract_original_cont_feature_names(
-            self.args["feature_names_type"].keys()
-        )
-        cat_feature_names = self.extract_original_cat_feature_names(
-            self.args["feature_names_type"].keys()
-        )
+        cont_feature_names = self.args["continuous_feature_names"].copy()
+        # The order of categorical features affect all results.
+        cat_feature_names = list(sorted(self.args["categorical_feature_names"])).copy()
         label_name = self.args["label_name"]
 
         self.set_data(self.df, cont_feature_names, cat_feature_names, label_name)
@@ -310,7 +308,8 @@ class DataModule:
         Parameters
         ----------
         df
-            The tabular dataset.
+            The tabular dataset. Note that if a ``DataModule.df`` is passed here, it should be inverse-transformed
+            first using :meth:`categories_inverse_transform`.
         cont_feature_names
             A list of continuous features in the tabular dataset.
         cat_feature_names
@@ -362,8 +361,6 @@ class DataModule:
         self.cont_feature_names = cont_feature_names
         self.cat_feature_names = cat_feature_names
         self.cat_feature_mapping = {}
-        for feature in self.cat_feature_names:
-            self.cat_feature_mapping[feature] = []
         self.label_name = label_name
         self.df = df.copy()
         if pd.isna(df[self.label_name]).any().any():
@@ -399,41 +396,53 @@ class DataModule:
 
         def make_imputation():
             train_val_indices = list(self.train_indices) + list(self.val_indices)
-            self.df.loc[train_val_indices, :] = self.dataimputer.fit_transform(
-                self.df.loc[train_val_indices, :], datamodule=self
-            )
+            self.df.loc[train_val_indices, :] = getattr(
+                self.dataimputer, "fit_transform" if not warm_start else "transform"
+            )(self.df.loc[train_val_indices, :], datamodule=self)
             self.df.loc[self.test_indices, :] = self.dataimputer.transform(
                 self.df.loc[self.test_indices, :], datamodule=self
             )
 
         make_imputation()
-        (
-            self.df,
-            cont_feature_names,
-        ) = self.derive_stacked(self.df)
+        self.df, cont_feature_names, cat_feature_names = self.derive_stacked(self.df)
         if derived_stacked_features is not None:
-            current_derived_stacked_features = (
+            current_derived_stacked_cont_features = (
                 self.extract_derived_stacked_feature_names(cont_feature_names)
             )
-            removed = list(
-                np.setdiff1d(current_derived_stacked_features, derived_stacked_features)
+            removed_cont = list(
+                np.setdiff1d(
+                    current_derived_stacked_cont_features, derived_stacked_features
+                )
             )
-            cont_feature_names = [x for x in cont_feature_names if x not in removed]
+            cont_feature_names = [
+                x for x in cont_feature_names if x not in removed_cont
+            ]
+            current_derived_stacked_cat_features = (
+                self.extract_derived_stacked_feature_names(cat_feature_names)
+            )
+            removed_cat = list(
+                np.setdiff1d(
+                    current_derived_stacked_cat_features, derived_stacked_features
+                )
+            )
+            cat_feature_names = [x for x in cat_feature_names if x not in removed_cat]
         self.cont_feature_names = cont_feature_names
+        self.cat_feature_names = cat_feature_names
         # There may exist nan in stacked features.
         self._cont_imputed_mask = pd.concat(
             [
                 self._cont_imputed_mask,
-                pd.DataFrame(
-                    columns=self.derived_stacked_features,
-                    data=np.isnan(self.df[self.derived_stacked_features].values).astype(
-                        int
-                    ),
-                    index=np.arange(len(self.df)),
-                ),
+                self.df[self.derived_stacked_cont_features].isna().astype(int),
             ],
             axis=1,
         )[self.cont_feature_names]
+        self._cat_imputed_mask = pd.concat(
+            [
+                self._cat_imputed_mask,
+                self.df[self.derived_stacked_cat_features].isna().astype(int),
+            ],  # How to find invalid values in object columns (after they are turned into "nan")?
+            axis=1,
+        )[self.cat_feature_names]
         make_imputation()
 
         self._data_process(
@@ -495,7 +504,9 @@ class DataModule:
                 len(np.unique(self.label_data[col])) for col in self.label_name
             ]
             self.label_ordinal_encoder = OrdinalEncoder()
-            res = self.label_ordinal_encoder.fit_transform(self.label_data).astype(int)
+            res = self.label_ordinal_encoder.fit(self.label_data).transform(
+                self.label_data
+            )
             self.df[self.label_name] = res
             self.scaled_df[self.label_name] = res
         else:
@@ -564,6 +575,11 @@ class DataModule:
                         f"The inferred task {infer_task} is not consistent with the selected task {task}. Using the "
                         f"selected task."
                     )
+                    if infer_task == "regression":
+                        raise Exception(
+                            f"The inferred task is regression because the targets are not integers, but the selected "
+                            f"task is {task}, which will make categorical ordinal encoder unhappy."
+                        )
                     return task
             else:
                 return task
@@ -668,7 +684,7 @@ class DataModule:
         ):
             derived_data["augmented"] = np.zeros((len(df), 1))
         if derived_data is None or len(absent_derived_features) > 0:
-            df, _, derived_data = self.derive(df)
+            df, _, _, derived_data = self.derive(df)
         else:
             absent_keys = [
                 key
@@ -727,8 +743,8 @@ class DataModule:
     @property
     def derived_stacked_features(self) -> List[str]:
         """
-        Find derived features in ``all_feature_names`` derived by data derivers whose argument "stacked" is set to True,
-        i.e. the stacked data.
+        Find derived features in :attr:`all_feature_names` derived by data derivers whose argument "stacked" is set to
+        True, i.e. the stacked data.
 
         Returns
         -------
@@ -737,19 +753,44 @@ class DataModule:
         """
         return self.extract_derived_stacked_feature_names(self.all_feature_names)
 
+    @property
+    def derived_stacked_cont_features(self) -> List[str]:
+        """
+        Find derived features in :attr:`cont_feature_names` derived by data derivers whose argument "stacked" is set to
+        True, i.e. the stacked data.
+
+        Returns
+        -------
+        List
+            A list of feature names.
+        """
+        return self.extract_derived_stacked_feature_names(self.cont_feature_names)
+
+    @property
+    def derived_stacked_cat_features(self) -> List[str]:
+        """
+        Find derived features in :attr:`cat_feature_names` derived by data derivers whose argument "stacked" is set to
+        True, i.e. the stacked data.
+
+        Returns
+        -------
+        List
+            A list of feature names.
+        """
+        return self.extract_derived_stacked_feature_names(self.cat_feature_names)
+
     def get_feature_types(
-        self, features: List[str], unknown_as_derived: bool = False
+        self, features: List[str], allow_unknown: bool = False
     ) -> List[str]:
         """
-        Get the type defined in ``feature_types`` in the configuration for each feature, which is defined by
-        ``feature_names_type`` in the configuration. Derived unstacked features are supported.
+        Get the type defined in ``feature_types`` in the configuration for each feature.
 
         Parameters
         ----------
         features
             A list of features.
-        unknown_as_derived
-            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
+        allow_unknown
+            Regard unknown features as "Unknown" features. If False, an error will be raised if unknown features are
             found.
 
         Returns
@@ -761,38 +802,48 @@ class DataModule:
         --------
         :meth:`get_feature_types_idx`
         """
+        feature_types = self.feature_types_with_derived()
         invalid_features = [
-            feature
-            for feature in features
-            if feature not in self.args["feature_names_type"].keys()
-            and feature not in self.get_all_derived_stacked_feature_names()
-            and feature not in self.get_all_derived_unstacked_feature_names()
+            feature for feature in features if feature not in feature_types.keys()
         ]
-        if len(invalid_features) > 0 and not unknown_as_derived:
+        if len(invalid_features) > 0 and not allow_unknown:
             raise Exception(f"Unknown features: {invalid_features}")
         return [
-            self.args["feature_types"][
-                self.args["feature_names_type"].get(
-                    i, self.args["feature_types"].index("Derived")
-                )
-            ]
+            feature_types[i] if i in feature_types.keys() else "Unknown"
             for i in features
         ]
 
+    def feature_types_with_derived(self) -> Dict:
+        """
+        A dictionary stating the category of each feature, including derived stacked features.
+        """
+        derived_stacked_features = self.extract_derived_stacked_feature_names(
+            self.all_feature_names
+        )
+        d = cp(self.args["feature_types"])
+        d.update({feature: "Derived" for feature in derived_stacked_features})
+        return d
+
+    def unique_feature_types_with_derived(self) -> List[str]:
+        """
+        Unique values in :meth:`feature_types_with_derived`.
+        """
+        return list(sorted(set(self.feature_types_with_derived().values())))
+
     def get_feature_types_idx(
-        self, features: List[str], unknown_as_derived: bool = False
+        self, features: List[str], allow_unknown: bool = False
     ) -> List[str]:
         """
-        Get the type defined in ``feature_types`` in the configuration for each feature by their index, which is defined
-        by ``feature_names_type`` in the configuration. Derived unstacked features are supported.
+        For each feature, get the index in ``unique_feature_types`` of its type defined in ``feature_types`` in the
+        configuration.
 
         Parameters
         ----------
         features
             A list of features.
-        unknown_as_derived
-            Regard unknown features as "Derived" features. If False, an error will be raised if unknown features are
-            found.
+        allow_unknown
+            Regard unknown features as "Unknown" features (whose index is the number of known feature types). If False,
+            an error will be raised if unknown features are found.
 
         Returns
         -------
@@ -803,18 +854,22 @@ class DataModule:
         --------
         :meth:`get_feature_types`
         """
-        types = self.get_feature_types(features, unknown_as_derived=unknown_as_derived)
-        return [self.args["feature_types"].index(x) for x in types]
+        types = self.get_feature_types(features, allow_unknown=allow_unknown)
+        return [
+            self.unique_feature_types_with_derived().index(x)
+            if x != "Unknown"
+            else len(self.unique_feature_types_with_derived())
+            for x in types
+        ]
 
     def get_feature_names_by_type(self, typ: str) -> List[str]:
         """
-        Find features of the specified type defined by ``feature_names_type`` and ``feature_types`` in the configuration.
-        Derived unstacked features will not be included if ``typ="Derived"``.
+        Find features of the specified type defined by ``feature_types`` in the configuration.
 
         Parameters
         ----------
         typ
-            One type of features defined in ``feature_types`` in the configuration.
+            One type of features defined in ``unique_feature_types`` in the configuration.
 
         Returns
         -------
@@ -824,27 +879,35 @@ class DataModule:
         See Also
         --------
         :meth:`get_feature_idx_by_type`
+
+        Notes
+        -----
+        The key "Unknown" returned by :meth:`get_feature_types` is not a real key defined in ``unique_feature_types``.
+        It is a reserved type representing unknown features.
         """
-        if typ not in self.args["feature_types"]:
+        if typ not in self.unique_feature_types_with_derived():
             raise Exception(
-                f"Feature type {typ} is invalid (among {self.args['feature_types']})"
+                f"Feature type {typ} is invalid (among {self.args['unique_feature_types']})"
             )
         return [
-            name
-            for name, type_idx in self.args["feature_names_type"].items()
-            if type_idx == self.args["feature_types"].index(typ)
-            and name in self.all_feature_names
+            feature
+            for feature, t in self.feature_types_with_derived().items()
+            if t == typ and feature in self.all_feature_names
         ]
 
-    def get_feature_idx_by_type(self, typ: str) -> np.ndarray:
+    def get_feature_idx_by_type(self, typ: str, var_type: str = "any") -> np.ndarray:
         """
-        Find features (by their index) of the specified type defined by ``feature_names_type`` and ``feature_types``
-        in the configuration. Derived unstacked features will not be included if ``typ="Derived"``.
+        Find features (by their index) of the specified type defined by ``feature_types`` in the configuration. This is
+        used to determine the indices of specific features after they are transformed into ``torch.Tensor``.
 
         Parameters
         ----------
         typ
-            One type of features in ``feature_types`` in the configuration.
+            One type of features in ``unique_feature_types`` in the configuration.
+        var_type
+            "continuous", "categorical", or "any". If is "continuous", only indices of :attr:`cont_feature_names` of
+            continuous features will be returned. If is "categorical", indices of :attr:`cat_feature_names` of
+            categorical features will be returned. If is "any", indices of :attr:`all_feature_names` will be returned.
 
         Returns
         -------
@@ -856,10 +919,12 @@ class DataModule:
         :meth:`get_feature_names_by_type`
         """
         names = self.get_feature_names_by_type(typ=typ)
-        if typ == "Categorical":
-            return np.array([self.cat_feature_names.index(name) for name in names])
-        else:
-            return np.array([self.cont_feature_names.index(name) for name in names])
+        name_list = {
+            "categorical": self.cat_feature_names,
+            "continuous": self.cont_feature_names,
+            "any": self.all_feature_names,
+        }[var_type]
+        return np.array([name_list.index(name) for name in names if name in name_list])
 
     def extract_original_cont_feature_names(
         self, all_feature_names: List[str]
@@ -882,10 +947,7 @@ class DataModule:
         :meth:`extract_original_cat_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
-            x
-            for x in all_feature_names
-            if x in self.args["feature_names_type"].keys()
-            and x not in self.args["categorical_feature_names"]
+            x for x in all_feature_names if x in self.args["continuous_feature_names"]
         ]
 
     def extract_original_cat_feature_names(
@@ -909,11 +971,7 @@ class DataModule:
         :meth:`extract_original_cont_feature_names`, :meth:`extract_derived_stacked_feature_names`
         """
         return [
-            str(x)
-            for x in np.intersect1d(
-                list(all_feature_names),
-                self.args["categorical_feature_names"],
-            )
+            x for x in all_feature_names if x in self.args["categorical_feature_names"]
         ]
 
     def extract_derived_stacked_feature_names(
@@ -989,7 +1047,7 @@ class DataModule:
         )
         has_indices = hasattr(self, "train_indices")
         self.set_data(
-            self.df,
+            self.categories_inverse_transform(self.df),
             cont_feature_names,
             cat_feature_names,
             self.label_name,
@@ -1031,9 +1089,9 @@ class DataModule:
                     tmp_derived_data[key] = derived_data[key]
             return tmp_derived_data
 
-    def _get_categorical_ordinal_encoder(self):
+    def get_categorical_ordinal_encoder(self) -> Union[OrdinalEncoder, None]:
         """
-        Find and return the :class:`~tabensemb.data.dataprocessor.CategoricalOrdinalEncoder` in data processors..
+        Find and return the :class:`~tabensemb.data.utils.OrdinalEncoder` in data processors..
 
         Returns
         -------
@@ -1043,11 +1101,8 @@ class DataModule:
 
         for processor in self.dataprocessors:
             if isinstance(processor, CategoricalOrdinalEncoder):
-                encoder = processor.transformer
-                cat_features = processor.record_cat_features
-                if len(cat_features) == 0:
-                    return None
-                return encoder, cat_features
+                transformer = processor.transformer
+                return transformer if transformer.fitted else None
         else:
             return None
 
@@ -1066,13 +1121,11 @@ class DataModule:
         pd.DataFrame
             The inverse-transformed data.
         """
-        encoder_features = self._get_categorical_ordinal_encoder()
-        if encoder_features is None:
+        encoder = self.get_categorical_ordinal_encoder()
+        if encoder is None:
             return X.copy()
         else:
-            encoder, cat_features = encoder_features
-        X = self._ordinal_encoder_transform(encoder, X, cat_features, transform=False)
-        return X
+            return encoder.inverse_transform(X)
 
     def categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1089,13 +1142,11 @@ class DataModule:
         pd.DataFrame
             The transformed data.
         """
-        encoder_features = self._get_categorical_ordinal_encoder()
-        if encoder_features is None:
+        encoder = self.get_categorical_ordinal_encoder()
+        if encoder is None:
             return X.copy()
         else:
-            encoder, cat_features = encoder_features
-        X = self._ordinal_encoder_transform(encoder, X, cat_features, transform=True)
-        return X
+            return encoder.transform(X)
 
     def label_categories_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1111,11 +1162,7 @@ class DataModule:
         pd.DataFrame
             The transformed data.
         """
-        res = self._ordinal_encoder_transform(
-            self.label_ordinal_encoder, X, self.label_name, transform=True
-        )
-        res[self.label_name] = res[self.label_name].astype(int)
-        return res
+        return self.label_ordinal_encoder.transform(X)
 
     def label_categories_inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1131,61 +1178,7 @@ class DataModule:
         pd.DataFrame
             The transformed data.
         """
-        return self._ordinal_encoder_transform(
-            self.label_ordinal_encoder, X, self.label_name, transform=False
-        )
-
-    @staticmethod
-    def _ordinal_encoder_transform(
-        encoder: OrdinalEncoder,
-        X: pd.DataFrame,
-        cat_features: List[str],
-        transform: bool,
-    ) -> pd.DataFrame:
-        """
-        For :meth:`categories_inverse_transform`, :meth:`categories_transform`,
-        :meth:`label_categories_transform`, and :meth:`label_categories_inverse_transform`, make the input legal
-        including getting ready for missing columns, return the input if it is already transformed, etc.
-
-        Parameters
-        ----------
-        encoder
-            A categorical ordinal encoder that has methods ``fit_transform`` and ``transform``.
-        X
-            The data to be transformed.
-        cat_features
-            Encoded categorical features (or targets).
-        transform
-            True if doing transform and False if doing inverse transform.
-
-        Returns
-        -------
-        pd.DataFrame
-            The transformed data.
-        """
-        X = X.copy()
-        missing_cols = np.setdiff1d(cat_features, list(X.columns)).astype(str)
-        if len(missing_cols) > 0:
-            X[missing_cols] = -1
-        X.columns = X.columns.astype(str)
-        try:
-            if transform:
-                X[cat_features] = encoder.transform(X[cat_features].copy()).astype(int)
-            else:
-                X[cat_features] = encoder.inverse_transform(X[cat_features].copy())
-        except:
-            try:
-                if transform:
-                    encoder.inverse_transform(X[cat_features].copy())
-                else:
-                    encoder.transform(X[cat_features].copy())
-            except:
-                raise Exception(
-                    f"Categorical features are not compatible with the fitted OrdinalEncoder."
-                )
-        for col in missing_cols:
-            del X[col]
-        return X
+        return self.label_ordinal_encoder.inverse_transform(X)
 
     def save_data(self, path: str):
         """
@@ -1214,7 +1207,7 @@ class DataModule:
 
     def derive(
         self, df: pd.DataFrame
-    ) -> Tuple[pd.DataFrame, List[str], Dict[str, np.ndarray]]:
+    ) -> Tuple[pd.DataFrame, List[str], List[str], Dict[str, np.ndarray]]:
         """
         Derive both stacked and unstacked features using the input dataframe.
 
@@ -1229,6 +1222,8 @@ class DataModule:
             The tabular dataset with derived stacked features.
         List
             Continuous feature names with derived stacked features.
+        List
+            Categorical feature names with derived stacked features.
         dict
             The derived unstacked data.
 
@@ -1236,12 +1231,14 @@ class DataModule:
         --------
         :meth:`.derive_stacked`, :meth:`.derive_unstacked`.
         """
-        df_tmp, cont_feature_names = self.derive_stacked(df)
+        df_tmp, cont_feature_names, cat_feature_names = self.derive_stacked(df)
         derived_data = self.derive_unstacked(df_tmp)
 
-        return df_tmp, cont_feature_names, derived_data
+        return df_tmp, cont_feature_names, cat_feature_names, derived_data
 
-    def derive_stacked(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+    def derive_stacked(
+        self, df: pd.DataFrame
+    ) -> Tuple[pd.DataFrame, List[str], List[str]]:
         """
         Derive stacked features using the input dataframe. Calculated using data derivers whose argument "stacked" is
         set to True.
@@ -1257,20 +1254,33 @@ class DataModule:
             The tabular dataset with derived stacked features.
         List
             Continuous feature names with derived stacked features.
+        List
+            Categorical feature names with derived stacked features.
         """
         df_tmp = df.copy()
         cont_feature_names = cp(self.cont_feature_names)
+        cat_feature_names = cp(self.cat_feature_names)
         for deriver in self.dataderivers:
             if deriver.kwargs["stacked"]:
-                value, name, col_names = deriver.derive(df_tmp, datamodule=self)
+                value, col_names = deriver.derive(df_tmp, datamodule=self)
                 if not deriver.kwargs["intermediate"]:
                     for col_name in col_names:
-                        if col_name not in cont_feature_names:
+                        if (
+                            deriver.kwargs["is_continuous"]
+                            and col_name not in cont_feature_names
+                        ):
                             cont_feature_names.append(col_name)
                             if self.training:
                                 self.cont_feature_names.append(col_name)
+                        if (
+                            not deriver.kwargs["is_continuous"]
+                            and col_name not in cat_feature_names
+                        ):
+                            cat_feature_names.append(col_name)
+                            if self.training:
+                                self.cat_feature_names.append(col_name)
                 df_tmp[col_names] = value
-        return df_tmp, cont_feature_names
+        return df_tmp, cont_feature_names, cat_feature_names
 
     def derive_unstacked(
         self, df: pd.DataFrame, categorical_only=False
@@ -1297,7 +1307,8 @@ class DataModule:
         if not categorical_only:
             for deriver in self.dataderivers:
                 if not deriver.kwargs["stacked"]:
-                    value, name, col_names = deriver.derive(df, datamodule=self)
+                    value, col_names = deriver.derive(df, datamodule=self)
+                    name = deriver.kwargs["derived_name"]
                     derived_data[name] = value
                     self.unstacked_col_names[name] = col_names
         if len(self.cat_feature_names) > 0:
@@ -1335,6 +1346,8 @@ class DataModule:
         """
         self.df.reset_index(drop=True, inplace=True)
         self.scaled_df = self.df.copy()
+        for feature in self.cat_feature_names:
+            self.cat_feature_mapping[feature] = []
         original_length = len(self.df)
 
         with HiddenPrints(disable_std=not verbose):
@@ -1551,6 +1564,10 @@ class DataModule:
             raise Exception(f"Both skip_scaler and scaler_only are True.")
         data = input_data.copy()
         for processor in self.dataprocessors:
+            # First reset the status of the processor.
+            # If scaler_only == True, we may want to fit the scaler separately and do not change the status of others.
+            if not scaler_only and not warm_start:
+                processor.fitted = False
             if skip_scaler and isinstance(processor, AbstractScaler):
                 continue
             if skip_selector and isinstance(processor, AbstractFeatureSelector):
@@ -1558,7 +1575,8 @@ class DataModule:
             if scaler_only and not isinstance(processor, AbstractScaler):
                 continue
             if warm_start:
-                data = processor.transform(data, self)
+                if processor.fitted:
+                    data = processor.transform(data, self)
             else:
                 data = processor.fit_transform(data, self)
         return data
@@ -1566,8 +1584,7 @@ class DataModule:
     def data_transform(
         self,
         input_data: pd.DataFrame,
-        skip_scaler: bool = False,
-        scaler_only: bool = False,
+        **kwargs,
     ):
         """
         Transform the input tabular dataset using fitted data processors.
@@ -1576,22 +1593,15 @@ class DataModule:
         ----------
         input_data
             The tabular dataset.
-        skip_scaler
-            True to skip scaling (the last processor).
-        scaler_only
-            True to only perform scaling (the last processor).
+        **kwargs
+            Other arguments for :meth:`_data_preprocess`, except for ``warm_start``.
 
         Returns
         -------
         pd.DataFrame
             The transformed tabular dataset.
         """
-        return self._data_preprocess(
-            input_data.copy(),
-            warm_start=True,
-            skip_scaler=skip_scaler,
-            scaler_only=scaler_only,
-        )
+        return self._data_preprocess(input_data.copy(), warm_start=True, **kwargs)
 
     def update_dataset(self):
         """
@@ -1621,12 +1631,15 @@ class DataModule:
             A tensor of continuous features, a list of tensors of derived_unstacked data, and a tensor of the target.
         """
         X = torch.tensor(
-            scaled_df[self.cont_feature_names].values.astype(np.float64),
+            scaled_df[self.cont_feature_names].values.astype(np.float32),
             dtype=torch.float32,
         )
-        D = [torch.tensor(value.astype(np.float64)) for value in derived_data.values()]
+        D = [
+            torch.tensor(value.astype(np.float32), dtype=torch.float32)
+            for value in derived_data.values()
+        ]
         y = torch.tensor(
-            scaled_df[self.label_name].values.astype(np.float64),
+            scaled_df[self.label_name].values.astype(np.float32),
             dtype=torch.float32,
         )
         return X, D, y

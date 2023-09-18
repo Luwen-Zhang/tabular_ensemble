@@ -279,12 +279,14 @@ class Trainer:
             elif is_notebook() or input_config:
                 parse_res = {"base": config}
             else:  # not notebook and config is None
-                parse_res = UserConfig.from_parser()
+                parse_res = UserConfig.parse()
             self.configfile = parse_res["base"]
             config = UserConfig(path=self.configfile)
             # Then, several args can be modified using other arguments like --lr, --weight_decay
             # only when a config file is not given so that configs depend on input arguments.
             if not is_notebook() and not input_config:
+                # If the argument is not given in the command, the item will be None and will not be merged into
+                # `config` using the `merge` method.
                 config.merge(parse_res)
             if manual_config is not None:
                 config.merge(manual_config)
@@ -1492,7 +1494,7 @@ class Trainer:
         )
 
         bar_kwargs_ = update_defaults_by_kwargs(
-            dict(linewidth=1, edgecolor="k", orient="h"), bar_kwargs
+            dict(linewidth=1, edgecolor="k", orient="h", saturation=1), bar_kwargs
         )
         figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(7, 4)), figure_kwargs)
 
@@ -2141,7 +2143,7 @@ class Trainer:
             instance.
         """
         pairplot_kwargs_ = update_defaults_by_kwargs(
-            dict(corner=True, diag_kind="kde", palette=global_palette), pairplot_kwargs
+            dict(corner=True, diag_kind="kde"), pairplot_kwargs
         )
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
@@ -2208,6 +2210,7 @@ class Trainer:
                 fliersize=4,
                 flierprops={"marker": "o"},
                 color=clr[0],
+                saturation=1,
             ),
             boxplot_kwargs,
         )
@@ -2426,7 +2429,7 @@ class Trainer:
             disable=given_ax,
             ax_or_fig=ax,
             xlabel=feature,
-            ylabel="Density",
+            ylabel="Density" if hist_kwargs_["density"] else "Frequency",
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -2763,10 +2766,11 @@ class Trainer:
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         barplot_kwargs_ = update_defaults_by_kwargs(
             dict(
-                hue_order=self.args["feature_types"],
+                hue_order=self.datamodule.unique_feature_types_with_derived(),
                 orient="h",
                 linewidth=1,
                 edgecolor="k",
+                saturation=1,
             ),
             barplot_kwargs,
         )
@@ -2784,7 +2788,9 @@ class Trainer:
             {
                 "feature": presence_ratio.index,
                 "ratio": presence_ratio.values,
-                "types": self.datamodule.get_feature_types(list(presence_ratio.index)),
+                "types": self.datamodule.get_feature_types(
+                    list(presence_ratio.index), allow_unknown=True
+                ),
             }
         )
         presence.sort_values(
@@ -3004,7 +3010,7 @@ class Trainer:
             A list of colors for each feature. It can be used as the argument ``palette`` for seaborn functions.
         """
         type_idx = self.datamodule.get_feature_types_idx(
-            features=features, unknown_as_derived=True
+            features=features, allow_unknown=True
         )
         palette = [clr[i] for i in type_idx]
         return palette
@@ -3029,7 +3035,9 @@ class Trainer:
         matplotlib.legend.Legend
         """
         clr_map = dict()
-        for idx, feature_type in enumerate(self.args["feature_types"]):
+        for idx, feature_type in enumerate(
+            self.datamodule.unique_feature_types_with_derived()
+        ):
             clr_map[feature_type] = clr[idx]
         legend_kwargs_ = update_defaults_by_kwargs(
             dict(
@@ -3413,4 +3421,6 @@ def load_trainer(path: Union[os.PathLike, str]) -> Trainer:
     trainer.set_path(root, verbose=False)
     for modelbase in trainer.modelbases:
         modelbase.set_path(os.path.join(root, modelbase.program))
+        modelbase.trainer = trainer
+    trainer.datamodule.args = trainer.args
     return trainer

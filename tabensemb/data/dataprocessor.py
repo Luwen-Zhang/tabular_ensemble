@@ -12,9 +12,8 @@ import inspect
 from sklearn.model_selection import KFold
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import StandardScaler as skStandardScaler
-from sklearn.preprocessing import OrdinalEncoder
 from typing import Type
-from .utils import get_corr_sets
+from .utils import get_corr_sets, OrdinalEncoder
 
 
 class SampleDataAugmentor(AbstractAugmenter):
@@ -87,7 +86,9 @@ class IQRRemover(AbstractProcessor):
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         print(f"Removing outliers by IQR. Original size: {len(data)}, ", end="")
-        for feature in list(datamodule.args["feature_names_type"].keys()):
+        for feature in datamodule.extract_original_cont_feature_names(
+            datamodule.cont_feature_names
+        ):
             if pd.isna(data[feature]).all():
                 raise Exception(f"All values of {feature} are NaN.")
             Q1 = np.percentile(data[feature].dropna(axis=0), 25, method="midpoint")
@@ -114,7 +115,9 @@ class StdRemover(AbstractProcessor):
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
         print(f"Removing outliers by std. Original size: {len(data)}, ", end="")
-        for feature in list(datamodule.args["feature_names_type"].keys()):
+        for feature in datamodule.extract_original_cont_feature_names(
+            datamodule.cont_feature_names
+        ):
             if pd.isna(data[feature]).all():
                 raise Exception(f"All values of {feature} are NaN.")
             m = np.mean(data[feature].dropna(axis=0))
@@ -339,8 +342,8 @@ class StandardScaler(AbstractScaler):
 
 class CategoricalOrdinalEncoder(AbstractTransformer):
     """
-    A categorical feature encoder that transforms string values to unique integer values, implemented using
-    OrdinalEncoder from sklearn.
+    A categorical feature encoder that transforms string values to unique integer values.
+    See :class:`~tabensemb.data.utils.OrdinalEncoder` for details.
     """
 
     def __init__(self, **kwargs):
@@ -348,37 +351,18 @@ class CategoricalOrdinalEncoder(AbstractTransformer):
         self.record_feature_mapping = None
 
     def _fit_transform(self, data: pd.DataFrame, datamodule: DataModule):
-        oe = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan)
-        data[datamodule.cat_feature_names] = oe.fit_transform(
-            data[datamodule.cat_feature_names]
-        ).astype(int)
-        for feature, categories in zip(datamodule.cat_feature_names, oe.categories_):
-            datamodule.cat_feature_mapping[feature] = categories
+        oe = OrdinalEncoder()
+        data = oe.fit(data[datamodule.cat_feature_names]).transform(data)
+        datamodule.cat_feature_mapping = {
+            key: np.array(val) for key, val in oe.mapping.items()
+        }
         self.transformer = oe
         self.record_feature_mapping = cp(datamodule.cat_feature_mapping)
         return data
 
     def _transform(self, data: pd.DataFrame, datamodule: DataModule):
         datamodule.cat_feature_mapping = cp(self.record_feature_mapping)
-        try:
-            res = self.transformer.transform(data[datamodule.cat_feature_names])
-            for idx, cat_feature in enumerate(datamodule.cat_feature_names):
-                res[:, idx] = np.nan_to_num(
-                    res[:, idx],
-                    nan=list(self.record_feature_mapping[cat_feature]).index("UNK")
-                    if "UNK" in self.record_feature_mapping.keys()
-                    else len(self.record_feature_mapping),
-                )
-            data[datamodule.cat_feature_names] = res.astype(int)
-        except Exception as e:
-            try:
-                # Categorical features are already transformed.
-                self.transformer.inverse_transform(data[datamodule.cat_feature_names])
-                return data
-            except:
-                raise Exception(
-                    f"Categorical features are not compatible with the fitted OrdinalEncoder."
-                )
+        data = self.transformer.transform(data)
         return data
 
     def var_slip(self, feature_name, x):

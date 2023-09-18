@@ -4,13 +4,14 @@ from typing import *
 from .datamodule import DataModule
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
+from .utils import fill_cat_nan
 
 
-class AbstractRequireKwargs:
+class AbstractDataStep:
     """
     By inheriting this class, the input kwargs will be used to update default values defined in
-    :meth:`~AbstractRequireKwargs._defaults`. The requirements defined in
-    :meth:`~AbstractRequireKwargs._cls_required_kwargs` and :meth:`~AbstractRequireKwargs._required_kwargs` will be
+    :meth:`~AbstractDataStep._defaults`. The requirements defined in
+    :meth:`~AbstractDataStep._cls_required_kwargs` and :meth:`~AbstractDataStep._required_kwargs` will be
     checked. The final kwargs will be stored as ``self.kwargs``.
     """
 
@@ -21,11 +22,31 @@ class AbstractRequireKwargs:
             self._check_arg(key)
         for key in self._required_kwargs():
             self._check_arg(key)
+        self.record_cont_features = None
+        self.record_cat_features = None
+        self.record_cat_dtypes = {}
+
+    def _record_features(self, input_data: pd.DataFrame, datamodule: DataModule):
+        self.record_cont_features = cp(datamodule.cont_feature_names)
+        self.record_cat_features = cp(datamodule.cat_feature_names)
+        self.record_cat_dtypes = {
+            feature: input_data[feature].values.dtype
+            for feature in datamodule.cat_feature_names
+        }
+
+    def _restore_features(self, input_data: pd.DataFrame, datamodule: DataModule):
+        if not getattr(datamodule, "_force_features", False):
+            datamodule.cont_feature_names = cp(self.record_cont_features)
+            datamodule.cat_feature_names = cp(self.record_cat_features)
+        for feature, dtype in self.record_cat_dtypes.items():
+            if feature in input_data.columns:
+                input_data[feature] = input_data[feature].values.astype(dtype)
+        return input_data
 
     def _defaults(self) -> Dict:
         """
-        Defaults values for arguments defined in :meth:`~AbstractRequireKwargs._cls_required_kwargs` and
-        :meth:`~AbstractRequireKwargs._required_kwargs`
+        Defaults values for arguments defined in :meth:`~AbstractDataStep._cls_required_kwargs` and
+        :meth:`~AbstractDataStep._required_kwargs`
 
         Returns
         -------
@@ -41,7 +62,7 @@ class AbstractRequireKwargs:
         Returns
         -------
         List
-            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            A list of names of arguments that should be defined either in :meth:`~AbstractDataStep._defaults` or
             in the configuration file.
         """
         return []
@@ -53,7 +74,7 @@ class AbstractRequireKwargs:
         Returns
         -------
         List
-            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            A list of names of arguments that should be defined either in :meth:`~AbstractDataStep._defaults` or
             in the configuration file.
         """
         return []
@@ -61,7 +82,7 @@ class AbstractRequireKwargs:
     def _check_arg(self, name: str):
         """
         Check whether the required parameter is specified in the configuration file or in
-        :meth:`~AbstractRequireKwargs._defaults`.
+        :meth:`~AbstractDataStep._defaults`.
 
         Parameters
         ----------
@@ -72,7 +93,7 @@ class AbstractRequireKwargs:
             raise Exception(f"{self.__class__.__name__}: {name} should be specified.")
 
 
-class AbstractDeriver(AbstractRequireKwargs):
+class AbstractDeriver(AbstractDataStep):
     def __init__(self, **kwargs):
         """
         The base class for all data-derivers, which will derive new features based on the input DataFrame and return
@@ -88,24 +109,26 @@ class AbstractDeriver(AbstractRequireKwargs):
         for arg_name in self._required_cols():
             self._check_arg(arg_name)
         self.last_derived_col_names = []
+        self.derived_dtype = None
 
     def _cls_required_kwargs(self):
         """
-        kwargs required by the class. "stacked", "intermediate", and "derived_name" are required for all data derivers.
+        kwargs required by the class. "stacked", "intermediate", "derived_name", and "is_continuous" are required for
+        all data derivers.
 
         Returns
         -------
         List
-            A list of names of arguments that should be defined either in :meth:`~AbstractRequireKwargs._defaults` or
+            A list of names of arguments that should be defined either in :meth:`~AbstractDataStep._defaults` or
             in the configuration file.
         """
-        return ["stacked", "intermediate", "derived_name"]
+        return ["stacked", "intermediate", "derived_name", "is_continuous"]
 
     def derive(
         self,
         df: pd.DataFrame,
         datamodule: DataModule,
-    ) -> Tuple[np.ndarray, str, List]:
+    ) -> Tuple[np.ndarray, List]:
         """
         The method automatically checks input column names and the DataFrame, calls the :meth:`._derive` method, and
         checks the output of the derived data.
@@ -122,8 +145,6 @@ class AbstractDeriver(AbstractRequireKwargs):
         -------
         np.ndarray
             A ndarray of derived data
-        str
-            The name of the derived feature
         List
             Names of each column in the derived data.
         """
@@ -131,13 +152,17 @@ class AbstractDeriver(AbstractRequireKwargs):
             self._check_exist(df, arg_name)
         values = self._derive(df, datamodule)
         self._check_values(values)
+        if self.derived_dtype is None:
+            self.derived_dtype = values.dtype
+        else:
+            values = values.astype(self.derived_dtype)
         names = (
             self._generate_col_names(values.shape[-1])
             if "col_names" not in self.kwargs
             else self.kwargs["col_names"]
         )
         self.last_derived_col_names = names
-        return values, self.kwargs["derived_name"], names
+        return values, names
 
     def _derive(
         self,
@@ -242,14 +267,16 @@ class AbstractDeriver(AbstractRequireKwargs):
             )
 
 
-class AbstractImputer(AbstractRequireKwargs):
+class AbstractImputer(AbstractDataStep):
     """
-    The base class for all data-imputers. Data-imputers replace NaNs in the input tabular dataset.
+    The base class for all data-imputers. Data-imputers replace NaNs in the input tabular dataset. For categorical
+    features that are all numerical (integers or ``np.nan``), the column will be transformed to the dtype "int" after
+    filling NaNs with ``tabensemb.data.utils.number_unknown_value``. Other categorical features will be transformed to
+    the dtype "str" after filling NaNs with ``tabensemb.data.utils.object_unknown_value``.
     """
 
     def __init__(self, **kwargs):
         super(AbstractImputer, self).__init__(**kwargs)
-        self.record_cont_features = None
         self.record_imputed_features = None
 
     def fit_transform(
@@ -273,9 +300,8 @@ class AbstractImputer(AbstractRequireKwargs):
             A transformed tabular dataset.
         """
         data = input_data.copy()
-        self.record_cont_features = cp(datamodule.cont_feature_names)
-        self.record_cat_features = cp(datamodule.cat_feature_names)
-        data[self.record_cat_features] = data[self.record_cat_features].fillna("UNK")
+        self._record_features(input_data=input_data, datamodule=datamodule)
+        data = fill_cat_nan(data, self.record_cat_dtypes)
         return (
             self._fit_transform(data, datamodule)
             if len(self.record_cont_features) > 0
@@ -302,12 +328,8 @@ class AbstractImputer(AbstractRequireKwargs):
             A transformed tabular dataset.
         """
         data = input_data.copy()
-        if not getattr(datamodule, "_force_features", False):
-            datamodule.cont_feature_names = cp(self.record_cont_features)
-            datamodule.cat_feature_names = cp(self.record_cat_features)
-        data[datamodule.cat_feature_names] = data[datamodule.cat_feature_names].fillna(
-            "UNK"
-        )
+        data = self._restore_features(input_data=data, datamodule=datamodule)
+        data = fill_cat_nan(data, self.record_cat_dtypes)
         return (
             self._transform(data, datamodule)
             if len(self.record_cont_features) > 0
@@ -429,7 +451,7 @@ class AbstractSklearnImputer(AbstractImputer):
         raise NotImplementedError
 
 
-class AbstractProcessor(AbstractRequireKwargs):
+class AbstractProcessor(AbstractDataStep):
     """
     The base class for data-processors that change the content of the tabular dataset. The class is only directly used
     for those who reduce the number of data points.
@@ -444,8 +466,7 @@ class AbstractProcessor(AbstractRequireKwargs):
 
     def __init__(self, **kwargs):
         super(AbstractProcessor, self).__init__(**kwargs)
-        self.record_cont_features = None
-        self.record_cat_features = None
+        self.fitted = False
 
     def fit_transform(
         self, input_data: pd.DataFrame, datamodule: DataModule
@@ -468,9 +489,9 @@ class AbstractProcessor(AbstractRequireKwargs):
             A transformed tabular dataset.
         """
         data = input_data.copy()
+        self._record_features(input_data, datamodule)
         res = self._fit_transform(data, datamodule)
-        self.record_cont_features = cp(datamodule.cont_feature_names)
-        self.record_cat_features = cp(datamodule.cat_feature_names)
+        self.fitted = True
         return res
 
     def transform(
@@ -493,10 +514,8 @@ class AbstractProcessor(AbstractRequireKwargs):
         pd.DataFrame
             A transformed tabular dataset.
         """
-        if not getattr(datamodule, "_force_features", False):
-            datamodule.cont_feature_names = cp(self.record_cont_features)
-            datamodule.cat_feature_names = cp(self.record_cat_features)
         data = input_data.copy()
+        data = self._restore_features(input_data=data, datamodule=datamodule)
         return self._transform(data, datamodule)
 
     def _fit_transform(
