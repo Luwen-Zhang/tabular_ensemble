@@ -271,9 +271,9 @@ class DataModule:
             self.df = pd.read_csv(data_path, **kwargs)
         self.data_path = data_path
 
-        cont_feature_names = self.args["continuous_feature_names"]
+        cont_feature_names = self.args["continuous_feature_names"].copy()
         # The order of categorical features affect all results.
-        cat_feature_names = list(sorted(self.args["categorical_feature_names"]))
+        cat_feature_names = list(sorted(self.args["categorical_feature_names"])).copy()
         label_name = self.args["label_name"]
 
         self.set_data(self.df, cont_feature_names, cat_feature_names, label_name)
@@ -802,19 +802,33 @@ class DataModule:
         --------
         :meth:`get_feature_types_idx`
         """
+        feature_types = self.feature_types_with_derived()
         invalid_features = [
-            feature
-            for feature in features
-            if feature not in self.args["feature_types"].keys()
+            feature for feature in features if feature not in feature_types.keys()
         ]
         if len(invalid_features) > 0 and not allow_unknown:
             raise Exception(f"Unknown features: {invalid_features}")
         return [
-            self.args["feature_types"][i]
-            if i in self.args["feature_types"].keys()
-            else "Unknown"
+            feature_types[i] if i in feature_types.keys() else "Unknown"
             for i in features
         ]
+
+    def feature_types_with_derived(self) -> Dict:
+        """
+        A dictionary stating the category of each feature, including derived stacked features.
+        """
+        derived_stacked_features = self.extract_derived_stacked_feature_names(
+            self.all_feature_names
+        )
+        d = cp(self.args["feature_types"])
+        d.update({feature: "Derived" for feature in derived_stacked_features})
+        return d
+
+    def unique_feature_types_with_derived(self) -> List[str]:
+        """
+        Unique values in :meth:`feature_types_with_derived`.
+        """
+        return list(sorted(set(self.feature_types_with_derived().values())))
 
     def get_feature_types_idx(
         self, features: List[str], allow_unknown: bool = False
@@ -842,9 +856,9 @@ class DataModule:
         """
         types = self.get_feature_types(features, allow_unknown=allow_unknown)
         return [
-            self.args["unique_feature_types"].index(x)
+            self.unique_feature_types_with_derived().index(x)
             if x != "Unknown"
-            else len(self.args["unique_feature_types"])
+            else len(self.unique_feature_types_with_derived())
             for x in types
         ]
 
@@ -871,13 +885,13 @@ class DataModule:
         The key "Unknown" returned by :meth:`get_feature_types` is not a real key defined in ``unique_feature_types``.
         It is a reserved type representing unknown features.
         """
-        if typ not in self.args["unique_feature_types"]:
+        if typ not in self.unique_feature_types_with_derived():
             raise Exception(
                 f"Feature type {typ} is invalid (among {self.args['unique_feature_types']})"
             )
         return [
             feature
-            for feature, t in self.args["feature_types"].items()
+            for feature, t in self.feature_types_with_derived().items()
             if t == typ and feature in self.all_feature_names
         ]
 

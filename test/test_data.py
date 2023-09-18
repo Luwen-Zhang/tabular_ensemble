@@ -305,11 +305,14 @@ def test_get_feature_types():
         allow_unknown=True,
     )
     assert (
+        "derived_cont" not in datamodule.cont_feature_names
+    )  # Removed by CorrFeatureSelector
+    assert (
         "Continuous" == types[0]
         and "Categorical" == types[1]
         and "Unknown" == types[2]
         and "Unknown" == types[3]
-        and "Unknown" == types[4]
+        and "Derived" == types[4]
     )
 
     idxs = datamodule.get_feature_types_idx(
@@ -323,11 +326,12 @@ def test_get_feature_types():
         allow_unknown=True,
     )
     assert (
-        idxs[0] == datamodule.args["unique_feature_types"].index("Continuous")
-        and idxs[1] == datamodule.args["unique_feature_types"].index("Categorical")
-        and idxs[2] == 2
-        and idxs[3] == 2
-        and idxs[4] == 2
+        idxs[0] == datamodule.unique_feature_types_with_derived().index("Continuous")
+        and idxs[1]
+        == datamodule.unique_feature_types_with_derived().index("Categorical")
+        and idxs[2] == 3
+        and idxs[3] == 3
+        and idxs[4] == datamodule.unique_feature_types_with_derived().index("Derived")
     )
 
     with pytest.raises(Exception) as err:

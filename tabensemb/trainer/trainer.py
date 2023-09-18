@@ -2766,7 +2766,7 @@ class Trainer:
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         barplot_kwargs_ = update_defaults_by_kwargs(
             dict(
-                hue_order=self.args["unique_feature_types"],
+                hue_order=self.datamodule.unique_feature_types_with_derived(),
                 orient="h",
                 linewidth=1,
                 edgecolor="k",
@@ -3035,7 +3035,9 @@ class Trainer:
         matplotlib.legend.Legend
         """
         clr_map = dict()
-        for idx, feature_type in enumerate(self.args["unique_feature_types"]):
+        for idx, feature_type in enumerate(
+            self.datamodule.unique_feature_types_with_derived()
+        ):
             clr_map[feature_type] = clr[idx]
         legend_kwargs_ = update_defaults_by_kwargs(
             dict(
