@@ -39,7 +39,8 @@ class AbstractDataStep:
             datamodule.cont_feature_names = cp(self.record_cont_features)
             datamodule.cat_feature_names = cp(self.record_cat_features)
         for feature, dtype in self.record_cat_dtypes.items():
-            input_data[feature] = input_data[feature].values.astype(dtype)
+            if feature in input_data.columns:
+                input_data[feature] = input_data[feature].values.astype(dtype)
         return input_data
 
     def _defaults(self) -> Dict:
