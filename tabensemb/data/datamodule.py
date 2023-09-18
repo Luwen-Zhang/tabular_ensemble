@@ -359,8 +359,6 @@ class DataModule:
         self.cont_feature_names = cont_feature_names
         self.cat_feature_names = cat_feature_names
         self.cat_feature_mapping = {}
-        for feature in self.cat_feature_names:
-            self.cat_feature_mapping[feature] = []
         self.label_name = label_name
         self.df = df.copy()
         if pd.isna(df[self.label_name]).any().any():
@@ -1335,6 +1333,8 @@ class DataModule:
         """
         self.df.reset_index(drop=True, inplace=True)
         self.scaled_df = self.df.copy()
+        for feature in self.cat_feature_names:
+            self.cat_feature_mapping[feature] = []
         original_length = len(self.df)
 
         with HiddenPrints(disable_std=not verbose):
