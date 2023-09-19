@@ -2436,11 +2436,13 @@ class Trainer:
         ax=None,
         clr: Iterable = None,
         imputed=False,
+        kde=False,
         x_values=None,
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
+        kde_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -2457,6 +2459,8 @@ class Trainer:
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
+        kde
+            Plot the kernel density estimation along with each histogram of continuous features.
         x_values
             Unique values of the `feature`. If None, it will be inferred from the dataset.
         figure_kwargs
@@ -2465,6 +2469,8 @@ class Trainer:
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
+        kde_kwargs
+            Arguments for :meth:`plot_kde` when ``kde`` is True.
         select_by_value_kwargs
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         savefig_kwargs
@@ -2480,6 +2486,10 @@ class Trainer:
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
+        )
+        kde_kwargs_ = update_defaults_by_kwargs(
+            dict(imputed=imputed, select_by_value_kwargs=select_by_value_kwargs_),
+            kde_kwargs,
         )
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
@@ -2509,6 +2519,12 @@ class Trainer:
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
                 ax.set_xlim([np.min(x_values), np.max(x_values)])
+                if kde:
+                    self.plot_kde(
+                        feature=feature,
+                        ax=ax,
+                        **kde_kwargs_,
+                    )
             else:
                 counts = np.array(
                     [len(np.where(hist_data[feature].values == x)[0]) for x in x_values]
@@ -2829,7 +2845,7 @@ class Trainer:
             disable=given_ax,
             ax_or_fig=ax,
             xlabel=feature,
-            ylabel="Probability density",
+            ylabel="Density",
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
