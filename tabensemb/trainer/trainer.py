@@ -2127,6 +2127,8 @@ class Trainer:
         self,
         fontsize: Any = 10,
         imputed=False,
+        features: List[str] = None,
+        include_label: bool = True,
         ax=None,
         figure_kwargs: Dict = None,
         imshow_kwargs: Dict = None,
@@ -2144,6 +2146,10 @@ class Trainer:
         imputed
             Whether the imputed dataset should be considered. If False, some NaN coefficients may exist for features
             with missing values.
+        features
+            A subset of continuous features to calculate correlations on.
+        include_label
+            If True, the target is also considered.
         ax
             ``matplotlib.axes.Axes``
         figure_kwargs
@@ -2166,13 +2172,17 @@ class Trainer:
         )
         imshow_kwargs_ = update_defaults_by_kwargs(dict(cmap="bwr"), imshow_kwargs)
 
-        cont_feature_names = self.cont_feature_names + self.label_name
+        cont_feature_names = (
+            self.cont_feature_names if features is None else features
+        ) + (self.label_name if include_label else [])
         # sns.reset_defaults()
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
         plt.box(on=True)
         corr = self.datamodule.cal_corr(
-            imputed=imputed, select_by_value_kwargs=select_by_value_kwargs
-        ).values
+            imputed=imputed,
+            features_only=False,
+            select_by_value_kwargs=select_by_value_kwargs,
+        )[cont_feature_names].values
         im = ax.imshow(corr, **imshow_kwargs_)
         ax.set_xticks(np.arange(len(cont_feature_names)))
         ax.set_yticks(np.arange(len(cont_feature_names)))
@@ -2210,6 +2220,9 @@ class Trainer:
 
     def plot_pairplot(
         self,
+        imputed: bool = False,
+        features: List[str] = None,
+        include_label=True,
         pairplot_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
@@ -2220,6 +2233,12 @@ class Trainer:
 
         Parameters
         ----------
+        imputed
+            Whether the imputed dataset should be considered.
+        features
+            A subset of continuous features to plot pairplots for.
+        include_label
+            If True, the target is also considered.
         pairplot_kwargs
             Arguments for ``seaborn.pairplot``.
         select_by_value_kwargs
@@ -2237,9 +2256,12 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        df_all = pd.concat(
-            [self.unscaled_feature_data, self.unscaled_label_data], axis=1
-        )
+        cont_feature_names = (
+            self.cont_feature_names if features is None else features
+        ) + (self.label_name if include_label else [])
+        df_all = (self.df if imputed else self.datamodule.get_not_imputed_df())[
+            cont_feature_names
+        ]
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         grid = sns.pairplot(df_all.loc[indices, :], **pairplot_kwargs_)
 
