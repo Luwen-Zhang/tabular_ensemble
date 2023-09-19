@@ -1610,7 +1610,9 @@ class Trainer:
         # plt.grid(axis='x')
         plt.grid(axis="x", linewidth=0.2)
         # plt.barh(x,y, color= [clr_map[name] for name in x])
-        sns.barplot(x=y, y=x, palette=palette, **bar_kwargs_)
+        sns.barplot(x=y, y=x, palette=palette, ax=ax, **bar_kwargs_)
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
         # ax.set_xlim([0, 1])
 
         legend = self._plot_action_generate_feature_types_legends(
@@ -2348,6 +2350,8 @@ class Trainer:
             ax=ax,
             **boxplot_kwargs_,
         )
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
 
         boxes = []
 
@@ -2903,6 +2907,8 @@ class Trainer:
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         sns.kdeplot(data=df, x=feature, ax=ax, **kdeplot_kwargs_)
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"kde_{feature}.pdf"),
@@ -3005,6 +3011,8 @@ class Trainer:
             palette=palette,
             **barplot_kwargs_,
         )
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
         getattr(ax, "set_xlim" if is_horizontal else "set_ylim")([0, 1])
 
         legend = self._plot_action_generate_feature_types_legends(
