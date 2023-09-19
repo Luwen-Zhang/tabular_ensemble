@@ -551,8 +551,8 @@ def test_ordinal_encoder():
     assert res_inv_trans.loc[3, "col2"] == tabensemb.data.utils.object_unknown_value
     assert res_inv_trans.loc[4, "col2"] == tabensemb.data.utils.object_unknown_value
 
-    res_inv_trans_same = oe.inverse_transform(df_test[["col1"]])
-    assert len(res_inv_trans_same.columns) == 1
+    res_inv_trans_same = oe.inverse_transform(df_test)
+    assert len(res_inv_trans_same.columns) == 2
     assert res_inv_trans_same.loc[0, "col1"] == 1
     assert res_inv_trans_same.loc[1, "col1"] == 2
     assert np.isnan(res_inv_trans_same.loc[2, "col1"])
@@ -575,6 +575,20 @@ def test_ordinal_encoder():
     with pytest.raises(Exception) as err:
         oe.inverse_transform(df_test_not_int)
     assert "is not integeral" in err.value.args[0]
+
+    df_all_int = pd.DataFrame({"col1": [1, 2, 4, np.nan]})
+    res_all_int = oe.transform(df_all_int)
+    assert (
+        res_all_int.loc[0, "col1"] != 1
+        or res_all_int.loc[1, "col1"] != 2
+        or res_all_int.loc[2, "col1"] != 4
+    )
+    res_inv_all_int = oe.inverse_transform(df_all_int)
+    assert (
+        res_inv_all_int.loc[0, "col1"] != 1
+        or res_inv_all_int.loc[1, "col1"] != 2
+        or res_inv_all_int.loc[2, "col1"] == -1
+    )
 
 
 def test_base_predictor():
