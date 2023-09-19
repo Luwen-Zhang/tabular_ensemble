@@ -2785,6 +2785,66 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def plot_kde_all(
+        self,
+        imputed=False,
+        fontsize=12,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+        **kwargs,
+    ) -> matplotlib.figure.Figure:
+        """
+        Plot the kernel density estimation for each feature in the tabular data.
+
+        Parameters
+        ----------
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
+        **kwargs
+            Arguments for :meth:`plot_kde`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure if ``save_show_close`` is False.
+        """
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"kdes{'_imputed' if imputed else ''}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
+            ls=self.cont_feature_names + self.label_name,
+            ls_kwarg_name="feature",
+            meth_name="plot_kde",
+            meth_fix_kwargs=dict(imputed=imputed, **kwargs),
+            fontsize=fontsize,
+            with_title=True,
+            xlabel="Value of features",
+            ylabel="Density",
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs_,
+        )
+
     def plot_kde(
         self,
         feature: str,
