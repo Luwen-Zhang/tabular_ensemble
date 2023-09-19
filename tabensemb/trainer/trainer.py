@@ -1100,10 +1100,11 @@ class Trainer:
 
     def _plot_action_subplots(
         self,
-        ls: List[str],
-        ls_kwarg_name: str,
         meth_name: str,
+        ls: List[str],
+        ls_kwarg_name: Union[str, None],
         with_title: bool = False,
+        titles: List[str] = None,
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
@@ -1119,11 +1120,15 @@ class Trainer:
         ls
             The list to be iterated.
         ls_kwarg_name
-            The argument name of the components in ``ls`` when the component is passed to ``meth_name``.
+            The argument name of the components in ``ls`` when the component is passed to ``meth_name`` one by one. If
+            is None, the components in ``ls`` should be dictionaries and will be unpacked and passed to the method
+            ``meth_name``.
         meth_name
             The method to plot on a subplot. It has an argument named ``ax`` which indicates the subplot.
         with_title
-            Whether each subplot has a title, which is the components in ``ls``.
+            Whether each subplot has a title, which is the components in ``ls`` if ``titles`` is None.
+        titles
+            The titles of each subplot if ``with_title`` is True.
         fontsize
             ``plt.rcParams["font.size"]``
         xlabel
@@ -1154,8 +1159,14 @@ class Trainer:
         for idx, name in enumerate(ls):
             ax = plt.subplot(height, width, idx + 1)
             if with_title:
-                ax.set_title(name, {"fontsize": fontsize})
-            getattr(self, meth_name)(ax=ax, **{ls_kwarg_name: name}, **meth_fix_kwargs)
+                ax.set_title(
+                    name if titles is None else titles[idx], {"fontsize": fontsize}
+                )
+            getattr(self, meth_name)(
+                ax=ax,
+                **({ls_kwarg_name: name} if ls_kwarg_name is not None else name),
+                **meth_fix_kwargs,
+            )
 
         ax = fig.add_subplot(111, frameon=False)
         plt.tick_params(
@@ -1170,6 +1181,106 @@ class Trainer:
         ax.set_ylabel(ylabel)
 
         return fig
+
+    def _plot_action_get_df(
+        self, imputed: bool, scaled: bool, cat_transformed: bool
+    ) -> pd.DataFrame:
+        if scaled:
+            df = (
+                self.datamodule.scaled_df
+                if imputed
+                else self.datamodule.data_transform(
+                    self.datamodule.categories_transform(
+                        self.datamodule.get_not_imputed_df()
+                    ),
+                    scaler_only=True,
+                )
+            )
+        else:
+            df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = (
+            self.datamodule.categories_transform(df)
+            if cat_transformed
+            else self.datamodule.categories_inverse_transform(df)
+        )
+        return df
+
+    def plot_subplots(
+        self,
+        ls: List[str],
+        ls_kwarg_name: str,
+        meth_name: str,
+        with_title: bool = False,
+        titles: List[str] = None,
+        fontsize: float = 12,
+        xlabel: str = None,
+        ylabel: str = None,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        meth_fix_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ):
+        """
+        Iterate over a list to plot subplots.
+
+        Parameters
+        ----------
+        ls
+            The list to be iterated.
+        ls_kwarg_name
+            The argument name of the components in ``ls`` when the component is passed to ``meth_name``.
+        meth_name
+            The method to plot on a subplot. It has an argument named ``ax`` which indicates the subplot.
+        with_title
+            Whether each subplot has a title, which is the components in ``ls`` if ``titles`` is None.
+        titles
+            The titles of each subplot if ``with_title`` is True.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        xlabel
+            The overall xlabel.
+        ylabel
+            The overall ylabel.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        figure_kwargs
+            Arguments for ``plt.figure()``
+        meth_fix_kwargs
+            Fixed arguments of ``meth_name`` (except for ``ax`` and ``ls_kwarg_name``).
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure that has plotted subplots.
+        """
+        fig = self._plot_action_subplots(
+            ls=ls,
+            ls_kwarg_name=ls_kwarg_name,
+            meth_name=meth_name,
+            meth_fix_kwargs=meth_fix_kwargs,
+            fontsize=fontsize,
+            with_title=with_title,
+            titles=titles,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+        )
+
+        return self._plot_action_after_plot(
+            disable=False,
+            ax_or_fig=fig,
+            fig_name=os.path.join(self.project_root, f"subplots.pdf"),
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
 
     def plot_truth_pred_all(
         self,
@@ -1210,7 +1321,12 @@ class Trainer:
         modelbase = self.get_modelbase(program)
         model_names = modelbase.get_model_names()
 
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(fname=os.path.join(self.project_root, program, f"truth_pred.pdf")),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=model_names,
             ls_kwarg_name="model_name",
             meth_name="plot_truth_pred",
@@ -1221,15 +1337,8 @@ class Trainer:
             ylabel="Prediction",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(self.project_root, program, f"truth_pred.pdf"),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_truth_pred(
@@ -1524,7 +1633,9 @@ class Trainer:
         # plt.grid(axis='x')
         plt.grid(axis="x", linewidth=0.2)
         # plt.barh(x,y, color= [clr_map[name] for name in x])
-        sns.barplot(x=y, y=x, palette=palette, **bar_kwargs_)
+        sns.barplot(x=y, y=x, palette=palette, ax=ax, **bar_kwargs_)
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
         # ax.set_xlim([0, 1])
 
         legend = self._plot_action_generate_feature_types_legends(
@@ -1592,7 +1703,16 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_dependence",
@@ -1603,16 +1723,8 @@ class Trainer:
             ylabel="Predicted target",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(
-                self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
-            ),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_partial_dependence(
@@ -1882,7 +1994,16 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"partial_err_{program}_{model_name}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_err",
@@ -1893,16 +2014,8 @@ class Trainer:
             ylabel="Prediction absolute error",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(
-                self.project_root, f"partial_err_{program}_{model_name}.pdf"
-            ),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_partial_err(
@@ -2039,6 +2152,8 @@ class Trainer:
         self,
         fontsize: Any = 10,
         imputed=False,
+        features: List[str] = None,
+        include_label: bool = True,
         ax=None,
         figure_kwargs: Dict = None,
         imshow_kwargs: Dict = None,
@@ -2056,6 +2171,10 @@ class Trainer:
         imputed
             Whether the imputed dataset should be considered. If False, some NaN coefficients may exist for features
             with missing values.
+        features
+            A subset of continuous features to calculate correlations on.
+        include_label
+            If True, the target is also considered.
         ax
             ``matplotlib.axes.Axes``
         figure_kwargs
@@ -2078,13 +2197,21 @@ class Trainer:
         )
         imshow_kwargs_ = update_defaults_by_kwargs(dict(cmap="bwr"), imshow_kwargs)
 
-        cont_feature_names = self.cont_feature_names + self.label_name
+        cont_feature_names = (
+            self.cont_feature_names if features is None else features
+        ) + (self.label_name if include_label else [])
         # sns.reset_defaults()
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
         plt.box(on=True)
-        corr = self.datamodule.cal_corr(
-            imputed=imputed, select_by_value_kwargs=select_by_value_kwargs
-        ).values
+        corr = (
+            self.datamodule.cal_corr(
+                imputed=imputed,
+                features_only=False,
+                select_by_value_kwargs=select_by_value_kwargs,
+            )
+            .loc[cont_feature_names, cont_feature_names]
+            .values
+        )
         im = ax.imshow(corr, **imshow_kwargs_)
         ax.set_xticks(np.arange(len(cont_feature_names)))
         ax.set_yticks(np.arange(len(cont_feature_names)))
@@ -2122,6 +2249,9 @@ class Trainer:
 
     def plot_pairplot(
         self,
+        imputed: bool = False,
+        features: List[str] = None,
+        include_label=True,
         pairplot_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
@@ -2132,6 +2262,12 @@ class Trainer:
 
         Parameters
         ----------
+        imputed
+            Whether the imputed dataset should be considered.
+        features
+            A subset of continuous features to plot pairplots for.
+        include_label
+            If True, the target is also considered.
         pairplot_kwargs
             Arguments for ``seaborn.pairplot``.
         select_by_value_kwargs
@@ -2149,9 +2285,12 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        df_all = pd.concat(
-            [self.unscaled_feature_data, self.unscaled_label_data], axis=1
-        )
+        cont_feature_names = (
+            self.cont_feature_names if features is None else features
+        ) + (self.label_name if include_label else [])
+        df_all = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )[cont_feature_names]
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         grid = sns.pairplot(df_all.loc[indices, :], **pairplot_kwargs_)
 
@@ -2167,6 +2306,7 @@ class Trainer:
     def plot_feature_box(
         self,
         imputed: bool = False,
+        features: List[str] = None,
         ax=None,
         clr: Iterable = None,
         figure_kwargs: Dict = None,
@@ -2221,19 +2361,16 @@ class Trainer:
 
         # sns.reset_defaults()
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
-        data = (
-            self.feature_data
-            if imputed
-            else self.datamodule.data_transform(
-                self.datamodule.get_not_imputed_df()[self.cont_feature_names],
-                scaler_only=True,
-            )
-        )
+        data = self._plot_action_get_df(
+            imputed=imputed, scaled=True, cat_transformed=False
+        )[self.cont_feature_names if features is None else features]
         bp = sns.boxplot(
             data=data.loc[indices, :],
             ax=ax,
             **boxplot_kwargs_,
         )
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
 
         boxes = []
 
@@ -2296,7 +2433,16 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=self.all_feature_names + self.label_name,
             ls_kwarg_name="feature",
             meth_name="plot_hist",
@@ -2307,16 +2453,8 @@ class Trainer:
             ylabel="Density",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(
-                self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
-            ),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_hist(
@@ -2325,11 +2463,13 @@ class Trainer:
         ax=None,
         clr: Iterable = None,
         imputed=False,
+        kde=False,
         x_values=None,
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
+        kde_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -2346,6 +2486,8 @@ class Trainer:
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
+        kde
+            Plot the kernel density estimation along with each histogram of continuous features.
         x_values
             Unique values of the `feature`. If None, it will be inferred from the dataset.
         figure_kwargs
@@ -2354,6 +2496,8 @@ class Trainer:
             Arguments for ``ax.bar`` (used for frequencies of categorical features).
         hist_kwargs
             Arguments for ``ax.hist`` (used for histograms of continuous features).
+        kde_kwargs
+            Arguments for :meth:`plot_kde` when ``kde`` is True.
         select_by_value_kwargs
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         savefig_kwargs
@@ -2370,13 +2514,15 @@ class Trainer:
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
         )
+        kde_kwargs_ = update_defaults_by_kwargs(
+            dict(imputed=imputed, select_by_value_kwargs=select_by_value_kwargs_),
+            kde_kwargs,
+        )
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
-        hist_data = (
-            self.datamodule.categories_transform(self.datamodule.get_not_imputed_df())
-            if not imputed
-            else self.df
+        hist_data = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=True
         )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         hist_data = hist_data.loc[indices, :]
@@ -2398,6 +2544,12 @@ class Trainer:
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
                 ax.set_xlim([np.min(x_values), np.max(x_values)])
+                if kde:
+                    self.plot_kde(
+                        feature=feature,
+                        ax=ax,
+                        **kde_kwargs_,
+                    )
             else:
                 counts = np.array(
                     [len(np.where(hist_data[feature].values == x)[0]) for x in x_values]
@@ -2564,7 +2716,9 @@ class Trainer:
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
-        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
 
         x = df.loc[indices, x_col].values.flatten()
@@ -2636,7 +2790,9 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         df = df.loc[indices, :]
 
@@ -2656,6 +2812,66 @@ class Trainer:
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
+        )
+
+    def plot_kde_all(
+        self,
+        imputed=False,
+        fontsize=12,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+        **kwargs,
+    ) -> matplotlib.figure.Figure:
+        """
+        Plot the kernel density estimation for each feature in the tabular data.
+
+        Parameters
+        ----------
+        imputed
+            Whether the imputed dataset should be considered.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
+        **kwargs
+            Arguments for :meth:`plot_kde`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure if ``save_show_close`` is False.
+        """
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"kdes{'_imputed' if imputed else ''}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
+            ls=self.cont_feature_names + self.label_name,
+            ls_kwarg_name="feature",
+            meth_name="plot_kde",
+            meth_fix_kwargs=dict(imputed=imputed, **kwargs),
+            fontsize=fontsize,
+            with_title=True,
+            xlabel="Value of features",
+            ylabel="Density",
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_kde(
@@ -2705,20 +2921,24 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         df = df.loc[indices, :]
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         sns.kdeplot(data=df, x=feature, ax=ax, **kdeplot_kwargs_)
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"kde_{feature}.pdf"),
             disable=given_ax,
             ax_or_fig=ax,
             xlabel=feature,
-            ylabel="Probability density",
+            ylabel="Density",
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -2814,6 +3034,8 @@ class Trainer:
             palette=palette,
             **barplot_kwargs_,
         )
+        ax.set_ylabel(None)
+        ax.set_xlabel(None)
         getattr(ax, "set_xlim" if is_horizontal else "set_ylim")([0, 1])
 
         legend = self._plot_action_generate_feature_types_legends(

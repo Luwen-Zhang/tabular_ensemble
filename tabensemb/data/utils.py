@@ -117,12 +117,26 @@ def get_unknown_value(dtype: Union[Type[int], Type[str]]) -> Union[int, str]:
         return object_unknown_value
 
 
+class _OrdinalEncodingWrongDirException(Exception):
+    """
+    The exception might be raised by :class:`OrdinalEncoder` under the circumstance that
+    :meth:`OrdinalEncoder.transform` is called for transformed data or :meth:`OrdinalEncoder.inverse_transform` is
+    called for inverse-transformed data. If it is caught, the other method will be called to check whether it is now
+    really the case.
+    """
+
+    pass
+
+
 class OrdinalEncoder:
     """
-    An ordinal encoder for categorical features that better supports ``pd.DataFrame`` even with missing columns. It can
-    also identify a miss-calling of ``transform`` and ``inverse_transform``, and return the input dataframe directly. It
-    supports ``np.ndarray`` when calling ``transform`` or ``inverse_transform``, but does not support fitting on a
-    ``np.ndarray`` because it is designed for dataframes.
+    An ordinal encoder for categorical features that better supports ``pd.DataFrame`` even with missing columns. It
+    supports ``np.ndarray`` when calling :meth:`transform` or :meth:`inverse_transform`, but does not support fitting
+    on a ``np.ndarray`` because it is designed for dataframes.
+    It can also identify a miss-calling of :meth:`transform` and :meth:`inverse_transform` (calling transform on
+    transformed dataframe, and vice versa), and return the input dataframe directly. But the functionality won't work
+    if the dataframe to be transformed/inverse-transformed only contains categorical features whose categories before
+    encoding are all integers.
     """
 
     def __init__(self):
@@ -183,10 +197,24 @@ class OrdinalEncoder:
         else:
             input_type = str(type(df))
             df = pd.DataFrame(data=df, columns=self.features, index=np.arange(len(df)))
-        if transform:
-            trans_df = self._transform(df)
-        else:
-            trans_df = self._inverse_transform(df)
+        try:
+            if transform:
+                trans_df = self._transform(df.copy())
+            else:
+                trans_df = self._inverse_transform(df.copy())
+        except _OrdinalEncodingWrongDirException as e_forw:
+            try:
+                if transform:
+                    _ = self._inverse_transform(df.copy())
+                else:
+                    _ = self._transform(df.copy())
+                trans_df = df
+            except Exception as e_inv:
+                raise Exception(
+                    f"The dataframe can be neither transformed nor inverse transformed by the ordinal encoder.\n"
+                    f"Exception when calling {'transform' if transform else 'inverse_transform'}: {e_forw}\n"
+                    f"Exception when calling {'inverse_transform' if transform else 'transform'}: {e_inv}"
+                )
         return trans_df if input_type == "dataframe" else trans_df.values
 
     def transform(self, df: Union[pd.DataFrame, np.ndarray]):
@@ -204,8 +232,6 @@ class OrdinalEncoder:
         return self._transform_or_inverse_transform(df, transform=False)
 
     def _transform(self, df: pd.DataFrame):
-        input_df = df.copy()
-        transformed = [True for feature in self.features]
         for idx, feature in enumerate(self.features):
             if feature not in df.columns:
                 continue
@@ -226,15 +252,22 @@ class OrdinalEncoder:
                 if val not in unknown_values and val != unknown_val
             ]
 
+            is_int = (
+                lambda x: str(x).replace(".", "").isdigit() and float(x).is_integer()
+            )
             # If the input is transformed, the unique values will be strings of integers because of fill_cat_nan.
-            # Otherwise, they will be at least non-digits.
+            # Otherwise, they will be at least non-digits. One exception is that all categories are integers.
             str_int_in_encoded = lambda x: str(x).isdigit() and int(x) in encoded_values
-            if any([str_int_in_encoded(val) for val in unknown_values]) and all(
-                [str_int_in_encoded(val) for val in known_values]
+            if (
+                any([str_int_in_encoded(val) for val in unknown_values])
+                and all([str_int_in_encoded(val) for val in known_values])
+                and not (
+                    all([is_int(val) for val in unknown_values + known_values])
+                    and self.dtypes[feature] == int
+                )
             ):
                 # The input is already transformed.
-                transformed[idx] = False
-                continue
+                raise _OrdinalEncodingWrongDirException
 
             transformed_values = np.zeros_like(values, dtype=int)
             for val in unique_values:
@@ -242,11 +275,9 @@ class OrdinalEncoder:
                     unknown_val if val in unknown_values else val
                 )
             df[feature] = transformed_values.astype(int)
-        return input_df if not all(transformed) else df
+        return df
 
     def _inverse_transform(self, df: pd.DataFrame):
-        input_df = df.copy()
-        transformed = [True for feature in self.features]
         for idx, feature in enumerate(self.features):
             if feature not in df.columns:
                 continue
@@ -274,14 +305,15 @@ class OrdinalEncoder:
             # In fit or _transform, the values are all translated to a consistent dtype (str or int) because of
             # fill_cat_nan. If the input here is an integer, it can also be a category before transform when other
             # categories are strings.
-            if any(
-                [dtype(val) in self.mapping[feature] for val in unknown_values]
-            ) and all([dtype(val) in self.mapping[feature] for val in known_values]):
-                transformed[idx] = False
-                continue
+            if (
+                any([dtype(val) in self.mapping[feature] for val in unknown_values])
+                and all([dtype(val) in self.mapping[feature] for val in known_values])
+                and self.dtypes[feature] != int
+            ):
+                raise _OrdinalEncodingWrongDirException
 
             if not all([is_int(x) for x in unique_values]):
-                raise Exception(
+                raise _OrdinalEncodingWrongDirException(
                     f"The feature {feature} is not integeral ({unique_values}), therefore can not be "
                     f"inverse-transformed."
                 )
@@ -294,4 +326,4 @@ class OrdinalEncoder:
                     else self.mapping[feature][int(val)]
                 )
             df[feature] = transformed_values.astype(self.dtypes[feature])
-        return input_df if not all(transformed) else df
+        return df

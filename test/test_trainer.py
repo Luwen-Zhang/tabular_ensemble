@@ -781,6 +781,7 @@ def test_plots():
         )
 
         print(f"\n-- KDE --\n")
+        trainer.plot_kde_all()
         trainer.plot_kde(
             feature="cont_2", select_by_value_kwargs={"selection": {"cat_1": [1, 2]}}
         )
@@ -801,7 +802,7 @@ def test_plots():
         trainer.plot_corr(imputed=False)
 
         print(f"\n-- hist --\n")
-        trainer.plot_hist_all(imputed=True)
+        trainer.plot_hist_all(imputed=True, kde=True)
         trainer.plot_hist_all(imputed=False)
         trainer.plot_hist(feature="cont_0")
 
