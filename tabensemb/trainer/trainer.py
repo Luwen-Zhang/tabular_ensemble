@@ -2366,7 +2366,7 @@ class Trainer:
             dict(
                 orient="h",
                 linewidth=1,
-                fliersize=4,
+                fliersize=2,
                 flierprops={"marker": "o"},
                 color=clr[0],
                 saturation=1,
@@ -2583,7 +2583,7 @@ class Trainer:
                 count_range = np.max(counts) - np.min(counts)
                 ax.set_ylim(
                     [
-                        np.min(counts) - 0.2 * count_range,
+                        max([np.min(counts) - 0.2 * count_range, 0]),
                         np.max(counts) + 0.2 * count_range,
                     ]
                 )
