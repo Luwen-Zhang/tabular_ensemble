@@ -2178,11 +2178,15 @@ class Trainer:
         # sns.reset_defaults()
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
         plt.box(on=True)
-        corr = self.datamodule.cal_corr(
-            imputed=imputed,
-            features_only=False,
-            select_by_value_kwargs=select_by_value_kwargs,
-        )[cont_feature_names].values
+        corr = (
+            self.datamodule.cal_corr(
+                imputed=imputed,
+                features_only=False,
+                select_by_value_kwargs=select_by_value_kwargs,
+            )
+            .loc[cont_feature_names, cont_feature_names]
+            .values
+        )
         im = ax.imshow(corr, **imshow_kwargs_)
         ax.set_xticks(np.arange(len(cont_feature_names)))
         ax.set_yticks(np.arange(len(cont_feature_names)))
