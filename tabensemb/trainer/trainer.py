@@ -1100,10 +1100,11 @@ class Trainer:
 
     def _plot_action_subplots(
         self,
-        ls: List[str],
-        ls_kwarg_name: str,
         meth_name: str,
+        ls: List[str],
+        ls_kwarg_name: Union[str, None],
         with_title: bool = False,
+        titles: List[str] = None,
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
@@ -1119,11 +1120,15 @@ class Trainer:
         ls
             The list to be iterated.
         ls_kwarg_name
-            The argument name of the components in ``ls`` when the component is passed to ``meth_name``.
+            The argument name of the components in ``ls`` when the component is passed to ``meth_name`` one by one. If
+            is None, the components in ``ls`` should be dictionaries and will be unpacked and passed to the method
+            ``meth_name``.
         meth_name
             The method to plot on a subplot. It has an argument named ``ax`` which indicates the subplot.
         with_title
-            Whether each subplot has a title, which is the components in ``ls``.
+            Whether each subplot has a title, which is the components in ``ls`` if ``titles`` is None.
+        titles
+            The titles of each subplot if ``with_title`` is True.
         fontsize
             ``plt.rcParams["font.size"]``
         xlabel
@@ -1154,8 +1159,14 @@ class Trainer:
         for idx, name in enumerate(ls):
             ax = plt.subplot(height, width, idx + 1)
             if with_title:
-                ax.set_title(name, {"fontsize": fontsize})
-            getattr(self, meth_name)(ax=ax, **{ls_kwarg_name: name}, **meth_fix_kwargs)
+                ax.set_title(
+                    name if titles is None else titles[idx], {"fontsize": fontsize}
+                )
+            getattr(self, meth_name)(
+                ax=ax,
+                **({ls_kwarg_name: name} if ls_kwarg_name is not None else name),
+                **meth_fix_kwargs,
+            )
 
         ax = fig.add_subplot(111, frameon=False)
         plt.tick_params(
@@ -1177,6 +1188,7 @@ class Trainer:
         ls_kwarg_name: str,
         meth_name: str,
         with_title: bool = False,
+        titles: List[str] = None,
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
@@ -1198,7 +1210,9 @@ class Trainer:
         meth_name
             The method to plot on a subplot. It has an argument named ``ax`` which indicates the subplot.
         with_title
-            Whether each subplot has a title, which is the components in ``ls``.
+            Whether each subplot has a title, which is the components in ``ls`` if ``titles`` is None.
+        titles
+            The titles of each subplot if ``with_title`` is True.
         fontsize
             ``plt.rcParams["font.size"]``
         xlabel
@@ -1229,6 +1243,7 @@ class Trainer:
             meth_fix_kwargs=meth_fix_kwargs,
             fontsize=fontsize,
             with_title=with_title,
+            titles=titles,
             xlabel=xlabel,
             ylabel=ylabel,
             get_figsize_kwargs=get_figsize_kwargs,
