@@ -1182,6 +1182,29 @@ class Trainer:
 
         return fig
 
+    def _plot_action_get_df(
+        self, imputed: bool, scaled: bool, cat_transformed: bool
+    ) -> pd.DataFrame:
+        if scaled:
+            df = (
+                self.datamodule.scaled_df
+                if imputed
+                else self.datamodule.data_transform(
+                    self.datamodule.categories_transform(
+                        self.datamodule.get_not_imputed_df()
+                    ),
+                    scaler_only=True,
+                )
+            )
+        else:
+            df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = (
+            self.datamodule.categories_transform(df)
+            if cat_transformed
+            else self.datamodule.categories_inverse_transform(df)
+        )
+        return df
+
     def plot_subplots(
         self,
         ls: List[str],
@@ -2265,9 +2288,9 @@ class Trainer:
         cont_feature_names = (
             self.cont_feature_names if features is None else features
         ) + (self.label_name if include_label else [])
-        df_all = (self.df if imputed else self.datamodule.get_not_imputed_df())[
-            cont_feature_names
-        ]
+        df_all = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )[cont_feature_names]
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         grid = sns.pairplot(df_all.loc[indices, :], **pairplot_kwargs_)
 
@@ -2283,6 +2306,7 @@ class Trainer:
     def plot_feature_box(
         self,
         imputed: bool = False,
+        features: List[str] = None,
         ax=None,
         clr: Iterable = None,
         figure_kwargs: Dict = None,
@@ -2337,14 +2361,9 @@ class Trainer:
 
         # sns.reset_defaults()
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
-        data = (
-            self.feature_data
-            if imputed
-            else self.datamodule.data_transform(
-                self.datamodule.get_not_imputed_df()[self.cont_feature_names],
-                scaler_only=True,
-            )
-        )
+        data = self._plot_action_get_df(
+            imputed=imputed, scaled=True, cat_transformed=False
+        )[self.cont_feature_names if features is None else features]
         bp = sns.boxplot(
             data=data.loc[indices, :],
             ax=ax,
@@ -2502,10 +2521,8 @@ class Trainer:
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
-        hist_data = (
-            self.datamodule.categories_transform(self.datamodule.get_not_imputed_df())
-            if not imputed
-            else self.df
+        hist_data = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=True
         )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         hist_data = hist_data.loc[indices, :]
@@ -2699,7 +2716,9 @@ class Trainer:
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
-        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
 
         x = df.loc[indices, x_col].values.flatten()
@@ -2771,7 +2790,9 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         df = df.loc[indices, :]
 
@@ -2900,7 +2921,9 @@ class Trainer:
             dict(), select_by_value_kwargs
         )
 
-        df = self.df if imputed else self.datamodule.get_not_imputed_df()
+        df = self._plot_action_get_df(
+            imputed=imputed, scaled=False, cat_transformed=False
+        )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
         df = df.loc[indices, :]
 
