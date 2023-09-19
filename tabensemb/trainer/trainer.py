@@ -1108,6 +1108,7 @@ class Trainer:
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
+        twin_ylabel: str = None,
         get_figsize_kwargs: Dict = None,
         figure_kwargs: Dict = None,
         meth_fix_kwargs: Dict = None,
@@ -1135,6 +1136,8 @@ class Trainer:
             The overall xlabel.
         ylabel
             The overall ylabel.
+        twin_ylabel
+            The overall ylabel of the twin x-axis.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
         figure_kwargs
@@ -1169,7 +1172,7 @@ class Trainer:
             )
 
         ax = fig.add_subplot(111, frameon=False)
-        plt.tick_params(
+        ax.tick_params(
             labelcolor="none",
             which="both",
             top=False,
@@ -1179,6 +1182,18 @@ class Trainer:
         )
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+        if twin_ylabel is not None:
+            twin_ax = ax.twinx()
+            twin_ax.set_frame_on(False)
+            twin_ax.tick_params(
+                labelcolor="none",
+                which="both",
+                top=False,
+                bottom=False,
+                left=False,
+                right=False,
+            )
+            twin_ax.set_ylabel(twin_ylabel)
 
         return fig
 
@@ -1215,6 +1230,7 @@ class Trainer:
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
+        twin_ylabel: str = None,
         get_figsize_kwargs: Dict = None,
         figure_kwargs: Dict = None,
         meth_fix_kwargs: Dict = None,
@@ -1242,6 +1258,8 @@ class Trainer:
             The overall xlabel.
         ylabel
             The overall ylabel.
+        twin_ylabel
+            The overall ylabel of the twin x-axis.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
         figure_kwargs
@@ -1269,6 +1287,7 @@ class Trainer:
             titles=titles,
             xlabel=xlabel,
             ylabel=ylabel,
+            twin_ylabel=twin_ylabel,
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
@@ -2591,9 +2610,11 @@ class Trainer:
         self,
         meth_name: Union[str, List],
         meth_kwargs_ls: List[Dict],
+        twin: bool = False,
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
+        twin_ylabel: str = None,
         ax=None,
         meth_fix_kwargs: Dict = None,
         figure_kwargs: Dict = None,
@@ -2612,12 +2633,16 @@ class Trainer:
             indicates the subplot.
         meth_kwargs_ls
             A list of arguments of the corresponding ``meth_name`` (except for ``ax``).
+        twin
+            Plot one plot on ``ax`` and the next plot on ``ax.twin()``.
         fontsize
             ``plt.rcParams["font.size"]``
         xlabel
             The overall xlabel.
         ylabel
             The overall ylabel.
+        twin_ylabel
+            The overall ylabel of the twin x-axis if ``twin`` is True.
         ax
             ``matplotlib.axes.Axes``
         meth_fix_kwargs
@@ -2639,7 +2664,6 @@ class Trainer:
         matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
-        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
         meth_fix_kwargs_ = update_defaults_by_kwargs(dict(), meth_fix_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
@@ -2647,12 +2671,24 @@ class Trainer:
         plt.rcParams["font.size"] = fontsize
         if isinstance(meth_name, str):
             meth_name = [meth_name] * len(meth_kwargs_ls)
+
+        current_ax = ax
+        twin_ax = ax.twinx() if twin else ax
         for meth, meth_kwargs in zip(meth_name, meth_kwargs_ls):
-            getattr(self, meth)(ax=ax, **meth_kwargs, **meth_fix_kwargs_)
+            getattr(self, meth)(ax=current_ax, **meth_kwargs, **meth_fix_kwargs_)
+            current_ax = twin_ax if current_ax == ax and twin else ax
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+        handlers, labels = ax.get_legend_handles_labels()
+        if twin:
+            twin_ax.set_ylabel(twin_ylabel)
+            handlers_twin, labels_twin = twin_ax.get_legend_handles_labels()
+            handlers += handlers_twin
+            labels += labels_twin
+
         if legend:
+            legend_kwargs_ = update_defaults_by_kwargs(dict(handles=handlers, labels=labels), legend_kwargs)
             ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(

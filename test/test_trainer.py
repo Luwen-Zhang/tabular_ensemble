@@ -775,6 +775,29 @@ def test_plots():
             legend=True,
         )
 
+        trainer.plot_subplots(
+            ls=[
+                [
+                    dict(
+                        x_col="cont_1", y_col="cont_2", scatter_kwargs={"label": "all"}
+                    ),
+                    dict(
+                        x_col="cont_1",
+                        y_col="cont_2",
+                        select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
+                        scatter_kwargs={"label": "cat_1=1,2,3"},
+                    ),
+                ]
+            ]
+            * 2,
+            ls_kwarg_name="meth_kwargs_ls",
+            meth_name="plot_on_one_axes",
+            with_title=False,
+            meth_fix_kwargs=dict(meth_name="plot_scatter", legend=True, twin=True),
+            ylabel="TEST 1",
+            twin_ylabel="TEST 2",
+        )
+
         print(f"\n-- PDF --\n")
         trainer.plot_pdf(
             feature="cont_1", select_by_value_kwargs={"selection": {"cat_1": [1, 2]}}
