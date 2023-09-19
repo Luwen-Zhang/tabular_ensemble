@@ -1171,6 +1171,79 @@ class Trainer:
 
         return fig
 
+    def plot_subplots(
+        self,
+        ls: List[str],
+        ls_kwarg_name: str,
+        meth_name: str,
+        with_title: bool = False,
+        fontsize: float = 12,
+        xlabel: str = None,
+        ylabel: str = None,
+        get_figsize_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        meth_fix_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ):
+        """
+        Iterate over a list to plot subplots.
+
+        Parameters
+        ----------
+        ls
+            The list to be iterated.
+        ls_kwarg_name
+            The argument name of the components in ``ls`` when the component is passed to ``meth_name``.
+        meth_name
+            The method to plot on a subplot. It has an argument named ``ax`` which indicates the subplot.
+        with_title
+            Whether each subplot has a title, which is the components in ``ls``.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        xlabel
+            The overall xlabel.
+        ylabel
+            The overall ylabel.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        figure_kwargs
+            Arguments for ``plt.figure()``
+        meth_fix_kwargs
+            Fixed arguments of ``meth_name`` (except for ``ax`` and ``ls_kwarg_name``).
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure that has plotted subplots.
+        """
+        fig = self._plot_action_subplots(
+            ls=ls,
+            ls_kwarg_name=ls_kwarg_name,
+            meth_name=meth_name,
+            meth_fix_kwargs=meth_fix_kwargs,
+            fontsize=fontsize,
+            with_title=with_title,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+        )
+
+        return self._plot_action_after_plot(
+            disable=False,
+            ax_or_fig=fig,
+            fig_name=os.path.join(self.project_root, f"subplots.pdf"),
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
     def plot_truth_pred_all(
         self,
         program: str,
@@ -1210,7 +1283,12 @@ class Trainer:
         modelbase = self.get_modelbase(program)
         model_names = modelbase.get_model_names()
 
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(fname=os.path.join(self.project_root, program, f"truth_pred.pdf")),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=model_names,
             ls_kwarg_name="model_name",
             meth_name="plot_truth_pred",
@@ -1221,15 +1299,8 @@ class Trainer:
             ylabel="Prediction",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(self.project_root, program, f"truth_pred.pdf"),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_truth_pred(
@@ -1592,7 +1663,16 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_dependence",
@@ -1603,16 +1683,8 @@ class Trainer:
             ylabel="Predicted target",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(
-                self.project_root, f"partial_dependence_{program}_{model_name}.pdf"
-            ),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_partial_dependence(
@@ -1882,7 +1954,16 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"partial_err_{program}_{model_name}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=self.all_feature_names,
             ls_kwarg_name="feature",
             meth_name="plot_partial_err",
@@ -1893,16 +1974,8 @@ class Trainer:
             ylabel="Prediction absolute error",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(
-                self.project_root, f"partial_err_{program}_{model_name}.pdf"
-            ),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_partial_err(
@@ -2296,7 +2369,16 @@ class Trainer:
         matplotlib.figure.Figure
             The figure if ``save_show_close`` is False.
         """
-        fig = self._plot_action_subplots(
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
             ls=self.all_feature_names + self.label_name,
             ls_kwarg_name="feature",
             meth_name="plot_hist",
@@ -2307,16 +2389,8 @@ class Trainer:
             ylabel="Density",
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
-        )
-        return self._plot_action_after_plot(
-            disable=False,
-            ax_or_fig=fig,
-            fig_name=os.path.join(
-                self.project_root, f"hist{'_imputed' if imputed else ''}.pdf"
-            ),
-            tight_layout=False,
             save_show_close=save_show_close,
-            savefig_kwargs=savefig_kwargs,
+            savefig_kwargs=savefig_kwargs_,
         )
 
     def plot_hist(
