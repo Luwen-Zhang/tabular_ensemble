@@ -104,6 +104,21 @@ def pytest_configure_data():
 def test_load_data():
     pytest_configure_data()
 
+    min_datamodule = pytest.min_datamodule
+    dm = DataModule(min_datamodule.args)
+    shuffled_index = np.array(min_datamodule.df.index)
+    np.random.shuffle(shuffled_index)
+    shuffled_df = min_datamodule.df.copy()
+    shuffled_df.index = shuffled_index
+    with pytest.raises(Exception) as err:
+        dm.set_data(
+            df=shuffled_df,
+            cont_feature_names=min_datamodule.cont_feature_names,
+            cat_feature_names=min_datamodule.cat_feature_names,
+            label_name=min_datamodule.label_name,
+        )
+    assert "Call df.reset_index(drop=True)" in err.value.args[0]
+
 
 def test_var_slip():
     pytest_configure_data()
@@ -140,6 +155,15 @@ def test_augmentation():
     ].describe()
     assert np.allclose(
         aug_desc.values.astype(float), original_desc.values.astype(float)
+    )
+    AbstractSplitter._check_split(
+        datamodule.train_indices, datamodule.val_indices, datamodule.test_indices
+    )
+    assert all(
+        [
+            x in datamodule.train_indices
+            for x in datamodule.augmented_indices - len(datamodule.dropped_indices)
+        ]
     )
 
 

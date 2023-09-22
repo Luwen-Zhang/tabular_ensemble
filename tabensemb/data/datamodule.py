@@ -362,7 +362,12 @@ class DataModule:
         self.cat_feature_names = cat_feature_names
         self.cat_feature_mapping = {}
         self.label_name = label_name
-        self.df = df.copy()
+
+        if not np.all(np.equal(np.arange(len(df)), df.index.values)):
+            raise Exception(
+                f"Call df.reset_index(drop=True) to reset the index of the dataset."
+            )
+        self.df = df.copy().reset_index(drop=True)
         if pd.isna(df[self.label_name]).any().any():
             raise Exception("Label missing in the input dataframe.")
 
