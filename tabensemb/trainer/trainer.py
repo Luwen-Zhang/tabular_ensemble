@@ -1782,7 +1782,7 @@ class Trainer:
         ax
             ``matplotlib.axes.Axes``
         refit
-            Whether to refit models on bootstrapped datasets. See :meth:`_bootstrap`.
+            Whether to refit models on bootstrapped datasets. See :meth:`_bootstrap_fit`.
         log_trans
             Whether the label data is in log scale.
         lower_lim
@@ -1938,7 +1938,7 @@ class Trainer:
         feature_subset
             A subset of :meth:`all_feature_names`.
         kwargs
-            Arguments for :meth:`_bootstrap`.
+            Arguments for :meth:`_bootstrap_fit`.
 
         Returns
         -------
@@ -1962,7 +1962,7 @@ class Trainer:
             if kwargs["verbose"]:
                 print("Calculate PDP: ", feature_name)
 
-            x_value, model_predictions, ci_left, ci_right = self._bootstrap(
+            x_value, model_predictions, ci_left, ci_right = self._bootstrap_fit(
                 focus_feature=feature_name, **kwargs
             )
 
@@ -3387,7 +3387,7 @@ class Trainer:
                 plt.close()
         return ax_or_fig
 
-    def _bootstrap(
+    def _bootstrap_fit(
         self,
         program: str,
         df: pd.DataFrame,
