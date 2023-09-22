@@ -72,7 +72,7 @@ def pytest_configure_data():
         ["CorrFeatureSelector", {"thres": 0.1}],
         ["IQRRemover", {}],
         ["StdRemover", {}],
-        ["SampleDataAugmentor", {}],
+        ["SampleDataAugmenter", {}],
         ["StandardScaler", {}],
     ]
     relative_deriver_unstacked_kwargs = relative_deriver_kwargs.copy()

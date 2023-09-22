@@ -100,7 +100,7 @@ def pytest_configure_trainer():
                 ["NaNFeatureRemover", {}],
                 ["VarianceFeatureSelector", {"thres": 1}],
                 ["IQRRemover", {}],  # Note the remover here
-                ["SampleDataAugmentor", {}],  # Note the augmentor here
+                ["SampleDataAugmenter", {}],  # Note the augmenter here
                 ["StandardScaler", {}],
             ],
         },
