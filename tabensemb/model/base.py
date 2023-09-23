@@ -47,6 +47,10 @@ class AbstractModel:
         large dataset and a large ``batch_size``, it is possible that the last batch is so large that contains
         essential information, (iii) the user should have full control for this. If you want to use ``drop_last`` in
         your code, use the ``original_batch_size`` in ``kwargs`` passed to :class:`AbstractModel` methods.
+    train_losses
+        The training loss during training of each model.
+    val_losses
+        The validation loss during training of each model.
     model
         A dictionary of models.
     model_params
@@ -110,6 +114,8 @@ class AbstractModel:
         self.program = self._get_program_name() if program is None else program
         self.init_params = {}
         self.model_params = {}
+        self.train_losses = {}
+        self.val_losses = {}
         self.save_kwargs(d=self.init_params, ignore=["trainer", "self", "frame"])
         self._check_space()
         self._mkdir()
@@ -2091,6 +2097,7 @@ class TorchModel(AbstractModel):
             mode="min",
             every_n_epochs=1,
         )
+        pl_loss_callback = PytorchLightningLossCallback(verbose=True, total_epoch=epoch)
 
         lightning_kwargs = update_defaults_by_kwargs(
             dict(
@@ -2114,11 +2121,7 @@ class TorchModel(AbstractModel):
 
         trainer = pl.Trainer(
             max_epochs=epoch,
-            callbacks=[
-                PytorchLightningLossCallback(verbose=True, total_epoch=epoch),
-                es_callback,
-                ckpt_callback,
-            ],
+            callbacks=[pl_loss_callback, es_callback, ckpt_callback],
             auto_lr_find=False,
             enable_progress_bar=False,
             check_val_every_n_epoch=1,
@@ -2143,6 +2146,9 @@ class TorchModel(AbstractModel):
         trainer.strategy.remove_checkpoint(
             os.path.join(self.root, "early_stopping_ckpt.ckpt")
         )
+
+        self.train_losses[model_name] = pl_loss_callback.train_ls
+        self.val_losses[model_name] = pl_loss_callback.val_ls
         # pl.Trainer is not pickle-able. When pickling, "ReferenceError: weakly-referenced object no longer exists."
         # may be raised occasionally. Set the trainer to None.
         # https://deepforest.readthedocs.io/en/latest/FAQ.html
@@ -3087,6 +3093,7 @@ def get_linear(n_inputs, n_outputs, nonlinearity="leaky_relu"):
 class PytorchLightningLossCallback(Callback):
     def __init__(self, verbose, total_epoch):
         super(PytorchLightningLossCallback, self).__init__()
+        self.train_ls = []
         self.val_ls = []
         self.es_val_ls = []
         self.verbose = verbose
@@ -3104,7 +3111,8 @@ class PytorchLightningLossCallback(Callback):
         logs = trainer.callback_metrics
         train_loss = logs["train_loss_verbose"].detach().cpu().numpy()
         val_loss = logs["valid_loss_verbose"].detach().cpu().numpy()
-        self.val_ls.append(val_loss)
+        self.train_ls.append(float(train_loss))
+        self.val_ls.append(float(val_loss))
         if hasattr(pl_module, "_early_stopping_eval"):
             early_stopping_eval = pl_module._early_stopping_eval(
                 trainer.logged_metrics["train_loss_verbose"],

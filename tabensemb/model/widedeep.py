@@ -387,6 +387,9 @@ class WideDeep(AbstractModel):
             finetune_epochs=10,
         )
 
+        self.train_losses[model_name] = model.history["train_loss"]
+        self.val_losses[model_name] = model.history["val_loss"]
+
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
         original_batch_size = model.batch_size
         delattr(model, "batch_size")

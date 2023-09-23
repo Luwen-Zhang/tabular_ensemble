@@ -169,6 +169,9 @@ class PytorchTabular(AbstractModel):
         train_data[label_name] = y_train
         val_data = X_val.copy()
         val_data[label_name] = y_val
+        pl_loss_callback = PytorchLightningLossCallback(
+            verbose=verbose, total_epoch=epoch
+        )
         with HiddenPrints(
             disable_std=not verbose,
             disable_logging=not verbose,
@@ -179,9 +182,11 @@ class PytorchTabular(AbstractModel):
                 max_epochs=epoch,
                 callbacks=[
                     PytorchTabularVerboseLossCallback(),
-                    PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch),
+                    pl_loss_callback,
                 ],
             )
+        self.train_losses[model_name] = pl_loss_callback.train_ls
+        self.val_losses[model_name] = pl_loss_callback.val_ls
         if os.path.exists(os.path.join(self.root, "ckpts")):
             shutil.rmtree(os.path.join(self.root, "ckpts"))
         warnings.simplefilter(action="default", category=UserWarning)
