@@ -2168,6 +2168,121 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def plot_err_hist(
+        self,
+        program: str,
+        model_name: str,
+        category: str = None,
+        metric: str = None,
+        ax=None,
+        legend=True,
+        clr: Iterable = None,
+        figure_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot histograms of prediction errors.
+
+        Parameters
+        ----------
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base.
+        category
+            The category to classify histograms and stack them with different colors.
+        metric
+            The metric to be calculated. It should be supported by :func:`tabenseb.utils.utils.auto_metric_sklearn`.
+        ax
+            ``matplotlib.axes.Axes``
+        legend
+            Show legends if ``category`` is not None.
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        hist_kwargs
+            Arguments for ``ax.hist`` (used for histograms of continuous features).
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        legend_kwargs
+            Arguments for ``plt.legend`` if ``legend`` is True and ``category`` is not None.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        clr = global_palette if clr is None else clr
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+        hist_kwargs_ = update_defaults_by_kwargs(
+            dict(density=True, color=clr[0], rwidth=0.95, bins=20), hist_kwargs
+        )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = self.datamodule.df.loc[indices, :]
+        derived_data = self.datamodule.get_derived_data_slice(
+            self.datamodule.derived_data, indices=indices
+        )
+        pred = self.get_modelbase(program=program).predict(
+            df=df, model_name=model_name, derived_data=derived_data, proba=True
+        )
+        truth = df[self.label_name].values
+
+        metric = (
+            metric
+            if metric is not None
+            else ("rmse" if self.datamodule.task == "regression" else "log_loss")
+        )
+        metrics = np.array(
+            [
+                auto_metric_sklearn(
+                    t,
+                    p,
+                    metric=metric,
+                    task=self.datamodule.task,
+                )
+                for t, p in zip(truth, pred)
+            ]
+        )
+
+        if category is not None:
+            unique_values = np.unique(df[category])
+            metrics = [
+                metrics[np.where(df[category] == val)[0]] for val in unique_values
+            ]
+            hist_kwargs_.update(
+                dict(color=clr[: len(unique_values)], label=unique_values, stacked=True)
+            )
+
+        ax.hist(metrics, **hist_kwargs_)
+        if legend:
+            ax.legend(**legend_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"err_hist.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=metric.upper(),
+            ylabel="Density" if hist_kwargs_["density"] else "Frequency",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
     def plot_corr(
         self,
         fontsize: Any = 10,

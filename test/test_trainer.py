@@ -853,6 +853,13 @@ def test_plots():
             program="CatEmbed", model_name="Category Embedding", feature="cont_0"
         )
 
+        print(f"\n-- Err histogram --\n")
+        trainer.plot_err_hist(
+            program="CatEmbed",
+            model_name="Category Embedding",
+            category=trainer.cat_feature_names[0],
+        )
+
         print(f"\n-- Importance --\n")
         trainer.plot_feature_importance(program="WideDeep", model_name="TabMlp")
         with pytest.warns(
