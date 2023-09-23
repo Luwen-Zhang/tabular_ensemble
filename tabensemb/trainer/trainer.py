@@ -3445,9 +3445,8 @@ class Trainer:
         )
         if category is not None:
             unique_values = np.unique(self.datamodule.df[category])
-            rating = [
-                rating[self.datamodule.df[category] == val] for val in unique_values
-            ]
+            df = self.datamodule.df.loc[self.datamodule.cont_imputed_mask.index, :]
+            rating = [rating[df[category] == val] for val in unique_values]
             hist_kwargs_.update(
                 dict(label=unique_values, stacked=True, color=clr[: len(unique_values)])
             )
