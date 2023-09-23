@@ -1986,6 +1986,7 @@ class DataModule:
 
     def cal_corr(
         self,
+        method: Union[str, Callable] = "pearson",
         imputed: bool = False,
         features_only: bool = False,
         select_by_value_kwargs: Dict = None,
@@ -1995,6 +1996,8 @@ class DataModule:
 
         Parameters
         ----------
+        method
+            The argument of ``pd.DataFrame.corr``. "pearson", "kendall", "spearman" or Callable.
         imputed
             Whether the imputed dataset should be considered. If False, some NaN values may exist for features that have
             missing values.
@@ -2019,9 +2022,9 @@ class DataModule:
         indices = self.select_by_value(**select_by_value_kwargs_)
         if not imputed:
             not_imputed_df = self.get_not_imputed_df()
-            return not_imputed_df.loc[indices, subset].corr()
+            return not_imputed_df.loc[indices, subset].corr(method=method)
         else:
-            return self.df.loc[indices, subset].corr()
+            return self.df.loc[indices, subset].corr(method=method)
 
     def get_not_imputed_df(self) -> pd.DataFrame:
         """

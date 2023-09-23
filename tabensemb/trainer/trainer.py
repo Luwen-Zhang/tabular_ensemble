@@ -2288,6 +2288,7 @@ class Trainer:
         fontsize: Any = 10,
         imputed=False,
         features: List[str] = None,
+        method: Union[str, Callable] = "pearson",
         include_label: bool = True,
         ax=None,
         figure_kwargs: Dict = None,
@@ -2308,6 +2309,8 @@ class Trainer:
             with missing values.
         features
             A subset of continuous features to calculate correlations on.
+        method
+            The argument of ``pd.DataFrame.corr``. "pearson", "kendall", "spearman" or Callable.
         include_label
             If True, the target is also considered.
         ax
@@ -2340,6 +2343,7 @@ class Trainer:
         plt.box(on=True)
         corr = (
             self.datamodule.cal_corr(
+                method=method,
                 imputed=imputed,
                 features_only=False,
                 select_by_value_kwargs=select_by_value_kwargs,
