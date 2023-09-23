@@ -65,7 +65,7 @@ class AutoGluon(AbstractModel):
             )
         if not os.path.exists(path):
             os.mkdir(path)
-        return (model_name, predictor)
+        return predictor
 
     def _train_data_preprocess(self, model_name):
         data = self.trainer.datamodule
@@ -92,6 +92,7 @@ class AutoGluon(AbstractModel):
     def _train_single_model(
         self,
         model,
+        model_name,
         epoch,
         X_train,
         y_train,
@@ -138,7 +139,7 @@ class AutoGluon(AbstractModel):
         val_data = X_val.copy()
         val_data[label_name] = y_val
         with HiddenPrints(disable_std=not verbose, disable_logging=not verbose):
-            model[1].fit(
+            model.fit(
                 train_data,
                 tuning_data=val_data,
                 presets="best_quality" if not in_bayes_opt else "medium_quality",
@@ -146,26 +147,26 @@ class AutoGluon(AbstractModel):
                 use_bag_holdout=True,  # Enable if tuning_data is specified
                 verbosity=2 if verbose else 0,
                 feature_generator=feature_generator,
-                hyperparameters={self._name_mapping[model[0]]: kwargs},
+                hyperparameters={self._name_mapping[model_name]: kwargs},
                 num_gpus=0 if self.device == "cpu" else "auto",
             )
         if not in_bayes_opt:
-            model[1].persist_models(max_memory=None)
-            if os.path.exists(os.path.join(self.root, model[0])):
-                shutil.rmtree(os.path.join(self.root, model[0]))
+            model.persist_models(max_memory=None)
+            if os.path.exists(os.path.join(self.root, model_name)):
+                shutil.rmtree(os.path.join(self.root, model_name))
         tc.enable_tqdm()
         warnings.simplefilter(action="default")
 
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
         if self.task == "regression":
             if len(self.trainer.label_name) > 1:
-                return model[1].predict(X_test).values
+                return model.predict(X_test).values
             else:
-                return model[1].predict(X_test).values.reshape(-1, 1)
+                return model.predict(X_test).values.reshape(-1, 1)
         elif self.task == "binary":
-            return model[1].predict_proba(X_test).values[:, 1].reshape(-1, 1)
+            return model.predict_proba(X_test).values[:, 1].reshape(-1, 1)
         else:
-            return model[1].predict_proba(X_test).values
+            return model.predict_proba(X_test).values
 
     @staticmethod
     def _get_model_names():

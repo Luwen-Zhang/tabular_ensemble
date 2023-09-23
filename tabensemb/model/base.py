@@ -1000,6 +1000,7 @@ class AbstractModel:
 
                             self._train_single_model(
                                 model,
+                                model_name=model_name,
                                 epoch=args["bayes_epoch"]
                                 if not tabensemb.setting["debug_mode"]
                                 else 1,
@@ -1128,6 +1129,7 @@ class AbstractModel:
 
             self._train_single_model(
                 model,
+                model_name=model_name,
                 epoch=total_epoch,
                 X_train=data["X_train"],
                 y_train=data["y_train"],
@@ -1431,6 +1433,7 @@ class AbstractModel:
     def _train_single_model(
         self,
         model: Any,
+        model_name: str,
         epoch: Optional[int],
         X_train: Any,
         y_train: np.ndarray,
@@ -1448,6 +1451,8 @@ class AbstractModel:
         ----------
         model:
             The model returned by :meth:`_new_model`.
+        model_name:
+            The name of the model.
         epoch:
             Total epochs to train the model.
         X_train:
@@ -2027,6 +2032,7 @@ class TorchModel(AbstractModel):
     def _train_single_model(
         self,
         model: "AbstractNN",
+        model_name,
         epoch,
         X_train,
         y_train,

@@ -150,6 +150,7 @@ class PytorchTabular(AbstractModel):
     def _train_single_model(
         self,
         model,
+        model_name,
         epoch,
         X_train,
         y_train,

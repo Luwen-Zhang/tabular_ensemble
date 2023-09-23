@@ -384,6 +384,7 @@ def test_abstract_model():
     with pytest.raises(NotImplementedError):
         abs_model._train_single_model(
             model=None,
+            model_name="TEST",
             epoch=1,
             X_train=None,
             y_train=np.array([]),
