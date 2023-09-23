@@ -16,7 +16,7 @@ from typing import Type
 from .utils import get_corr_sets, OrdinalEncoder
 
 
-class SampleDataAugmentor(AbstractAugmenter):
+class SampleDataAugmenter(AbstractAugmenter):
     """
     This is a sample of data augmentation, which is not reasonable at all and is only used to test data augmentation.
     """

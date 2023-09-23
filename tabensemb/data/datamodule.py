@@ -362,7 +362,12 @@ class DataModule:
         self.cat_feature_names = cat_feature_names
         self.cat_feature_mapping = {}
         self.label_name = label_name
-        self.df = df.copy()
+
+        if not np.all(np.equal(np.arange(len(df)), df.index.values)):
+            raise Exception(
+                f"Call df.reset_index(drop=True) to reset the index of the dataset."
+            )
+        self.df = df.copy().reset_index(drop=True)
         if pd.isna(df[self.label_name]).any().any():
             raise Exception("Label missing in the input dataframe.")
 
@@ -1981,6 +1986,7 @@ class DataModule:
 
     def cal_corr(
         self,
+        method: Union[str, Callable] = "pearson",
         imputed: bool = False,
         features_only: bool = False,
         select_by_value_kwargs: Dict = None,
@@ -1990,6 +1996,8 @@ class DataModule:
 
         Parameters
         ----------
+        method
+            The argument of ``pd.DataFrame.corr``. "pearson", "kendall", "spearman" or Callable.
         imputed
             Whether the imputed dataset should be considered. If False, some NaN values may exist for features that have
             missing values.
@@ -2014,9 +2022,9 @@ class DataModule:
         indices = self.select_by_value(**select_by_value_kwargs_)
         if not imputed:
             not_imputed_df = self.get_not_imputed_df()
-            return not_imputed_df.loc[indices, subset].corr()
+            return not_imputed_df.loc[indices, subset].corr(method=method)
         else:
-            return self.df.loc[indices, subset].corr()
+            return self.df.loc[indices, subset].corr(method=method)
 
     def get_not_imputed_df(self) -> pd.DataFrame:
         """

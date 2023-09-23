@@ -1594,6 +1594,10 @@ class TorchModel(AbstractModel):
     The class for PyTorch-like models. Some abstract methods in :class:`AbstractModel` are implemented.
     """
 
+    def __init__(self, *args, lightning_trainer_kwargs: Dict = None, **kwargs):
+        super(TorchModel, self).__init__(*args, **kwargs)
+        self.lightning_trainer_kwargs = lightning_trainer_kwargs
+
     def cal_feature_importance(self, model_name, method, call_general_method=False):
         """
         Calculate feature importance using a specified model. ``captum`` or ``shap`` is called.
@@ -2081,32 +2085,39 @@ class TorchModel(AbstractModel):
             mode="min",
             every_n_epochs=1,
         )
+
+        lightning_kwargs = update_defaults_by_kwargs(
+            dict(
+                min_epochs=1,
+                fast_dev_run=False,
+                max_time=None,
+                gpus=None,
+                accelerator="cpu" if self.device == "cpu" else "auto",
+                devices=None,
+                accumulate_grad_batches=1,
+                gradient_clip_val=0.0,
+                overfit_batches=0.0,
+                deterministic=False,
+                profiler=None,
+                logger=False,
+                track_grad_norm=-1,
+                precision=32,
+            ),
+            self.lightning_trainer_kwargs,
+        )
+
         trainer = pl.Trainer(
             max_epochs=epoch,
-            min_epochs=1,
             callbacks=[
                 PytorchLightningLossCallback(verbose=True, total_epoch=epoch),
                 es_callback,
                 ckpt_callback,
             ],
-            fast_dev_run=False,
-            max_time=None,
-            gpus=None,
-            accelerator="cpu" if self.device == "cpu" else "auto",
-            devices=None,
-            accumulate_grad_batches=1,
             auto_lr_find=False,
-            # auto_select_gpus=True,
-            check_val_every_n_epoch=1,
-            gradient_clip_val=0.0,
-            overfit_batches=0.0,
-            deterministic=False,
-            profiler=None,
-            logger=False,
-            track_grad_norm=-1,
-            precision=32,
-            enable_checkpointing=True,
             enable_progress_bar=False,
+            check_val_every_n_epoch=1,
+            enable_checkpointing=True,
+            **lightning_kwargs,
         )
 
         ckpt_path = os.path.join(self.root, "early_stopping_ckpt.ckpt")

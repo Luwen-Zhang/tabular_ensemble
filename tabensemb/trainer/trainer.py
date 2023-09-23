@@ -1,4 +1,5 @@
 import os.path
+import warnings
 import matplotlib.figure
 import matplotlib.axes
 import matplotlib.legend
@@ -1108,6 +1109,7 @@ class Trainer:
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
+        twin_ylabel: str = None,
         get_figsize_kwargs: Dict = None,
         figure_kwargs: Dict = None,
         meth_fix_kwargs: Dict = None,
@@ -1135,6 +1137,8 @@ class Trainer:
             The overall xlabel.
         ylabel
             The overall ylabel.
+        twin_ylabel
+            The overall ylabel of the twin x-axis.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
         figure_kwargs
@@ -1169,7 +1173,7 @@ class Trainer:
             )
 
         ax = fig.add_subplot(111, frameon=False)
-        plt.tick_params(
+        ax.tick_params(
             labelcolor="none",
             which="both",
             top=False,
@@ -1179,6 +1183,18 @@ class Trainer:
         )
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+        if twin_ylabel is not None:
+            twin_ax = ax.twinx()
+            twin_ax.set_frame_on(False)
+            twin_ax.tick_params(
+                labelcolor="none",
+                which="both",
+                top=False,
+                bottom=False,
+                left=False,
+                right=False,
+            )
+            twin_ax.set_ylabel(twin_ylabel)
 
         return fig
 
@@ -1215,6 +1231,7 @@ class Trainer:
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
+        twin_ylabel: str = None,
         get_figsize_kwargs: Dict = None,
         figure_kwargs: Dict = None,
         meth_fix_kwargs: Dict = None,
@@ -1242,6 +1259,8 @@ class Trainer:
             The overall xlabel.
         ylabel
             The overall ylabel.
+        twin_ylabel
+            The overall ylabel of the twin x-axis.
         get_figsize_kwargs
             Arguments for :func:`tabensemb.utils.utils.get_figsize`.
         figure_kwargs
@@ -1269,6 +1288,7 @@ class Trainer:
             titles=titles,
             xlabel=xlabel,
             ylabel=ylabel,
+            twin_ylabel=twin_ylabel,
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
         )
@@ -1763,7 +1783,7 @@ class Trainer:
         ax
             ``matplotlib.axes.Axes``
         refit
-            Whether to refit models on bootstrapped datasets. See :meth:`_bootstrap`.
+            Whether to refit models on bootstrapped datasets. See :meth:`_bootstrap_fit`.
         log_trans
             Whether the label data is in log scale.
         lower_lim
@@ -1919,7 +1939,7 @@ class Trainer:
         feature_subset
             A subset of :meth:`all_feature_names`.
         kwargs
-            Arguments for :meth:`_bootstrap`.
+            Arguments for :meth:`_bootstrap_fit`.
 
         Returns
         -------
@@ -1943,7 +1963,7 @@ class Trainer:
             if kwargs["verbose"]:
                 print("Calculate PDP: ", feature_name)
 
-            x_value, model_predictions, ci_left, ci_right = self._bootstrap(
+            x_value, model_predictions, ci_left, ci_right = self._bootstrap_fit(
                 focus_feature=feature_name, **kwargs
             )
 
@@ -2148,11 +2168,127 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def plot_err_hist(
+        self,
+        program: str,
+        model_name: str,
+        category: str = None,
+        metric: str = None,
+        ax=None,
+        legend=True,
+        clr: Iterable = None,
+        figure_kwargs: Dict = None,
+        hist_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot histograms of prediction errors.
+
+        Parameters
+        ----------
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base.
+        category
+            The category to classify histograms and stack them with different colors.
+        metric
+            The metric to be calculated. It should be supported by :func:`tabenseb.utils.utils.auto_metric_sklearn`.
+        ax
+            ``matplotlib.axes.Axes``
+        legend
+            Show legends if ``category`` is not None.
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        hist_kwargs
+            Arguments for ``ax.hist`` (used for histograms of continuous features).
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        legend_kwargs
+            Arguments for ``plt.legend`` if ``legend`` is True and ``category`` is not None.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        clr = global_palette if clr is None else clr
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        select_by_value_kwargs_ = update_defaults_by_kwargs(
+            dict(), select_by_value_kwargs
+        )
+        hist_kwargs_ = update_defaults_by_kwargs(
+            dict(density=True, color=clr[0], rwidth=0.95, bins=20), hist_kwargs
+        )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+        df = self.datamodule.df.loc[indices, :]
+        derived_data = self.datamodule.get_derived_data_slice(
+            self.datamodule.derived_data, indices=indices
+        )
+        pred = self.get_modelbase(program=program).predict(
+            df=df, model_name=model_name, derived_data=derived_data, proba=True
+        )
+        truth = df[self.label_name].values
+
+        metric = (
+            metric
+            if metric is not None
+            else ("rmse" if self.datamodule.task == "regression" else "log_loss")
+        )
+        metrics = np.array(
+            [
+                auto_metric_sklearn(
+                    t,
+                    p,
+                    metric=metric,
+                    task=self.datamodule.task,
+                )
+                for t, p in zip(truth, pred)
+            ]
+        )
+
+        if category is not None:
+            unique_values = np.unique(df[category])
+            metrics = [
+                metrics[np.where(df[category] == val)[0]] for val in unique_values
+            ]
+            hist_kwargs_.update(
+                dict(color=clr[: len(unique_values)], label=unique_values, stacked=True)
+            )
+
+        ax.hist(metrics, **hist_kwargs_)
+        if legend:
+            ax.legend(**legend_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"err_hist.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=metric.upper(),
+            ylabel="Density" if hist_kwargs_["density"] else "Frequency",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
     def plot_corr(
         self,
         fontsize: Any = 10,
         imputed=False,
         features: List[str] = None,
+        method: Union[str, Callable] = "pearson",
         include_label: bool = True,
         ax=None,
         figure_kwargs: Dict = None,
@@ -2173,6 +2309,8 @@ class Trainer:
             with missing values.
         features
             A subset of continuous features to calculate correlations on.
+        method
+            The argument of ``pd.DataFrame.corr``. "pearson", "kendall", "spearman" or Callable.
         include_label
             If True, the target is also considered.
         ax
@@ -2205,6 +2343,7 @@ class Trainer:
         plt.box(on=True)
         corr = (
             self.datamodule.cal_corr(
+                method=method,
                 imputed=imputed,
                 features_only=False,
                 select_by_value_kwargs=select_by_value_kwargs,
@@ -2242,6 +2381,123 @@ class Trainer:
             ),
             disable=given_ax,
             ax_or_fig=ax,
+            tight_layout=True,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
+    def plot_corr_with_label(
+        self,
+        imputed=False,
+        features: List[str] = None,
+        order: str = "alphabetic",
+        clr=None,
+        ax=None,
+        figure_kwargs: Dict = None,
+        barplot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot Pearson correlation coefficients between the target and each feature.
+
+        Parameters
+        ----------
+        imputed
+            Whether the imputed dataset should be considered. If False, some NaN coefficients may exist for features
+            with missing values.
+        features
+            A subset of continuous features to calculate correlations on.
+        order
+            The order of features. "alphabetic", "ascending", or "descending".
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        ax
+            ``matplotlib.axes.Axes``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        imshow_kwargs
+            Arguments for ``plt.imshow``.
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        legend_kwargs
+            Arguments for ``plt.legend``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(8, 5)), figure_kwargs)
+        barplot_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                orient="h",
+                linewidth=1,
+                edgecolor="k",
+                saturation=1,
+            ),
+            barplot_kwargs,
+        )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
+
+        is_horizontal = barplot_kwargs_["orient"] == "h"
+
+        cont_feature_names = self.cont_feature_names if features is None else features
+
+        # sns.reset_defaults()
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+        plt.box(on=True)
+        corr = (
+            self.datamodule.cal_corr(
+                imputed=imputed,
+                features_only=False,
+                select_by_value_kwargs=select_by_value_kwargs,
+            )
+            .loc[cont_feature_names, self.label_name]
+            .values.flatten()
+        )
+        df = pd.DataFrame(data={"feature": cont_feature_names, "correlation": corr})
+        df.sort_values(
+            by="feature" if order == "alphabetic" else "correlation",
+            ascending=order != "descending",
+            inplace=True,
+        )
+
+        clr = global_palette if clr is None else clr
+        palette = self._plot_action_generate_feature_types_palette(
+            clr=clr, features=df["feature"]
+        )
+
+        sns.barplot(
+            data=df,
+            x="correlation" if is_horizontal else "feature",
+            y="feature" if is_horizontal else "correlation",
+            ax=ax,
+            palette=palette,
+            **barplot_kwargs_,
+        )
+        ax.set_xlabel(None)
+        ax.set_ylabel(None)
+
+        legend = self._plot_action_generate_feature_types_legends(
+            clr=clr, ax=ax, legend_kwargs=legend_kwargs_
+        )
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"corr_with_label{'_imputed' if imputed else ''}.pdf"
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=f"Correlation with {self.label_name[0]}" if is_horizontal else None,
+            ylabel=f"Correlation with {self.label_name[0]}"
+            if not is_horizontal
+            else None,
             tight_layout=True,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -2347,7 +2603,7 @@ class Trainer:
             dict(
                 orient="h",
                 linewidth=1,
-                fliersize=4,
+                fliersize=2,
                 flierprops={"marker": "o"},
                 color=clr[0],
                 saturation=1,
@@ -2464,12 +2720,15 @@ class Trainer:
         clr: Iterable = None,
         imputed=False,
         kde=False,
+        category: str = None,
         x_values=None,
+        legend: bool = True,
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         kde_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -2488,8 +2747,12 @@ class Trainer:
             Whether the imputed dataset should be considered.
         kde
             Plot the kernel density estimation along with each histogram of continuous features.
+        category
+            The category to classify histograms and stack them with different colors.
         x_values
             Unique values of the `feature`. If None, it will be inferred from the dataset.
+        legend
+            Show legends if ``category`` is not None.
         figure_kwargs
             Arguments for ``plt.figure``.
         bar_kwargs
@@ -2500,6 +2763,8 @@ class Trainer:
             Arguments for :meth:`plot_kde` when ``kde`` is True.
         select_by_value_kwargs
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        legend_kwargs
+            Arguments for ``plt.legend`` if ``legend`` is True and ``category`` is not None.
         savefig_kwargs
             Arguments for ``plt.savefig``
         save_show_close
@@ -2518,6 +2783,7 @@ class Trainer:
             dict(imputed=imputed, select_by_value_kwargs=select_by_value_kwargs_),
             kde_kwargs,
         )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
@@ -2539,8 +2805,23 @@ class Trainer:
         )
         x_values = x_values[np.isfinite(x_values)]
         if len(x_values) > 0:
+            values = hist_data[feature]
             if feature not in self.cat_feature_names:
-                ax.hist(hist_data[feature], **hist_kwargs_)
+                if category is not None:
+                    unique_values = np.unique(hist_data[category])
+                    values = [
+                        values[hist_data[category] == val] for val in unique_values
+                    ]
+                    hist_kwargs_.update(
+                        color=clr[: len(unique_values)],
+                        stacked=True,
+                        label=unique_values,
+                    )
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore", message="All-NaN slice encountered"
+                    )
+                    ax.hist(values, **hist_kwargs_)
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
                 ax.set_xlim([np.min(x_values), np.max(x_values)])
@@ -2552,22 +2833,51 @@ class Trainer:
                     )
             else:
                 counts = np.array(
-                    [len(np.where(hist_data[feature].values == x)[0]) for x in x_values]
+                    [len(np.where(values.values == x)[0]) for x in x_values]
                 )
-                ax.bar(
-                    x_values,
-                    counts,
-                    tick_label=[self.cat_feature_mapping[feature][x] for x in x_values],
-                    **bar_kwargs_,
-                )
+                if category is not None:
+                    bottom = np.zeros(len(x_values))
+                    unique_values = np.unique(hist_data[category])
+                    for idx, val in enumerate(unique_values):
+                        category_counts = np.array(
+                            [
+                                len(
+                                    np.where(
+                                        values[hist_data[category] == val].values == x
+                                    )[0]
+                                )
+                                for x in x_values
+                            ]
+                        )
+                        bar_kwargs_.update(color=clr[idx], label=val, bottom=bottom)
+                        ax.bar(
+                            x_values,
+                            category_counts,
+                            tick_label=[
+                                self.cat_feature_mapping[feature][x] for x in x_values
+                            ],
+                            **bar_kwargs_,
+                        )
+                        bottom += category_counts
+                else:
+                    ax.bar(
+                        x_values,
+                        counts,
+                        tick_label=[
+                            self.cat_feature_mapping[feature][x] for x in x_values
+                        ],
+                        **bar_kwargs_,
+                    )
                 ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
                 count_range = np.max(counts) - np.min(counts)
                 ax.set_ylim(
                     [
-                        np.min(counts) - 0.2 * count_range,
+                        max([np.min(counts) - 0.2 * count_range, 0]),
                         np.max(counts) + 0.2 * count_range,
                     ]
                 )
+            if category is not None and legend:
+                ax.legend(**legend_kwargs_)
         else:
             ax.text(0.5, 0.5, "Invalid interval", ha="center", va="center")
             ax.set_xlim([0, 1])
@@ -2591,9 +2901,11 @@ class Trainer:
         self,
         meth_name: Union[str, List],
         meth_kwargs_ls: List[Dict],
+        twin: bool = False,
         fontsize: float = 12,
         xlabel: str = None,
         ylabel: str = None,
+        twin_ylabel: str = None,
         ax=None,
         meth_fix_kwargs: Dict = None,
         figure_kwargs: Dict = None,
@@ -2612,12 +2924,16 @@ class Trainer:
             indicates the subplot.
         meth_kwargs_ls
             A list of arguments of the corresponding ``meth_name`` (except for ``ax``).
+        twin
+            Plot one plot on ``ax`` and the next plot on ``ax.twin()``.
         fontsize
             ``plt.rcParams["font.size"]``
         xlabel
             The overall xlabel.
         ylabel
             The overall ylabel.
+        twin_ylabel
+            The overall ylabel of the twin x-axis if ``twin`` is True.
         ax
             ``matplotlib.axes.Axes``
         meth_fix_kwargs
@@ -2639,7 +2955,6 @@ class Trainer:
         matplotlib.axes.Axes
         """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
-        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
         meth_fix_kwargs_ = update_defaults_by_kwargs(dict(), meth_fix_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
@@ -2647,12 +2962,26 @@ class Trainer:
         plt.rcParams["font.size"] = fontsize
         if isinstance(meth_name, str):
             meth_name = [meth_name] * len(meth_kwargs_ls)
+
+        current_ax = ax
+        twin_ax = ax.twinx() if twin else ax
         for meth, meth_kwargs in zip(meth_name, meth_kwargs_ls):
-            getattr(self, meth)(ax=ax, **meth_kwargs, **meth_fix_kwargs_)
+            getattr(self, meth)(ax=current_ax, **meth_kwargs, **meth_fix_kwargs_)
+            current_ax = twin_ax if current_ax == ax and twin else ax
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+        handlers, labels = ax.get_legend_handles_labels()
+        if twin:
+            twin_ax.set_ylabel(twin_ylabel)
+            handlers_twin, labels_twin = twin_ax.get_legend_handles_labels()
+            handlers += handlers_twin
+            labels += labels_twin
+
         if legend:
+            legend_kwargs_ = update_defaults_by_kwargs(
+                dict(handles=handlers, labels=labels), legend_kwargs
+            )
             ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
@@ -3057,8 +3386,11 @@ class Trainer:
         self,
         ax=None,
         clr: Iterable = None,
+        category: str = None,
+        legend: bool = True,
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -3071,10 +3403,16 @@ class Trainer:
             ``matplotlib.axes.Axes``
         clr
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        category
+            The category to classify histograms and stack them with different colors.
+        legend
+            Show legends if ``category`` is not None.
         figure_kwargs
             Arguments for ``plt.figure``.
         hist_kwargs
             Arguments for ``plt.hist``.
+        legend_kwargs
+            Arguments for ``plt.legend`` if ``legend`` is True and ``category`` is not None.
         savefig_kwargs
             Arguments for ``plt.savefig``
         save_show_close
@@ -3091,9 +3429,10 @@ class Trainer:
         clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         hist_kwargs_ = update_defaults_by_kwargs(
-            dict(linewidth=1, edgecolor="k", facecolor=clr[0], density=True),
+            dict(linewidth=1, edgecolor="k", color=clr[0], density=True),
             hist_kwargs,
         )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
@@ -3104,8 +3443,18 @@ class Trainer:
         rating = (cont_presence_features + cat_presence_features) / len(
             self.all_feature_names
         )
+        if category is not None:
+            unique_values = np.unique(self.datamodule.df[category])
+            df = self.datamodule.df.loc[self.datamodule.cont_imputed_mask.index, :]
+            rating = [rating[df[category] == val] for val in unique_values]
+            hist_kwargs_.update(
+                dict(label=unique_values, stacked=True, color=clr[: len(unique_values)])
+            )
         ax.hist(rating, **hist_kwargs_)
         ax.set_xlim([0, 1])
+
+        if legend and category is not None:
+            ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
@@ -3351,7 +3700,7 @@ class Trainer:
                 plt.close()
         return ax_or_fig
 
-    def _bootstrap(
+    def _bootstrap_fit(
         self,
         program: str,
         df: pd.DataFrame,

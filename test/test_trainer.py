@@ -100,7 +100,7 @@ def pytest_configure_trainer():
                 ["NaNFeatureRemover", {}],
                 ["VarianceFeatureSelector", {"thres": 1}],
                 ["IQRRemover", {}],  # Note the remover here
-                ["SampleDataAugmentor", {}],  # Note the augmentor here
+                ["SampleDataAugmenter", {}],  # Note the augmenter here
                 ["StandardScaler", {}],
             ],
         },
@@ -775,6 +775,29 @@ def test_plots():
             legend=True,
         )
 
+        trainer.plot_subplots(
+            ls=[
+                [
+                    dict(
+                        x_col="cont_1", y_col="cont_2", scatter_kwargs={"label": "all"}
+                    ),
+                    dict(
+                        x_col="cont_1",
+                        y_col="cont_2",
+                        select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
+                        scatter_kwargs={"label": "cat_1=1,2,3"},
+                    ),
+                ]
+            ]
+            * 2,
+            ls_kwarg_name="meth_kwargs_ls",
+            meth_name="plot_on_one_axes",
+            with_title=False,
+            meth_fix_kwargs=dict(meth_name="plot_scatter", legend=True, twin=True),
+            ylabel="TEST 1",
+            twin_ylabel="TEST 2",
+        )
+
         print(f"\n-- PDF --\n")
         trainer.plot_pdf(
             feature="cont_1", select_by_value_kwargs={"selection": {"cat_1": [1, 2]}}
@@ -792,6 +815,7 @@ def test_plots():
 
         print(f"\n-- fill rating --\n")
         trainer.plot_fill_rating()
+        trainer.plot_fill_rating(category="cat_0")
 
         print(f"\n-- PCA 2d --\n")
         trainer.plot_pca_2d_visual()
@@ -800,11 +824,14 @@ def test_plots():
         print(f"\n-- Correlation --\n")
         trainer.plot_corr(imputed=True)
         trainer.plot_corr(imputed=False)
+        trainer.plot_corr_with_label(order="descending")
 
         print(f"\n-- hist --\n")
         trainer.plot_hist_all(imputed=True, kde=True)
         trainer.plot_hist_all(imputed=False)
         trainer.plot_hist(feature="cont_0")
+        trainer.plot_hist(feature="cont_0", category="cat_0")
+        trainer.plot_hist(feature="cat_0", category="cat_1")
 
         print(f"\n-- Pair --\n")
         trainer.plot_pairplot()
@@ -826,6 +853,11 @@ def test_plots():
         )
         trainer.plot_partial_err(
             program="CatEmbed", model_name="Category Embedding", feature="cont_0"
+        )
+
+        print(f"\n-- Err histogram --\n")
+        trainer.plot_err_hist(
+            program="CatEmbed", model_name="Category Embedding", category="cat_0"
         )
 
         print(f"\n-- Importance --\n")

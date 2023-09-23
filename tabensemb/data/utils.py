@@ -318,7 +318,9 @@ class OrdinalEncoder:
                     f"inverse-transformed."
                 )
 
-            transformed_values = np.empty_like(values).astype(self.dtypes[feature])
+            transformed_values = np.ones_like(values).astype(self.dtypes[feature])
+            for i in range(len(transformed_values)):
+                transformed_values[i] = unknown_val
             for val in unique_values:
                 transformed_values[values == val] = (
                     unknown_val
