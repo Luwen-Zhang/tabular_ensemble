@@ -2382,6 +2382,123 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def plot_corr_with_label(
+        self,
+        imputed=False,
+        features: List[str] = None,
+        order: str = "alphabetic",
+        clr=None,
+        ax=None,
+        figure_kwargs: Dict = None,
+        barplot_kwargs: Dict = None,
+        select_by_value_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot Pearson correlation coefficients between the target and each feature.
+
+        Parameters
+        ----------
+        imputed
+            Whether the imputed dataset should be considered. If False, some NaN coefficients may exist for features
+            with missing values.
+        features
+            A subset of continuous features to calculate correlations on.
+        order
+            The order of features. "alphabetic", "ascending", or "descending".
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        ax
+            ``matplotlib.axes.Axes``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        imshow_kwargs
+            Arguments for ``plt.imshow``.
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        legend_kwargs
+            Arguments for ``plt.legend``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(figsize=(8, 5)), figure_kwargs)
+        barplot_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                orient="h",
+                linewidth=1,
+                edgecolor="k",
+                saturation=1,
+            ),
+            barplot_kwargs,
+        )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
+
+        is_horizontal = barplot_kwargs_["orient"] == "h"
+
+        cont_feature_names = self.cont_feature_names if features is None else features
+
+        # sns.reset_defaults()
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+        plt.box(on=True)
+        corr = (
+            self.datamodule.cal_corr(
+                imputed=imputed,
+                features_only=False,
+                select_by_value_kwargs=select_by_value_kwargs,
+            )
+            .loc[cont_feature_names, self.label_name]
+            .values.flatten()
+        )
+        df = pd.DataFrame(data={"feature": cont_feature_names, "correlation": corr})
+        df.sort_values(
+            by="feature" if order == "alphabetic" else "correlation",
+            ascending=order != "descending",
+            inplace=True,
+        )
+
+        clr = global_palette if clr is None else clr
+        palette = self._plot_action_generate_feature_types_palette(
+            clr=clr, features=df["feature"]
+        )
+
+        sns.barplot(
+            data=df,
+            x="correlation" if is_horizontal else "feature",
+            y="feature" if is_horizontal else "correlation",
+            ax=ax,
+            palette=palette,
+            **barplot_kwargs_,
+        )
+        ax.set_xlabel(None)
+        ax.set_ylabel(None)
+
+        legend = self._plot_action_generate_feature_types_legends(
+            clr=clr, ax=ax, legend_kwargs=legend_kwargs_
+        )
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"corr_with_label{'_imputed' if imputed else ''}.pdf"
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=f"Correlation with {self.label_name[0]}" if is_horizontal else None,
+            ylabel=f"Correlation with {self.label_name[0]}"
+            if not is_horizontal
+            else None,
+            tight_layout=True,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
     def plot_pairplot(
         self,
         imputed: bool = False,

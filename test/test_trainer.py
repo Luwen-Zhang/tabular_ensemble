@@ -824,6 +824,7 @@ def test_plots():
         print(f"\n-- Correlation --\n")
         trainer.plot_corr(imputed=True)
         trainer.plot_corr(imputed=False)
+        trainer.plot_corr_with_label(order="descending")
 
         print(f"\n-- hist --\n")
         trainer.plot_hist_all(imputed=True, kde=True)
