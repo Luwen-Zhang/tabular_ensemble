@@ -815,7 +815,7 @@ def test_plots():
 
         print(f"\n-- fill rating --\n")
         trainer.plot_fill_rating()
-        trainer.plot_fill_rating(category=trainer.cat_feature_names[0])
+        trainer.plot_fill_rating(category="cat_0")
 
         print(f"\n-- PCA 2d --\n")
         trainer.plot_pca_2d_visual()
@@ -830,7 +830,8 @@ def test_plots():
         trainer.plot_hist_all(imputed=True, kde=True)
         trainer.plot_hist_all(imputed=False)
         trainer.plot_hist(feature="cont_0")
-        trainer.plot_hist(feature="cont_0", category=trainer.cat_feature_names[0])
+        trainer.plot_hist(feature="cont_0", category="cat_0")
+        trainer.plot_hist(feature="cat_0", category="cat_1")
 
         print(f"\n-- Pair --\n")
         trainer.plot_pairplot()
@@ -856,9 +857,7 @@ def test_plots():
 
         print(f"\n-- Err histogram --\n")
         trainer.plot_err_hist(
-            program="CatEmbed",
-            model_name="Category Embedding",
-            category=trainer.cat_feature_names[0],
+            program="CatEmbed", model_name="Category Embedding", category="cat_0"
         )
 
         print(f"\n-- Importance --\n")
