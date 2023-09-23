@@ -815,6 +815,7 @@ def test_plots():
 
         print(f"\n-- fill rating --\n")
         trainer.plot_fill_rating()
+        trainer.plot_fill_rating(category=trainer.cat_feature_names[0])
 
         print(f"\n-- PCA 2d --\n")
         trainer.plot_pca_2d_visual()
@@ -828,6 +829,7 @@ def test_plots():
         trainer.plot_hist_all(imputed=True, kde=True)
         trainer.plot_hist_all(imputed=False)
         trainer.plot_hist(feature="cont_0")
+        trainer.plot_hist(feature="cont_0", category=trainer.cat_feature_names[0])
 
         print(f"\n-- Pair --\n")
         trainer.plot_pairplot()

@@ -1,4 +1,5 @@
 import os.path
+import warnings
 import matplotlib.figure
 import matplotlib.axes
 import matplotlib.legend
@@ -2483,12 +2484,15 @@ class Trainer:
         clr: Iterable = None,
         imputed=False,
         kde=False,
+        category: str = None,
         x_values=None,
+        legend: bool = True,
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
         bar_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         kde_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -2507,8 +2511,12 @@ class Trainer:
             Whether the imputed dataset should be considered.
         kde
             Plot the kernel density estimation along with each histogram of continuous features.
+        category
+            The category to classify histograms and stack them with different colors.
         x_values
             Unique values of the `feature`. If None, it will be inferred from the dataset.
+        legend
+            Show legends if ``category`` is not None.
         figure_kwargs
             Arguments for ``plt.figure``.
         bar_kwargs
@@ -2519,6 +2527,8 @@ class Trainer:
             Arguments for :meth:`plot_kde` when ``kde`` is True.
         select_by_value_kwargs
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
+        legend_kwargs
+            Arguments for ``plt.legend`` if ``legend`` is True and ``category`` is not None.
         savefig_kwargs
             Arguments for ``plt.savefig``
         save_show_close
@@ -2537,6 +2547,7 @@ class Trainer:
             dict(imputed=imputed, select_by_value_kwargs=select_by_value_kwargs_),
             kde_kwargs,
         )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
@@ -2558,8 +2569,23 @@ class Trainer:
         )
         x_values = x_values[np.isfinite(x_values)]
         if len(x_values) > 0:
+            values = hist_data[feature]
             if feature not in self.cat_feature_names:
-                ax.hist(hist_data[feature], **hist_kwargs_)
+                if category is not None:
+                    unique_values = np.unique(hist_data[category])
+                    values = [
+                        values[hist_data[category] == val] for val in unique_values
+                    ]
+                    hist_kwargs_.update(
+                        color=clr[: len(unique_values)],
+                        stacked=True,
+                        label=unique_values,
+                    )
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore", message="All-NaN slice encountered"
+                    )
+                    ax.hist(values, **hist_kwargs_)
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
                 ax.set_xlim([np.min(x_values), np.max(x_values)])
@@ -2571,14 +2597,41 @@ class Trainer:
                     )
             else:
                 counts = np.array(
-                    [len(np.where(hist_data[feature].values == x)[0]) for x in x_values]
+                    [len(np.where(values.values == x)[0]) for x in x_values]
                 )
-                ax.bar(
-                    x_values,
-                    counts,
-                    tick_label=[self.cat_feature_mapping[feature][x] for x in x_values],
-                    **bar_kwargs_,
-                )
+                if category is not None:
+                    bottom = np.zeros(len(x_values))
+                    unique_values = np.unique(hist_data[category])
+                    for idx, val in enumerate(unique_values):
+                        category_counts = np.array(
+                            [
+                                len(
+                                    np.where(
+                                        values[hist_data[category] == val].values == x
+                                    )[0]
+                                )
+                                for x in x_values
+                            ]
+                        )
+                        bar_kwargs_.update(color=clr[idx], label=val, bottom=bottom)
+                        ax.bar(
+                            x_values,
+                            category_counts,
+                            tick_label=[
+                                self.cat_feature_mapping[feature][x] for x in x_values
+                            ],
+                            **bar_kwargs_,
+                        )
+                        bottom += category_counts
+                else:
+                    ax.bar(
+                        x_values,
+                        counts,
+                        tick_label=[
+                            self.cat_feature_mapping[feature][x] for x in x_values
+                        ],
+                        **bar_kwargs_,
+                    )
                 ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
                 count_range = np.max(counts) - np.min(counts)
                 ax.set_ylim(
@@ -2587,6 +2640,8 @@ class Trainer:
                         np.max(counts) + 0.2 * count_range,
                     ]
                 )
+            if category is not None and legend:
+                ax.legend(**legend_kwargs_)
         else:
             ax.text(0.5, 0.5, "Invalid interval", ha="center", va="center")
             ax.set_xlim([0, 1])
@@ -2688,7 +2743,9 @@ class Trainer:
             labels += labels_twin
 
         if legend:
-            legend_kwargs_ = update_defaults_by_kwargs(dict(handles=handlers, labels=labels), legend_kwargs)
+            legend_kwargs_ = update_defaults_by_kwargs(
+                dict(handles=handlers, labels=labels), legend_kwargs
+            )
             ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
@@ -3093,8 +3150,11 @@ class Trainer:
         self,
         ax=None,
         clr: Iterable = None,
+        category: str = None,
+        legend: bool = True,
         figure_kwargs: Dict = None,
         hist_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -3107,10 +3167,16 @@ class Trainer:
             ``matplotlib.axes.Axes``
         clr
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        category
+            The category to classify histograms and stack them with different colors.
+        legend
+            Show legends if ``category`` is not None.
         figure_kwargs
             Arguments for ``plt.figure``.
         hist_kwargs
             Arguments for ``plt.hist``.
+        legend_kwargs
+            Arguments for ``plt.legend`` if ``legend`` is True and ``category`` is not None.
         savefig_kwargs
             Arguments for ``plt.savefig``
         save_show_close
@@ -3127,9 +3193,10 @@ class Trainer:
         clr = global_palette if clr is None else clr
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         hist_kwargs_ = update_defaults_by_kwargs(
-            dict(linewidth=1, edgecolor="k", facecolor=clr[0], density=True),
+            dict(linewidth=1, edgecolor="k", color=clr[0], density=True),
             hist_kwargs,
         )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
@@ -3140,8 +3207,19 @@ class Trainer:
         rating = (cont_presence_features + cat_presence_features) / len(
             self.all_feature_names
         )
+        if category is not None:
+            unique_values = np.unique(self.datamodule.df[category])
+            rating = [
+                rating[self.datamodule.df[category] == val] for val in unique_values
+            ]
+            hist_kwargs_.update(
+                dict(label=unique_values, stacked=True, color=clr[: len(unique_values)])
+            )
         ax.hist(rating, **hist_kwargs_)
         ax.set_xlim([0, 1])
+
+        if legend and category is not None:
+            ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
