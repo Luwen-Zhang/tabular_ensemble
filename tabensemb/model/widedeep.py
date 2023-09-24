@@ -336,6 +336,7 @@ class WideDeep(AbstractModel):
     def _train_single_model(
         self,
         model,
+        model_name,
         epoch,
         X_train,
         y_train,
@@ -360,13 +361,15 @@ class WideDeep(AbstractModel):
         )
         model.optimizer = model._set_optimizer({"deeptabular": optimizer})
 
+        es_callback = EarlyStopping(
+            patience=self.trainer.static_params["patience"],
+            verbose=1 if verbose else 0,
+            restore_best_weights=True,
+        )
+
         model._set_callbacks_and_metrics(
             callbacks=[
-                EarlyStopping(
-                    patience=self.trainer.static_params["patience"],
-                    verbose=1 if verbose else 0,
-                    restore_best_weights=True,
-                ),
+                es_callback,
                 WideDeepCallback(total_epoch=epoch, verbose=verbose),
             ],
             metrics=None,
@@ -385,6 +388,10 @@ class WideDeep(AbstractModel):
             finetune=warm_start,
             finetune_epochs=10,
         )
+
+        self.train_losses[model_name] = model.history["train_loss"]
+        self.val_losses[model_name] = model.history["val_loss"]
+        self.restored_epochs[model_name] = es_callback.best_epoch
 
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
         original_batch_size = model.batch_size

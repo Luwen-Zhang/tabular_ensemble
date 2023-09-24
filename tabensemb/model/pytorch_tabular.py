@@ -10,6 +10,7 @@ from .base import PytorchLightningLossCallback
 from .base import AbstractWrapper
 from typing import Dict, Any
 from torch import nn
+import re
 
 
 class PytorchTabular(AbstractModel):
@@ -150,6 +151,7 @@ class PytorchTabular(AbstractModel):
     def _train_single_model(
         self,
         model,
+        model_name,
         epoch,
         X_train,
         y_train,
@@ -168,6 +170,9 @@ class PytorchTabular(AbstractModel):
         train_data[label_name] = y_train
         val_data = X_val.copy()
         val_data[label_name] = y_val
+        pl_loss_callback = PytorchLightningLossCallback(
+            verbose=verbose, total_epoch=epoch
+        )
         with HiddenPrints(
             disable_std=not verbose,
             disable_logging=not verbose,
@@ -178,8 +183,22 @@ class PytorchTabular(AbstractModel):
                 max_epochs=epoch,
                 callbacks=[
                     PytorchTabularVerboseLossCallback(),
-                    PytorchLightningLossCallback(verbose=verbose, total_epoch=epoch),
+                    pl_loss_callback,
                 ],
+            )
+        self.train_losses[model_name] = pl_loss_callback.train_ls
+        self.val_losses[model_name] = pl_loss_callback.val_ls
+
+        from pytorch_lightning.callbacks import ModelCheckpoint
+
+        ckpt_callback = None
+        for callback in model.callbacks:
+            if isinstance(callback, ModelCheckpoint):
+                ckpt_callback = callback
+                break
+        if ckpt_callback is not None:
+            self.restored_epochs[model_name] = int(
+                re.findall(r"epoch=([0-9]*)-", ckpt_callback.kth_best_model_path)[0]
             )
         if os.path.exists(os.path.join(self.root, "ckpts")):
             shutil.rmtree(os.path.join(self.root, "ckpts"))

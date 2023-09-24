@@ -3562,6 +3562,135 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def plot_loss(
+        self,
+        program: str,
+        model_name: str,
+        ax=None,
+        train_val: str = "both",
+        restored_epoch_mark: bool = True,
+        restored_epoch_mark_if_last: bool = False,
+        legend: bool = True,
+        clr: Iterable = None,
+        plot_kwargs: Dict = None,
+        scatter_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
+        figure_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot loss curves for a model.
+
+        Parameters
+        ----------
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base.
+        ax
+            ``matplotlib.axes.Axes``
+        train_val
+            "train" to plot training loss only. "val" to plot validation loss only. "both" to plot both of them.
+        restored_epoch_mark
+            Plot the best epoch from where the model is restored after training.
+        restored_epoch_mark_if_last
+            Plot the best epoch when it is the last epoch.
+        legend
+            Show legends.
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        plot_kwargs
+            Arguments for ``plt.plot``
+        scatter_kwargs
+            Arguments for ``plt.scatter`` (used to plot the restored epoch).
+        legend_kwargs
+            Arguments for ``plt.legend``.
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        clr = global_palette if clr is None else clr
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        plot_kwargs_ = update_defaults_by_kwargs(dict(markersize=4), plot_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                color=clr[2],
+                marker=global_marker[2],
+                s=15,
+                label="Best epoch",
+                zorder=10,
+            ),
+            scatter_kwargs,
+        )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        modelbase = self.get_modelbase(program=program)
+        train_ls = modelbase.train_losses.get(model_name, None)
+        val_ls = modelbase.val_losses.get(model_name, None)
+        restored_epoch = modelbase.restored_epochs.get(model_name, None)
+
+        if train_ls is None and val_ls is None:
+            raise Exception(
+                f"The model base {program} did not record losses during training in its attributes `train_losses` or "
+                f"`val_losses` (in the `_train_single_model` method). "
+            )
+
+        if restored_epoch is None and restored_epoch_mark:
+            warnings.warn(
+                f"The model base {program} did not record the best epoch from where the model is restored in its "
+                f"attribute `restored_epochs`  (in the `_train_single_model` method)"
+            )
+
+        if train_val in ["both", "train"] and train_ls is not None:
+            train_plot_kwargs = plot_kwargs_.copy()
+            train_plot_kwargs.update(
+                dict(color=clr[0], marker=global_marker[0], label="Training loss")
+            )
+            ax.plot(np.arange(len(train_ls)), train_ls, **train_plot_kwargs)
+
+        if train_val in ["both", "val"] and val_ls is not None:
+            val_plot_kwargs = plot_kwargs_.copy()
+            val_plot_kwargs.update(
+                dict(color=clr[1], marker=global_marker[1], label="Validation loss")
+            )
+            ax.plot(np.arange(len(val_ls)), val_ls, **val_plot_kwargs)
+
+        if (
+            restored_epoch is not None
+            and restored_epoch_mark
+            and (restored_epoch < len(val_ls) - 1 or restored_epoch_mark_if_last)
+        ):
+            ax.scatter(
+                restored_epoch,
+                (val_ls if train_val in ["both", "val"] else train_ls)[restored_epoch],
+                **scatter_kwargs_,
+            )
+
+        if legend:
+            ax.legend(**legend_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root, f"loss_{train_val}_{program}_{model_name}.pdf"
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel="Epoch",
+            ylabel=f"{self.datamodule.loss.upper()} loss",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
     def _plot_action_generate_feature_types_palette(
         self, clr: Iterable, features: List[str]
     ) -> List:
