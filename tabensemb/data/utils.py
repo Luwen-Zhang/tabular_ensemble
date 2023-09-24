@@ -164,7 +164,7 @@ class OrdinalEncoder:
             unknown_value = get_unknown_value(dtype)
             values = fill_cat_nan(df[[feature]], {feature: dtype}).values.flatten()
             self.dtypes[feature] = dtype
-            unique_values = list(set(values))
+            unique_values = list(sorted(set(values)))
             if unknown_value not in unique_values:
                 unique_values += [unknown_value]
             self.mapping[feature] = unique_values
