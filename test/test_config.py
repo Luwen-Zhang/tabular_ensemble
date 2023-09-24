@@ -4,6 +4,7 @@ import tabensemb
 from tabensemb.config import UserConfig
 import pytest
 import collections.abc
+import pandas as pd
 
 
 def test_config_basic():
@@ -110,20 +111,46 @@ def test_from_uci():
                 datafile_name="iris",
                 max_retries=10,
             )
+        df = pd.read_csv(
+            os.path.join(
+                tabensemb.setting["default_data_path"], f"{cfg_iris['database']}.csv"
+            )
+        )
+        assert all([x == y for x, y in zip(df.columns, iris_columns)])
         assert cfg_iris is not None
         assert cfg_iris["task"] == "multiclass"
-        cfg_autompg = UserConfig.from_uci(
-            "Auto MPG", column_names=mpg_columns, sep=r"\s+", max_retries=10
+
+        with pytest.warns(UserWarning, match=r"is not given"):
+            cfg_autompg = UserConfig.from_uci("Auto MPG", sep=r"\s+", max_retries=10)
+        df = pd.read_csv(
+            os.path.join(
+                tabensemb.setting["default_data_path"], f"{cfg_autompg['database']}.csv"
+            )
         )
+        assert all(
+            [
+                x == y
+                for x, y in zip(df.columns[:3], ["displacement", "mpg", "cylinders"])
+            ]
+        )
+        assert all([x == y for x, y in zip(df.columns[3:], mpg_columns[3:])])
         assert cfg_autompg is not None
         assert cfg_autompg["task"] == "regression"
-        with pytest.warns(UserWarning, match=r"There exists"):
+
+        with pytest.warns(UserWarning) as warninfo:
             # Exists a test file.
-            cfg_adult = UserConfig.from_uci(
-                "Adult", column_names=adult_columns, sep=", ", max_retries=10
-            )
+            cfg_adult = UserConfig.from_uci("Adult", sep=", ", max_retries=10)
+        warns = [warn.message.args[0] for warn in warninfo]
+        expected = ["There exists", "is not given"]
+        assert all([x in y for x, y in zip(expected, warns)])
         assert cfg_adult is not None
         assert cfg_adult["task"] == "binary"
+        df = pd.read_csv(
+            os.path.join(
+                tabensemb.setting["default_data_path"], f"{cfg_adult['database']}.csv"
+            )
+        )
+        assert all([x == y for x, y in zip(df.columns, adult_columns)])
 
         with pytest.raises(Exception) as err:
             _ = UserConfig.from_uci(
