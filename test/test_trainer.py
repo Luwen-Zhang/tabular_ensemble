@@ -895,6 +895,33 @@ def test_plots():
             refit=False,
         )
 
+        print(f"\n-- loss --\n")
+        trainer.plot_loss(
+            program="PytorchTabular",
+            model_name="Category Embedding",
+            restored_epoch_mark_if_last=True,
+        )
+        trainer.plot_loss(
+            program="CatEmbed",
+            model_name="Category Embedding",
+            restored_epoch_mark_if_last=False,
+        )
+        trainer.plot_loss(
+            program="WideDeep", model_name="TabMlp", restored_epoch_mark_if_last=False
+        )
+
+        with pytest.raises(Exception) as err:
+            trainer.plot_loss(program="AutoGluon", model_name="Linear Regression")
+        assert "did not record losses" in err.value.args[0]
+
+        trainer.get_modelbase("PytorchTabular").restored_epochs = {}
+        with pytest.warns(UserWarning, match=r"did not record the best epoch"):
+            trainer.plot_loss(
+                program="PytorchTabular",
+                model_name="Category Embedding",
+                restored_epoch_mark_if_last=True,
+            )
+
 
 def test_exception_during_bayes_opt(capfd):
     configfile = "sample"

@@ -26,6 +26,7 @@ from captum.attr import FeaturePermutation
 import traceback
 import math
 import inspect
+import re
 
 
 class AbstractModel:
@@ -51,6 +52,8 @@ class AbstractModel:
         The training loss during training of each model.
     val_losses
         The validation loss during training of each model.
+    restored_epochs
+        The best epoch from where the model is restored after training.
     model
         A dictionary of models.
     model_params
@@ -116,6 +119,7 @@ class AbstractModel:
         self.model_params = {}
         self.train_losses = {}
         self.val_losses = {}
+        self.restored_epochs = {}
         self.save_kwargs(d=self.init_params, ignore=["trainer", "self", "frame"])
         self._check_space()
         self._mkdir()
@@ -2092,7 +2096,6 @@ class TorchModel(AbstractModel):
         ckpt_callback = ModelCheckpoint(
             monitor="early_stopping_eval",
             dirpath=self.root,
-            filename="early_stopping_ckpt",
             save_top_k=1,
             mode="min",
             every_n_epochs=1,
@@ -2129,10 +2132,6 @@ class TorchModel(AbstractModel):
             **lightning_kwargs,
         )
 
-        ckpt_path = os.path.join(self.root, "early_stopping_ckpt.ckpt")
-        if os.path.isfile(ckpt_path):
-            os.remove(ckpt_path)
-
         with HiddenPrints(
             disable_std=not verbose,
             disable_logging=not verbose,
@@ -2143,12 +2142,13 @@ class TorchModel(AbstractModel):
 
         model.to("cpu")
         model.load_state_dict(torch.load(ckpt_callback.best_model_path)["state_dict"])
-        trainer.strategy.remove_checkpoint(
-            os.path.join(self.root, "early_stopping_ckpt.ckpt")
-        )
+        trainer.strategy.remove_checkpoint(ckpt_callback.best_model_path)
 
         self.train_losses[model_name] = pl_loss_callback.train_ls
         self.val_losses[model_name] = pl_loss_callback.val_ls
+        self.restored_epochs[model_name] = int(
+            re.findall(r"epoch=([0-9]*)-", ckpt_callback.kth_best_model_path)[0]
+        )
         # pl.Trainer is not pickle-able. When pickling, "ReferenceError: weakly-referenced object no longer exists."
         # may be raised occasionally. Set the trainer to None.
         # https://deepforest.readthedocs.io/en/latest/FAQ.html
