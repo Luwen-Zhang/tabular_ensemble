@@ -2391,6 +2391,7 @@ class Trainer:
         imputed=False,
         features: List[str] = None,
         order: str = "alphabetic",
+        method: str = "pearson",
         clr=None,
         ax=None,
         figure_kwargs: Dict = None,
@@ -2412,6 +2413,8 @@ class Trainer:
             A subset of continuous features to calculate correlations on.
         order
             The order of features. "alphabetic", "ascending", or "descending".
+        method
+            The argument of ``pd.DataFrame.corr``. "pearson", "kendall", "spearman" or Callable.
         clr
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         ax
@@ -2454,6 +2457,7 @@ class Trainer:
         plt.box(on=True)
         corr = (
             self.datamodule.cal_corr(
+                method=method,
                 imputed=imputed,
                 features_only=False,
                 select_by_value_kwargs=select_by_value_kwargs,
