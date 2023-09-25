@@ -2827,7 +2827,8 @@ class Trainer:
                     ax.hist(values, **hist_kwargs_)
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
-                ax.set_xlim([np.min(x_values), np.max(x_values)])
+                if "range" not in hist_kwargs_.keys():
+                    ax.set_xlim([np.min(x_values), np.max(x_values)])
                 if kde:
                     self.plot_kde(
                         feature=feature,
@@ -2871,14 +2872,15 @@ class Trainer:
                         ],
                         **bar_kwargs_,
                     )
-                ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
-                count_range = np.max(counts) - np.min(counts)
-                ax.set_ylim(
-                    [
-                        max([np.min(counts) - 0.2 * count_range, 0]),
-                        np.max(counts) + 0.2 * count_range,
-                    ]
-                )
+                if "range" not in hist_kwargs_.keys():
+                    ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
+                    count_range = np.max(counts) - np.min(counts)
+                    ax.set_ylim(
+                        [
+                            max([np.min(counts) - 0.2 * count_range, 0]),
+                            np.max(counts) + 0.2 * count_range,
+                        ]
+                    )
             if category is not None and legend:
                 ax.legend(**legend_kwargs_)
         else:
