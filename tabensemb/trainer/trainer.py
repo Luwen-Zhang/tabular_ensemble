@@ -2800,7 +2800,7 @@ class Trainer:
             dict(color=clr[0], edgecolor=None), bar_kwargs
         )
         hist_kwargs_ = update_defaults_by_kwargs(
-            dict(density=True, color=clr[0], rwidth=0.95), hist_kwargs
+            dict(density=True, color=clr[0], rwidth=0.95, stacked=True), hist_kwargs
         )
         x_values = (
             np.sort(np.unique(hist_data[feature].values.flatten()))
@@ -2818,7 +2818,6 @@ class Trainer:
                     ]
                     hist_kwargs_.update(
                         color=clr[: len(unique_values)],
-                        stacked=True,
                         label=unique_values,
                     )
                 with warnings.catch_warnings():
