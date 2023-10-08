@@ -3005,6 +3005,7 @@ class Trainer:
         ax=None,
         clr: Iterable = None,
         imputed: bool = False,
+        kde_color: bool = False,
         figure_kwargs: Dict = None,
         scatter_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
@@ -3026,6 +3027,8 @@ class Trainer:
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
+        kde_color
+            Whether the scatters are colored by their KDE density.
         figure_kwargs
             Arguments for ``plt.figure``.
         scatter_kwargs
@@ -3060,7 +3063,16 @@ class Trainer:
         isna = np.union1d(np.where(np.isnan(x))[0], np.where(np.isnan(y))[0])
         notna = np.setdiff1d(np.arange(len(x)), isna)
 
-        ax.scatter(x[notna], y[notna], **scatter_kwargs_)
+        if kde_color:
+            xy = np.vstack([x[notna], y[notna]])
+            z = st.gaussian_kde(xy)(xy)
+            idx = z.argsort()
+            scatter_kwargs_ = update_defaults_by_kwargs(
+                scatter_kwargs_, dict(c=z[idx], color=None)
+            )
+            ax.scatter(x[notna][idx], y[notna][idx], **scatter_kwargs_)
+        else:
+            ax.scatter(x[notna], y[notna], **scatter_kwargs_)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"scatter_{x_col}_{y_col}.pdf"),
