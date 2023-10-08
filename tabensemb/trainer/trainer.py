@@ -2391,6 +2391,7 @@ class Trainer:
         imputed=False,
         features: List[str] = None,
         order: str = "alphabetic",
+        method: str = "pearson",
         clr=None,
         ax=None,
         figure_kwargs: Dict = None,
@@ -2412,6 +2413,8 @@ class Trainer:
             A subset of continuous features to calculate correlations on.
         order
             The order of features. "alphabetic", "ascending", or "descending".
+        method
+            The argument of ``pd.DataFrame.corr``. "pearson", "kendall", "spearman" or Callable.
         clr
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         ax
@@ -2454,6 +2457,7 @@ class Trainer:
         plt.box(on=True)
         corr = (
             self.datamodule.cal_corr(
+                method=method,
                 imputed=imputed,
                 features_only=False,
                 select_by_value_kwargs=select_by_value_kwargs,
@@ -2796,7 +2800,7 @@ class Trainer:
             dict(color=clr[0], edgecolor=None), bar_kwargs
         )
         hist_kwargs_ = update_defaults_by_kwargs(
-            dict(density=True, color=clr[0], rwidth=0.95), hist_kwargs
+            dict(density=True, color=clr[0], rwidth=0.95, stacked=True), hist_kwargs
         )
         x_values = (
             np.sort(np.unique(hist_data[feature].values.flatten()))
@@ -2814,7 +2818,6 @@ class Trainer:
                     ]
                     hist_kwargs_.update(
                         color=clr[: len(unique_values)],
-                        stacked=True,
                         label=unique_values,
                     )
                 with warnings.catch_warnings():
@@ -2824,7 +2827,8 @@ class Trainer:
                     ax.hist(values, **hist_kwargs_)
                 # sns.rugplot(data=chosen_data, height=0.05, ax=ax2, color='k')
                 # ax2.set_ylim([0,1])
-                ax.set_xlim([np.min(x_values), np.max(x_values)])
+                if "range" not in hist_kwargs_.keys():
+                    ax.set_xlim([np.min(x_values), np.max(x_values)])
                 if kde:
                     self.plot_kde(
                         feature=feature,
@@ -2868,14 +2872,15 @@ class Trainer:
                         ],
                         **bar_kwargs_,
                     )
-                ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
-                count_range = np.max(counts) - np.min(counts)
-                ax.set_ylim(
-                    [
-                        max([np.min(counts) - 0.2 * count_range, 0]),
-                        np.max(counts) + 0.2 * count_range,
-                    ]
-                )
+                if "range" not in hist_kwargs_.keys():
+                    ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
+                    count_range = np.max(counts) - np.min(counts)
+                    ax.set_ylim(
+                        [
+                            max([np.min(counts) - 0.2 * count_range, 0]),
+                            np.max(counts) + 0.2 * count_range,
+                        ]
+                    )
             if category is not None and legend:
                 ax.legend(**legend_kwargs_)
         else:
