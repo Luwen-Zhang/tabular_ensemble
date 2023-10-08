@@ -2260,7 +2260,7 @@ class Trainer:
         )
 
         if category is not None:
-            unique_values = np.unique(df[category])
+            unique_values = np.sort(np.unique(df[category]))
             metrics = [
                 metrics[np.where(df[category] == val)[0]] for val in unique_values
             ]
@@ -2812,7 +2812,7 @@ class Trainer:
             values = hist_data[feature]
             if feature not in self.cat_feature_names:
                 if category is not None:
-                    unique_values = np.unique(hist_data[category])
+                    unique_values = np.sort(np.unique(hist_data[category]))
                     values = [
                         values[hist_data[category] == val] for val in unique_values
                     ]
