@@ -2831,7 +2831,7 @@ class Trainer:
                     ax.set_xlim([np.min(x_values), np.max(x_values)])
                 if kde:
                     self.plot_kde(
-                        feature=feature,
+                        x_col=feature,
                         ax=ax,
                         **kde_kwargs_,
                     )
@@ -3207,7 +3207,7 @@ class Trainer:
 
         return self.plot_subplots(
             ls=self.cont_feature_names + self.label_name,
-            ls_kwarg_name="feature",
+            ls_kwarg_name="x_col",
             meth_name="plot_kde",
             meth_fix_kwargs=dict(imputed=imputed, **kwargs),
             fontsize=fontsize,
@@ -3222,7 +3222,8 @@ class Trainer:
 
     def plot_kde(
         self,
-        feature: str,
+        x_col: str,
+        y_col: str = None,
         ax=None,
         clr: Iterable = None,
         imputed: bool = False,
@@ -3233,12 +3234,14 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot the kernel density estimation of a feature.
+        Plot the kernel density estimation of a feature or two features.
 
         Parameters
         ----------
-        feature
+        x_col
             The investigated feature.
+        y_col
+            If not None, a bi-variate distribution will be plotted.
         ax
             ``matplotlib.axes.Axes``
         clr
@@ -3275,16 +3278,19 @@ class Trainer:
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
-        sns.kdeplot(data=df, x=feature, ax=ax, **kdeplot_kwargs_)
+        sns.kdeplot(data=df, x=x_col, y=y_col, ax=ax, **kdeplot_kwargs_)
         ax.set_ylabel(None)
         ax.set_xlabel(None)
 
         return self._plot_action_after_plot(
-            fig_name=os.path.join(self.project_root, f"kde_{feature}.pdf"),
+            fig_name=os.path.join(
+                self.project_root,
+                f"kde_{x_col}{'' if y_col is None else '_'+y_col}.pdf",
+            ),
             disable=given_ax,
             ax_or_fig=ax,
-            xlabel=feature,
-            ylabel="Density",
+            xlabel=x_col,
+            ylabel="Density" if y_col is None else y_col,
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -3535,7 +3541,7 @@ class Trainer:
         features = self.cont_feature_names if features is None else features
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         pca_kwargs_ = update_defaults_by_kwargs(dict(), pca_kwargs)
-        scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(dict(color=clr[0]), scatter_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(dict(title=category), legend_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
