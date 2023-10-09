@@ -1788,6 +1788,20 @@ class DataModule:
         kurtosis[self.cat_feature_names] = np.nan
         desc = pd.concat([desc, kurtosis], axis=0)
 
+        z_scores = {
+            key: len(
+                np.where(
+                    (tabular[key].values - tabular[key].mean()) / tabular[key].std() > 2
+                )[0]
+            )
+            / len(tabular[key][pd.notna(tabular[key])])
+            for key in tabular.columns
+        }
+        z_score_df = pd.DataFrame(
+            data=z_scores, index=["Percentage of points with Z-score beyond 2"]
+        )
+        desc = pd.concat([desc, z_score_df], axis=0)
+
         return desc
 
     def get_derived_data_sizes(self) -> List[Tuple]:
