@@ -3002,6 +3002,7 @@ class Trainer:
         self,
         x_col: str,
         y_col: str,
+        category: str = None,
         ax=None,
         clr: Iterable = None,
         imputed: bool = False,
@@ -3010,6 +3011,7 @@ class Trainer:
         scatter_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -3021,6 +3023,8 @@ class Trainer:
             The column for the x-axis.
         y_col
             The column for the y-axis.
+        category
+            The category to classify data points with different colors and markers.
         ax
             ``matplotlib.axes.Axes``
         clr
@@ -3037,6 +3041,8 @@ class Trainer:
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         savefig_kwargs
             Arguments for ``plt.savefig``
+        legend_kwargs
+            Arguments for ``plt.legend``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -3050,6 +3056,7 @@ class Trainer:
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
         )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
@@ -3072,7 +3079,20 @@ class Trainer:
             )
             ax.scatter(x[notna][idx], y[notna][idx], **scatter_kwargs_)
         else:
-            ax.scatter(x[notna], y[notna], **scatter_kwargs_)
+            if category is None:
+                ax.scatter(x[notna], y[notna], **scatter_kwargs_)
+            else:
+                df = df.loc[indices, :].reset_index(drop=True)
+                self._plot_action_categorical_scatter(
+                    x=x[notna],
+                    y=y[notna],
+                    df=df.loc[notna, :],
+                    category=category,
+                    ax=ax,
+                    clr=clr,
+                    scatter_kwargs=scatter_kwargs_,
+                )
+                ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"scatter_{x_col}_{y_col}.pdf"),
@@ -3559,19 +3579,15 @@ class Trainer:
         if category is None:
             ax.scatter(x, y, **scatter_kwargs_)
         else:
-            df = self.datamodule.categories_inverse_transform(df)
-            for idx, cat in enumerate(np.sort(np.unique(df[category]))):
-                colored_scatter_kwargs_ = scatter_kwargs_.copy()
-                colored_scatter_kwargs_.update(
-                    {
-                        "color": clr[idx % len(clr)],
-                        "marker": global_marker[idx % len(global_marker)],
-                    }
-                )
-                cat_indices = np.array(df[df[category] == cat].index)
-                ax.scatter(
-                    x[cat_indices], y[cat_indices], label=cat, **colored_scatter_kwargs_
-                )
+            self._plot_action_categorical_scatter(
+                x=x,
+                y=y,
+                df=df,
+                category=category,
+                ax=ax,
+                clr=clr,
+                scatter_kwargs=scatter_kwargs_,
+            )
             ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
@@ -3584,6 +3600,52 @@ class Trainer:
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
         )
+
+    def _plot_action_categorical_scatter(
+        self,
+        x,
+        y,
+        df: pd.DataFrame,
+        category: str,
+        ax,
+        clr: Iterable,
+        scatter_kwargs: Dict,
+    ):
+        """
+        Plot scatters whose colors are related to their category.
+
+        Parameters
+        ----------
+        x
+            x-values of the scatter plot.
+        y
+            y-values of the scatter plot.
+        df
+            The dataframe whose ``category`` column is used to classify data points.
+        category
+            The column to classify data points.
+        ax
+            ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        scatter_kwargs
+            Arguments for ``plt.scatter``
+        """
+        df = self.datamodule.categories_inverse_transform(df).reset_index(drop=True)
+        category_data = df[category]
+        category_data.fillna(object_unknown_value, inplace=True)
+        for idx, cat in enumerate(np.sort(np.unique(category_data))):
+            colored_scatter_kwargs_ = scatter_kwargs.copy()
+            colored_scatter_kwargs_.update(
+                {
+                    "color": clr[idx % len(clr)],
+                    "marker": global_marker[idx % len(global_marker)],
+                }
+            )
+            cat_indices = np.array(df[category_data == cat].index)
+            ax.scatter(
+                x[cat_indices], y[cat_indices], label=cat, **colored_scatter_kwargs_
+            )
 
     def plot_loss(
         self,
