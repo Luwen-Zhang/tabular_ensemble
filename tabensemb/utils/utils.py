@@ -723,6 +723,8 @@ def gini(x: np.ndarray, w: np.ndarray = None) -> float:
         The gini index of the feature.
     """
     x = np.asarray(x)
+    w = w[np.isfinite(x)] if w is not None else None
+    x = x[np.isfinite(x)]
     if len(np.unique(x)) == 1:
         return np.nan
     if w is not None:

@@ -1744,21 +1744,25 @@ class DataModule:
                 x = processor.var_slip(feature_name, x)
         return x
 
-    def describe(self, transformed=False) -> pd.DataFrame:
+    def describe(self, imputed: bool = False, scaled: bool = False) -> pd.DataFrame:
         """
         Describe the dataset using ``pd.DataFrame.describe``, skewness, gini index, mode values, etc.
 
         Parameters
         ----------
-        transformed
-            Whether to describe the scaled data.
+        imputed
+            Whether the imputed dataset is described.
+        scaled
+            Whether the scaled dataset is described.
 
         Returns
         -------
         pd.DataFrame
             The descriptions of the dataset.
         """
-        tabular = self.get_tabular_dataset(transformed=transformed)[0]
+        tabular = self.get_df(imputed=imputed, scaled=scaled, cat_transformed=True)[
+            self.all_feature_names
+        ]
         desc = tabular.describe()
 
         skew = tabular.skew()
@@ -1834,7 +1838,7 @@ class DataModule:
             The kurtosis for each feature in the dataset.
         """
         return pd.DataFrame(
-            data=st.kurtosis(tabular.values, axis=0).reshape(1, -1),
+            data=st.kurtosis(tabular.values, axis=0, nan_policy="omit").reshape(1, -1),
             columns=tabular.columns,
             index=["Kurtosis"],
         )
