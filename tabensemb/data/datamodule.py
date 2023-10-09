@@ -1761,7 +1761,7 @@ class DataModule:
             The descriptions of the dataset.
         """
         tabular = self.get_df(imputed=imputed, scaled=scaled, cat_transformed=True)[
-            self.all_feature_names
+            self.all_feature_names + self.label_name
         ]
         desc = tabular.describe()
 
