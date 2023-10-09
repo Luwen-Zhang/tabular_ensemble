@@ -542,6 +542,11 @@ def test_categorical_transform():
     returned_same = datamodule.categories_inverse_transform(returned[["derived_cat_1"]])
     assert all([x == y for x, y in zip(returned_same, returned[["derived_cat_1"]])])
 
+    permuted_df = test_df.copy()
+    permuted_df.index = np.random.permutation(test_df.index)
+    return_same_index = datamodule.categories_inverse_transform(permuted_df)
+    assert all([x == y for x, y in zip(permuted_df.index, return_same_index.index)])
+
 
 def test_ordinal_encoder():
     df = pd.DataFrame(

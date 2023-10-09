@@ -2210,6 +2210,7 @@ class DataModule:
             raise Exception(f"Provide only one of `partition` and `df`.")
         if df is None:
             df = self.df
+        df = self.categories_inverse_transform(df)
         if partition is not None:
             part = self._get_indices(partition)
         else:

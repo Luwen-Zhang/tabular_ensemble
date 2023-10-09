@@ -9,6 +9,7 @@ import tabensemb
 from tabensemb.utils import *
 from tabensemb.config import UserConfig
 from tabensemb.data import DataModule
+from tabensemb.data.utils import object_unknown_value
 from copy import deepcopy as cp
 from skopt.space import Real, Integer, Categorical
 import time
@@ -2233,7 +2234,9 @@ class Trainer:
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
-        df = self.datamodule.df.loc[indices, :]
+        df = self._plot_action_get_df(
+            imputed=True, scaled=False, cat_transformed=False
+        ).loc[indices, :]
         derived_data = self.datamodule.get_derived_data_slice(
             self.datamodule.derived_data, indices=indices
         )
@@ -2795,7 +2798,7 @@ class Trainer:
             imputed=imputed, scaled=False, cat_transformed=True
         )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
-        hist_data = hist_data.loc[indices, :]
+        hist_data = hist_data.loc[indices, :].reset_index(drop=True)
         bar_kwargs_ = update_defaults_by_kwargs(
             dict(color=clr[0], edgecolor=None), bar_kwargs
         )
@@ -2808,17 +2811,25 @@ class Trainer:
             else x_values
         )
         x_values = x_values[np.isfinite(x_values)]
+        category_data = (
+            self.datamodule.categories_inverse_transform(hist_data)[category]
+            if category is not None
+            else None
+        )
+        category_unique_values = (
+            np.sort(np.unique(category_data)) if category is not None else None
+        )
+
         if len(x_values) > 0:
             values = hist_data[feature]
             if feature not in self.cat_feature_names:
                 if category is not None:
-                    unique_values = np.sort(np.unique(hist_data[category]))
                     values = [
-                        values[hist_data[category] == val] for val in unique_values
+                        values[category_data == val] for val in category_unique_values
                     ]
                     hist_kwargs_.update(
-                        color=clr[: len(unique_values)],
-                        label=unique_values,
+                        color=clr[: len(category_unique_values)],
+                        label=category_unique_values,
                     )
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
@@ -2841,14 +2852,13 @@ class Trainer:
                 )
                 if category is not None:
                     bottom = np.zeros(len(x_values))
-                    unique_values = np.unique(hist_data[category])
-                    for idx, val in enumerate(unique_values):
+                    for idx, val in enumerate(category_unique_values):
                         category_counts = np.array(
                             [
                                 len(
-                                    np.where(
-                                        values[hist_data[category] == val].values == x
-                                    )[0]
+                                    np.where(values[category_data == val].values == x)[
+                                        0
+                                    ]
                                 )
                                 for x in x_values
                             ]
@@ -3487,8 +3497,10 @@ class Trainer:
             self.all_feature_names
         )
         if category is not None:
-            unique_values = np.unique(self.datamodule.df[category])
-            df = self.datamodule.df.loc[self.datamodule.cont_imputed_mask.index, :]
+            df = self._plot_action_get_df(
+                imputed=True, scaled=False, cat_transformed=False
+            ).loc[self.datamodule.cont_imputed_mask.index, :]
+            unique_values = np.sort(np.unique(df[category]))
             rating = [rating[df[category] == val] for val in unique_values]
             hist_kwargs_.update(
                 dict(label=unique_values, stacked=True, color=clr[: len(unique_values)])
@@ -3569,7 +3581,11 @@ class Trainer:
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
-        df = self.datamodule.scaled_df.loc[indices, :].copy().reset_index(drop=True)
+        df = (
+            self._plot_action_get_df(imputed=True, scaled=True, cat_transformed=False)
+            .loc[indices, :]
+            .reset_index(drop=True)
+        )
         pca = self.datamodule.pca(
             feature_names=features, indices=indices, **pca_kwargs_
         )
