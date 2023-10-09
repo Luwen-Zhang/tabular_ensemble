@@ -2268,7 +2268,11 @@ class Trainer:
                 metrics[np.where(df[category] == val)[0]] for val in unique_values
             ]
             hist_kwargs_.update(
-                dict(color=clr[: len(unique_values)], label=unique_values, stacked=True)
+                dict(
+                    color=clr[: len(unique_values)],
+                    label=unique_values.astype(str),
+                    stacked=True,
+                )
             )
 
         ax.hist(metrics, **hist_kwargs_)
@@ -2829,7 +2833,7 @@ class Trainer:
                     ]
                     hist_kwargs_.update(
                         color=clr[: len(category_unique_values)],
-                        label=category_unique_values,
+                        label=category_unique_values.astype(str),
                     )
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
@@ -2863,7 +2867,9 @@ class Trainer:
                                 for x in x_values
                             ]
                         )
-                        bar_kwargs_.update(color=clr[idx], label=val, bottom=bottom)
+                        bar_kwargs_.update(
+                            color=clr[idx], label=str(val), bottom=bottom
+                        )
                         ax.bar(
                             x_values,
                             category_counts,
@@ -3503,7 +3509,11 @@ class Trainer:
             unique_values = np.sort(np.unique(df[category]))
             rating = [rating[df[category] == val] for val in unique_values]
             hist_kwargs_.update(
-                dict(label=unique_values, stacked=True, color=clr[: len(unique_values)])
+                dict(
+                    label=unique_values.astype(str),
+                    stacked=True,
+                    color=clr[: len(unique_values)],
+                )
             )
         ax.hist(rating, **hist_kwargs_)
         ax.set_xlim([0, 1])
@@ -3660,7 +3670,10 @@ class Trainer:
             )
             cat_indices = np.array(df[category_data == cat].index)
             ax.scatter(
-                x[cat_indices], y[cat_indices], label=cat, **colored_scatter_kwargs_
+                x[cat_indices],
+                y[cat_indices],
+                label=str(cat),
+                **colored_scatter_kwargs_,
             )
 
     def plot_loss(
