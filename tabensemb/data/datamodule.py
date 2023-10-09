@@ -2178,6 +2178,8 @@ class DataModule:
         df: pd.DataFrame = None,
         partition: str = None,
         eps: float = None,
+        left_closed: bool = True,
+        right_closed: bool = False,
     ) -> np.ndarray:
         """
         Select data points with the given value(s) in the given column(s).
@@ -2186,7 +2188,7 @@ class DataModule:
         ----------
         selection
             A dictionary whose items indicate the columns to be investigated and the values (if is a list/int/float/str)
-            or a range of values (closed interval, if is a tuple with two components) to be selected for each column.
+            or a range of values (if is a tuple with two components) to be selected for each column.
         df
             A dataframe to be filtered. If not given, :attr:`df` is used.
         partition
@@ -2194,6 +2196,10 @@ class DataModule:
         eps
             A tolerance value if the value to be selected is a float. If None, only values "equal" to the float will be
             selected.
+        left_closed
+            When the feature is filtered by a range, whether the left boundary is closed.
+        right_closed
+            When the feature is filtered by a range, whether the right boundary is closed.
 
         Returns
         -------
@@ -2204,6 +2210,7 @@ class DataModule:
             raise Exception(f"Provide only one of `partition` and `df`.")
         if df is None:
             df = self.df
+        df = self.categories_inverse_transform(df)
         if partition is not None:
             part = self._get_indices(partition)
         else:
@@ -2217,7 +2224,11 @@ class DataModule:
                 for v in val:
                     col_res += list(df[df[col] == v].index)
             elif isinstance(val, tuple) and len(val) == 2:
-                col_res = df[(df[col] >= val[0]) & (df[col] <= val[1])].index
+                leq = lambda x, y: x <= y
+                le = lambda x, y: x < y
+                left_op = lambda x, y: (leq(y, x) if left_closed else le(y, x))
+                right_op = leq if right_closed else le
+                col_res = df[left_op(df[col], val[0]) & right_op(df[col], val[1])].index
             elif isinstance(val, int) or isinstance(val, float) or isinstance(val, str):
                 if isinstance(val, float) and eps is not None:
                     col_res = np.array(df[((df[col] - val).__abs__() <= eps)].index)

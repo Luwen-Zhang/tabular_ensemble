@@ -9,6 +9,7 @@ import tabensemb
 from tabensemb.utils import *
 from tabensemb.config import UserConfig
 from tabensemb.data import DataModule
+from tabensemb.data.utils import object_unknown_value
 from copy import deepcopy as cp
 from skopt.space import Real, Integer, Categorical
 import time
@@ -2233,7 +2234,9 @@ class Trainer:
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
-        df = self.datamodule.df.loc[indices, :]
+        df = self._plot_action_get_df(
+            imputed=True, scaled=False, cat_transformed=False
+        ).loc[indices, :]
         derived_data = self.datamodule.get_derived_data_slice(
             self.datamodule.derived_data, indices=indices
         )
@@ -2260,12 +2263,16 @@ class Trainer:
         )
 
         if category is not None:
-            unique_values = np.unique(df[category])
+            unique_values = np.sort(np.unique(df[category]))
             metrics = [
                 metrics[np.where(df[category] == val)[0]] for val in unique_values
             ]
             hist_kwargs_.update(
-                dict(color=clr[: len(unique_values)], label=unique_values, stacked=True)
+                dict(
+                    color=clr[: len(unique_values)],
+                    label=unique_values.astype(str),
+                    stacked=True,
+                )
             )
 
         ax.hist(metrics, **hist_kwargs_)
@@ -2795,7 +2802,7 @@ class Trainer:
             imputed=imputed, scaled=False, cat_transformed=True
         )
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
-        hist_data = hist_data.loc[indices, :]
+        hist_data = hist_data.loc[indices, :].reset_index(drop=True)
         bar_kwargs_ = update_defaults_by_kwargs(
             dict(color=clr[0], edgecolor=None), bar_kwargs
         )
@@ -2808,17 +2815,25 @@ class Trainer:
             else x_values
         )
         x_values = x_values[np.isfinite(x_values)]
+        category_data = (
+            self.datamodule.categories_inverse_transform(hist_data)[category]
+            if category is not None
+            else None
+        )
+        category_unique_values = (
+            np.sort(np.unique(category_data)) if category is not None else None
+        )
+
         if len(x_values) > 0:
             values = hist_data[feature]
             if feature not in self.cat_feature_names:
                 if category is not None:
-                    unique_values = np.unique(hist_data[category])
                     values = [
-                        values[hist_data[category] == val] for val in unique_values
+                        values[category_data == val] for val in category_unique_values
                     ]
                     hist_kwargs_.update(
-                        color=clr[: len(unique_values)],
-                        label=unique_values,
+                        color=clr[: len(category_unique_values)],
+                        label=category_unique_values.astype(str),
                     )
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
@@ -2831,7 +2846,7 @@ class Trainer:
                     ax.set_xlim([np.min(x_values), np.max(x_values)])
                 if kde:
                     self.plot_kde(
-                        feature=feature,
+                        x_col=feature,
                         ax=ax,
                         **kde_kwargs_,
                     )
@@ -2841,19 +2856,20 @@ class Trainer:
                 )
                 if category is not None:
                     bottom = np.zeros(len(x_values))
-                    unique_values = np.unique(hist_data[category])
-                    for idx, val in enumerate(unique_values):
+                    for idx, val in enumerate(category_unique_values):
                         category_counts = np.array(
                             [
                                 len(
-                                    np.where(
-                                        values[hist_data[category] == val].values == x
-                                    )[0]
+                                    np.where(values[category_data == val].values == x)[
+                                        0
+                                    ]
                                 )
                                 for x in x_values
                             ]
                         )
-                        bar_kwargs_.update(color=clr[idx], label=val, bottom=bottom)
+                        bar_kwargs_.update(
+                            color=clr[idx], label=str(val), bottom=bottom
+                        )
                         ax.bar(
                             x_values,
                             category_counts,
@@ -3002,13 +3018,16 @@ class Trainer:
         self,
         x_col: str,
         y_col: str,
+        category: str = None,
         ax=None,
         clr: Iterable = None,
         imputed: bool = False,
+        kde_color: bool = False,
         figure_kwargs: Dict = None,
         scatter_kwargs: Dict = None,
         select_by_value_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
+        legend_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
@@ -3020,12 +3039,16 @@ class Trainer:
             The column for the x-axis.
         y_col
             The column for the y-axis.
+        category
+            The category to classify data points with different colors and markers.
         ax
             ``matplotlib.axes.Axes``
         clr
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         imputed
             Whether the imputed dataset should be considered.
+        kde_color
+            Whether the scatters are colored by their KDE density.
         figure_kwargs
             Arguments for ``plt.figure``.
         scatter_kwargs
@@ -3034,6 +3057,8 @@ class Trainer:
             Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         savefig_kwargs
             Arguments for ``plt.savefig``
+        legend_kwargs
+            Arguments for ``plt.legend``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
 
@@ -3047,6 +3072,7 @@ class Trainer:
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
         )
+        legend_kwargs_ = update_defaults_by_kwargs(dict(), legend_kwargs)
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
@@ -3060,7 +3086,29 @@ class Trainer:
         isna = np.union1d(np.where(np.isnan(x))[0], np.where(np.isnan(y))[0])
         notna = np.setdiff1d(np.arange(len(x)), isna)
 
-        ax.scatter(x[notna], y[notna], **scatter_kwargs_)
+        if kde_color:
+            xy = np.vstack([x[notna], y[notna]])
+            z = st.gaussian_kde(xy)(xy)
+            idx = z.argsort()
+            scatter_kwargs_ = update_defaults_by_kwargs(
+                scatter_kwargs_, dict(c=z[idx], color=None)
+            )
+            ax.scatter(x[notna][idx], y[notna][idx], **scatter_kwargs_)
+        else:
+            if category is None:
+                ax.scatter(x[notna], y[notna], **scatter_kwargs_)
+            else:
+                df = df.loc[indices, :].reset_index(drop=True)
+                self._plot_action_categorical_scatter(
+                    x=x[notna],
+                    y=y[notna],
+                    df=df.loc[notna, :],
+                    category=category,
+                    ax=ax,
+                    clr=clr,
+                    scatter_kwargs=scatter_kwargs_,
+                )
+                ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"scatter_{x_col}_{y_col}.pdf"),
@@ -3195,7 +3243,7 @@ class Trainer:
 
         return self.plot_subplots(
             ls=self.cont_feature_names + self.label_name,
-            ls_kwarg_name="feature",
+            ls_kwarg_name="x_col",
             meth_name="plot_kde",
             meth_fix_kwargs=dict(imputed=imputed, **kwargs),
             fontsize=fontsize,
@@ -3210,7 +3258,8 @@ class Trainer:
 
     def plot_kde(
         self,
-        feature: str,
+        x_col: str,
+        y_col: str = None,
         ax=None,
         clr: Iterable = None,
         imputed: bool = False,
@@ -3221,12 +3270,14 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot the kernel density estimation of a feature.
+        Plot the kernel density estimation of a feature or two features.
 
         Parameters
         ----------
-        feature
+        x_col
             The investigated feature.
+        y_col
+            If not None, a bi-variate distribution will be plotted.
         ax
             ``matplotlib.axes.Axes``
         clr
@@ -3263,16 +3314,19 @@ class Trainer:
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
-        sns.kdeplot(data=df, x=feature, ax=ax, **kdeplot_kwargs_)
+        sns.kdeplot(data=df, x=x_col, y=y_col, ax=ax, **kdeplot_kwargs_)
         ax.set_ylabel(None)
         ax.set_xlabel(None)
 
         return self._plot_action_after_plot(
-            fig_name=os.path.join(self.project_root, f"kde_{feature}.pdf"),
+            fig_name=os.path.join(
+                self.project_root,
+                f"kde_{x_col}{'' if y_col is None else '_'+y_col}.pdf",
+            ),
             disable=given_ax,
             ax_or_fig=ax,
-            xlabel=feature,
-            ylabel="Density",
+            xlabel=x_col,
+            ylabel="Density" if y_col is None else y_col,
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -3449,11 +3503,17 @@ class Trainer:
             self.all_feature_names
         )
         if category is not None:
-            unique_values = np.unique(self.datamodule.df[category])
-            df = self.datamodule.df.loc[self.datamodule.cont_imputed_mask.index, :]
+            df = self._plot_action_get_df(
+                imputed=True, scaled=False, cat_transformed=False
+            ).loc[self.datamodule.cont_imputed_mask.index, :]
+            unique_values = np.sort(np.unique(df[category]))
             rating = [rating[df[category] == val] for val in unique_values]
             hist_kwargs_.update(
-                dict(label=unique_values, stacked=True, color=clr[: len(unique_values)])
+                dict(
+                    label=unique_values.astype(str),
+                    stacked=True,
+                    color=clr[: len(unique_values)],
+                )
             )
         ax.hist(rating, **hist_kwargs_)
         ax.set_xlim([0, 1])
@@ -3523,7 +3583,7 @@ class Trainer:
         features = self.cont_feature_names if features is None else features
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         pca_kwargs_ = update_defaults_by_kwargs(dict(), pca_kwargs)
-        scatter_kwargs_ = update_defaults_by_kwargs(dict(), scatter_kwargs)
+        scatter_kwargs_ = update_defaults_by_kwargs(dict(color=clr[0]), scatter_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(dict(title=category), legend_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
             dict(), select_by_value_kwargs
@@ -3531,7 +3591,11 @@ class Trainer:
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
-        df = self.datamodule.scaled_df.loc[indices, :].copy().reset_index(drop=True)
+        df = (
+            self._plot_action_get_df(imputed=True, scaled=True, cat_transformed=False)
+            .loc[indices, :]
+            .reset_index(drop=True)
+        )
         pca = self.datamodule.pca(
             feature_names=features, indices=indices, **pca_kwargs_
         )
@@ -3541,19 +3605,15 @@ class Trainer:
         if category is None:
             ax.scatter(x, y, **scatter_kwargs_)
         else:
-            df = self.datamodule.categories_inverse_transform(df)
-            for idx, cat in enumerate(np.sort(np.unique(df[category]))):
-                colored_scatter_kwargs_ = scatter_kwargs_.copy()
-                colored_scatter_kwargs_.update(
-                    {
-                        "color": clr[idx % len(clr)],
-                        "marker": global_marker[idx % len(global_marker)],
-                    }
-                )
-                cat_indices = np.array(df[df[category] == cat].index)
-                ax.scatter(
-                    x[cat_indices], y[cat_indices], label=cat, **colored_scatter_kwargs_
-                )
+            self._plot_action_categorical_scatter(
+                x=x,
+                y=y,
+                df=df,
+                category=category,
+                ax=ax,
+                clr=clr,
+                scatter_kwargs=scatter_kwargs_,
+            )
             ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
@@ -3566,6 +3626,55 @@ class Trainer:
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
         )
+
+    def _plot_action_categorical_scatter(
+        self,
+        x,
+        y,
+        df: pd.DataFrame,
+        category: str,
+        ax,
+        clr: Iterable,
+        scatter_kwargs: Dict,
+    ):
+        """
+        Plot scatters whose colors are related to their category.
+
+        Parameters
+        ----------
+        x
+            x-values of the scatter plot.
+        y
+            y-values of the scatter plot.
+        df
+            The dataframe whose ``category`` column is used to classify data points.
+        category
+            The column to classify data points.
+        ax
+            ``matplotlib.axes.Axes``
+        clr
+            A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        scatter_kwargs
+            Arguments for ``plt.scatter``
+        """
+        df = self.datamodule.categories_inverse_transform(df).reset_index(drop=True)
+        category_data = df[category]
+        category_data.fillna(object_unknown_value, inplace=True)
+        for idx, cat in enumerate(np.sort(np.unique(category_data))):
+            colored_scatter_kwargs_ = scatter_kwargs.copy()
+            colored_scatter_kwargs_.update(
+                {
+                    "color": clr[idx % len(clr)],
+                    "marker": global_marker[idx % len(global_marker)],
+                }
+            )
+            cat_indices = np.array(df[category_data == cat].index)
+            ax.scatter(
+                x[cat_indices],
+                y[cat_indices],
+                label=str(cat),
+                **colored_scatter_kwargs_,
+            )
 
     def plot_loss(
         self,
