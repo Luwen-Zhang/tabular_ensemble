@@ -2049,6 +2049,43 @@ class DataModule:
         )
         return not_imputed_df
 
+    def get_df(
+        self, imputed: bool, scaled: bool, cat_transformed: bool
+    ) -> pd.DataFrame:
+        """
+        Get the entire dataframe with certain processing steps.
+
+        Parameters
+        ----------
+        imputed
+            Whether continuous and categorical features in the dataframe are imputed.
+        scaled
+            Whether continuous features in the dataframe are scaled.
+        cat_transformed
+            Whether categorical features in the dataframe are ordinal-encoded.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        if scaled:
+            df = (
+                self.scaled_df
+                if imputed
+                else self.data_transform(
+                    self.categories_transform(self.get_not_imputed_df()),
+                    scaler_only=True,
+                )
+            )
+        else:
+            df = self.df if imputed else self.get_not_imputed_df()
+        df = (
+            self.categories_transform(df)
+            if cat_transformed
+            else self.categories_inverse_transform(df)
+        )
+        return df
+
     def _get_indices(self, partition: str = "train") -> np.ndarray:
         """
         Get training/validation/testing indices.
