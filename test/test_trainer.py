@@ -820,6 +820,9 @@ def test_plots():
         trainer.plot_fill_rating()
         trainer.plot_fill_rating(category="cat_0")
 
+        print(f"\n-- categorical presence ratio --\n")
+        trainer.plot_categorical_presence_ratio(category="cat_0")
+
         print(f"\n-- PCA 2d --\n")
         trainer.plot_pca_2d_visual()
         trainer.plot_pca_2d_visual(category="cat_4")
