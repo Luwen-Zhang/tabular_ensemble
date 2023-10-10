@@ -2250,9 +2250,11 @@ class Trainer:
         )
 
         if category is not None:
-            unique_values = np.sort(np.unique(df[category]))
+            category_data, unique_values = self._plot_action_category_unique_values(
+                df=df, category=category
+            )
             metrics = [
-                metrics[np.where(df[category] == val)[0]] for val in unique_values
+                metrics[np.where(category_data == val)[0]] for val in unique_values
             ]
             hist_kwargs_.update(
                 dict(
@@ -2802,13 +2804,10 @@ class Trainer:
             else x_values
         )
         x_values = x_values[np.isfinite(x_values)]
-        category_data = (
-            self.datamodule.categories_inverse_transform(hist_data)[category]
+        category_data, category_unique_values = (
+            self._plot_action_category_unique_values(df=hist_data, category=category)
             if category is not None
-            else None
-        )
-        category_unique_values = (
-            np.sort(np.unique(category_data)) if category is not None else None
+            else (None, None)
         )
 
         if len(x_values) > 0:
@@ -3493,8 +3492,10 @@ class Trainer:
             df = self._plot_action_get_df(
                 imputed=True, scaled=False, cat_transformed=False
             ).loc[self.datamodule.cont_imputed_mask.index, :]
-            unique_values = np.sort(np.unique(df[category]))
-            rating = [rating[df[category] == val] for val in unique_values]
+            category_data, unique_values = self._plot_action_category_unique_values(
+                df=df, category=category
+            )
+            rating = [rating[category_data == val] for val in unique_values]
             hist_kwargs_.update(
                 dict(
                     label=unique_values.astype(str),
@@ -3614,6 +3615,32 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def _plot_action_category_unique_values(
+        self, df: pd.DataFrame, category: str
+    ) -> Tuple[pd.Series, np.ndarray]:
+        """
+        Get the category to classify data points, whose NaNs are filled by
+        ``tabensemb.data.utils.object_unknown_value``, and its unique values.
+
+        Parameters
+        ----------
+        df
+            The dataframe. The returned Series has the same indices.
+        category
+            The category to classify data points.
+
+        Returns
+        -------
+        pd.Series
+            The category
+        np.ndarray
+            Unique values.
+        """
+        category_data = self.datamodule.categories_inverse_transform(df)[category]
+        category_data.fillna(object_unknown_value, inplace=True)
+        unique_values = np.sort(np.unique(category_data))
+        return category_data, unique_values
+
     def _plot_action_categorical_scatter(
         self,
         x,
@@ -3645,9 +3672,10 @@ class Trainer:
             Arguments for ``plt.scatter``
         """
         df = self.datamodule.categories_inverse_transform(df).reset_index(drop=True)
-        category_data = df[category]
-        category_data.fillna(object_unknown_value, inplace=True)
-        for idx, cat in enumerate(np.sort(np.unique(category_data))):
+        category_data, unique_values = self._plot_action_category_unique_values(
+            df=df, category=category
+        )
+        for idx, cat in enumerate(unique_values):
             colored_scatter_kwargs_ = scatter_kwargs.copy()
             colored_scatter_kwargs_.update(
                 {
