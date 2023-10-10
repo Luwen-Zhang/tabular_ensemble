@@ -2354,8 +2354,8 @@ class Trainer:
 
         plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
 
-        norm_corr = corr - (np.max(corr) + np.min(corr)) / 2
-        norm_corr /= np.max(norm_corr)
+        norm_corr = corr - (np.nanmax(corr) + np.nanmin(corr)) / 2
+        norm_corr /= np.nanmax(norm_corr)
 
         for i in range(len(cont_feature_names)):
             for j in range(len(cont_feature_names)):
