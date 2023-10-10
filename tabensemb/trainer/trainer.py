@@ -3530,7 +3530,31 @@ class Trainer:
         cbar_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
-    ):
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the ratio of presence of each feature, but is classified by a categorical variable.
+
+        Parameters
+        ----------
+        category
+            The category (usually data sources) to classify data points.
+        ax
+            ``matplotlib.axes.Axes``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        imshow_kwargs
+            Arguments for ``plt.imshow``.
+        cbar_kwargs
+            Arguments for ``plt.colorbar``.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         imshow_kwargs_ = update_defaults_by_kwargs(dict(cmap="Blues"), imshow_kwargs)
         cbar_kwargs_ = update_defaults_by_kwargs(dict(), cbar_kwargs)
