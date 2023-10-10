@@ -27,6 +27,7 @@ import traceback
 import math
 import inspect
 import re
+from packaging import version
 
 
 class AbstractModel:
@@ -1756,7 +1757,12 @@ class TorchModel(AbstractModel):
         D_test = tensors[1:-1]
         test_data = [X_test, *D_test]
 
-        with global_setting({"test_with_no_grad": False}):
+        with global_setting(
+            {
+                "test_with_no_grad": version.parse(shap.__version__)
+                >= version.parse("0.43.0")
+            }
+        ):
             explainer = shap.DeepExplainer(self.model[model_name], background_data)
 
             with HiddenPrints():
