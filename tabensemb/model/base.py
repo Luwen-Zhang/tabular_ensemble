@@ -1757,16 +1757,14 @@ class TorchModel(AbstractModel):
         D_test = tensors[1:-1]
         test_data = [X_test, *D_test]
 
-        with global_setting(
-            {
-                "test_with_no_grad": version.parse(shap.__version__)
-                >= version.parse("0.43.0")
-            }
-        ):
+        with global_setting({"test_with_no_grad": False}):
             explainer = shap.DeepExplainer(self.model[model_name], background_data)
 
             with HiddenPrints():
-                shap_values = explainer.shap_values(test_data)
+                # TODO: in PytorchDeep, ``model_output_values.cpu()`` at
+                #  ``_check_additivity(self, model_output_values.cpu(), output_phis)``  is not valid because the output
+                #  has gradient.
+                shap_values = explainer.shap_values(test_data, check_additivity=False)
 
         attr = (
             np.concatenate(
