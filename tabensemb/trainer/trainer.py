@@ -9,7 +9,7 @@ import tabensemb
 from tabensemb.utils import *
 from tabensemb.config import UserConfig
 from tabensemb.data import DataModule
-from tabensemb.data.utils import object_unknown_value
+from tabensemb.data.utils import get_imputed_dtype, fill_cat_nan
 from copy import deepcopy as cp
 from skopt.space import Real, Integer, Categorical
 import time
@@ -3619,8 +3619,7 @@ class Trainer:
         self, df: pd.DataFrame, category: str
     ) -> Tuple[pd.Series, np.ndarray]:
         """
-        Get the category to classify data points, whose NaNs are filled by
-        ``tabensemb.data.utils.object_unknown_value``, and its unique values.
+        Get the category to classify data points and its unique values.
 
         Parameters
         ----------
@@ -3636,8 +3635,15 @@ class Trainer:
         np.ndarray
             Unique values.
         """
-        category_data = self.datamodule.categories_inverse_transform(df)[category]
-        category_data.fillna(object_unknown_value, inplace=True)
+        df = self.datamodule.categories_inverse_transform(df)
+        # Same as the procedure in OrdinalEncoder.
+        dtype = get_imputed_dtype(df.dtypes[category])
+        category_data = (
+            fill_cat_nan(df[[category]], {category: dtype})[category]
+            if dtype == str
+            else df[category]
+        )
+
         unique_values = np.sort(np.unique(category_data))
         return category_data, unique_values
 

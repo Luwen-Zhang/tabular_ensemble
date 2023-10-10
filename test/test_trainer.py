@@ -752,7 +752,8 @@ def test_plots():
             select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
         )
         trainer.plot_scatter(x_col="cont_1", y_col="cont_2", kde_color=True)
-        trainer.plot_scatter(x_col="cont_1", y_col="cont_2", category="cat_1")
+        trainer.plot_scatter(x_col="cont_1", y_col="cont_2", category="cat_0")
+        trainer.plot_scatter(x_col="cont_1", y_col="cont_2", category="cat_2")
 
         print(f"\n-- multiple scatter --\n")
         trainer.plot_on_one_axes(
