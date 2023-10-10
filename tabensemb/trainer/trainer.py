@@ -1116,7 +1116,7 @@ class Trainer:
         meth_fix_kwargs: Dict = None,
     ):
         """
-        Iterate over a list to plot subplots.
+        Iterate over a list to plot subplots in a single figure.
 
         Parameters
         ----------
@@ -1227,7 +1227,7 @@ class Trainer:
         save_show_close: bool = True,
     ):
         """
-        Iterate over a list to plot subplots.
+        Iterate over a list to plot subplots in a single figure.
 
         Parameters
         ----------
@@ -2292,7 +2292,7 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot Pearson correlation coefficients among features and the target.
+        Plot correlation coefficients among features and the target.
 
         Parameters
         ----------
@@ -2396,7 +2396,7 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot Pearson correlation coefficients between the target and each feature.
+        Plot correlation coefficients between the target and each feature.
 
         Parameters
         ----------
@@ -3018,7 +3018,7 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot one column versus the other.
+        Plot one column against another.
 
         Parameters
         ----------
