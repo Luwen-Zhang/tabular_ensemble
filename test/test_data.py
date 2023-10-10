@@ -517,14 +517,9 @@ def test_categorical_transform():
             test_df.loc[0, "derived_cat_1"]
         ]
     )
-    assert np.all(
-        np.equal(
-            test_df[
-                datamodule.cat_feature_names[1:-2]
-            ].values,  # The last two are derived
-            returned[datamodule.cat_feature_names[1:-2]].values,
-        )
-    )
+    assert np.all(np.equal(test_df[["cat_1"]].values, returned[["cat_1"]].values))
+    # "cat_2" has unknown values, which is first filled with -1 and will be encoded as 0.
+    assert np.all(np.equal(test_df[["cat_2"]].values, returned[["cat_2"]].values + 1))
 
     return_inversed = datamodule.categories_inverse_transform(
         test_df[["derived_cat_1"]]
