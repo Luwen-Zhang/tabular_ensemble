@@ -9,7 +9,7 @@ import tabensemb
 from tabensemb.utils import *
 from tabensemb.config import UserConfig
 from tabensemb.data import DataModule
-from tabensemb.data.utils import object_unknown_value
+from tabensemb.data.utils import get_imputed_dtype, fill_cat_nan
 from copy import deepcopy as cp
 from skopt.space import Real, Integer, Categorical
 import time
@@ -1116,7 +1116,7 @@ class Trainer:
         meth_fix_kwargs: Dict = None,
     ):
         """
-        Iterate over a list to plot subplots.
+        Iterate over a list to plot subplots in a single figure.
 
         Parameters
         ----------
@@ -1227,7 +1227,7 @@ class Trainer:
         save_show_close: bool = True,
     ):
         """
-        Iterate over a list to plot subplots.
+        Iterate over a list to plot subplots in a single figure.
 
         Parameters
         ----------
@@ -2250,9 +2250,11 @@ class Trainer:
         )
 
         if category is not None:
-            unique_values = np.sort(np.unique(df[category]))
+            category_data, unique_values = self._plot_action_category_unique_values(
+                df=df, category=category
+            )
             metrics = [
-                metrics[np.where(df[category] == val)[0]] for val in unique_values
+                metrics[np.where(category_data == val)[0]] for val in unique_values
             ]
             hist_kwargs_.update(
                 dict(
@@ -2292,7 +2294,7 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot Pearson correlation coefficients among features and the target.
+        Plot correlation coefficients among features and the target.
 
         Parameters
         ----------
@@ -2354,8 +2356,8 @@ class Trainer:
 
         plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
 
-        norm_corr = corr - (np.max(corr) + np.min(corr)) / 2
-        norm_corr /= np.max(norm_corr)
+        norm_corr = corr - (np.nanmax(corr) + np.nanmin(corr)) / 2
+        norm_corr /= np.nanmax(norm_corr)
 
         for i in range(len(cont_feature_names)):
             for j in range(len(cont_feature_names)):
@@ -2396,7 +2398,7 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot Pearson correlation coefficients between the target and each feature.
+        Plot correlation coefficients between the target and each feature.
 
         Parameters
         ----------
@@ -2802,13 +2804,10 @@ class Trainer:
             else x_values
         )
         x_values = x_values[np.isfinite(x_values)]
-        category_data = (
-            self.datamodule.categories_inverse_transform(hist_data)[category]
+        category_data, category_unique_values = (
+            self._plot_action_category_unique_values(df=hist_data, category=category)
             if category is not None
-            else None
-        )
-        category_unique_values = (
-            np.sort(np.unique(category_data)) if category is not None else None
+            else (None, None)
         )
 
         if len(x_values) > 0:
@@ -3018,7 +3017,7 @@ class Trainer:
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
         """
-        Plot one column versus the other.
+        Plot one column against another.
 
         Parameters
         ----------
@@ -3490,11 +3489,14 @@ class Trainer:
             self.all_feature_names
         )
         if category is not None:
+            # augmented data points should not be included.
             df = self._plot_action_get_df(
                 imputed=True, scaled=False, cat_transformed=False
             ).loc[self.datamodule.cont_imputed_mask.index, :]
-            unique_values = np.sort(np.unique(df[category]))
-            rating = [rating[df[category] == val] for val in unique_values]
+            category_data, unique_values = self._plot_action_category_unique_values(
+                df=df, category=category
+            )
+            rating = [rating[category_data == val] for val in unique_values]
             hist_kwargs_.update(
                 dict(
                     label=unique_values.astype(str),
@@ -3509,11 +3511,108 @@ class Trainer:
             ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
-            fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
+            fig_name=os.path.join(self.project_root, f"fill_rating.pdf"),
             disable=given_ax,
             ax_or_fig=ax,
             xlabel="Fill rating",
             ylabel="Density",
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
+    def plot_categorical_presence_ratio(
+        self,
+        category: str = None,
+        ax=None,
+        figure_kwargs: Dict = None,
+        imshow_kwargs: Dict = None,
+        cbar_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+    ) -> matplotlib.axes.Axes:
+        """
+        Plot the ratio of presence of each feature, but is classified by a categorical variable.
+
+        Parameters
+        ----------
+        category
+            The category (usually data sources) to classify data points.
+        ax
+            ``matplotlib.axes.Axes``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        imshow_kwargs
+            Arguments for ``plt.imshow``.
+        cbar_kwargs
+            Arguments for ``plt.colorbar``.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        imshow_kwargs_ = update_defaults_by_kwargs(dict(cmap="Blues"), imshow_kwargs)
+        cbar_kwargs_ = update_defaults_by_kwargs(dict(), cbar_kwargs)
+
+        cont_mask = self.datamodule.cont_imputed_mask
+        cat_mask = self.datamodule.cat_imputed_mask
+
+        df = self._plot_action_get_df(
+            imputed=False, scaled=False, cat_transformed=False
+        ).loc[cont_mask.index, :]
+        category_data, unique_values = self._plot_action_category_unique_values(
+            df=df, category=category
+        )
+
+        mat = np.zeros((len(self.all_feature_names), len(unique_values)))
+        for idx, cls in enumerate(unique_values):
+            cls_indices = df.index[category_data == cls]
+            cont_presence_ratio = np.sum(1 - cont_mask.loc[cls_indices, :]) / len(
+                cls_indices
+            )
+            cat_presence_ratio = np.sum(1 - cat_mask.loc[cls_indices, :]) / len(
+                cls_indices
+            )
+            presence_ratio = pd.concat([cont_presence_ratio, cat_presence_ratio])
+            mat[:, idx] = presence_ratio[self.all_feature_names]
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+        im = ax.imshow(mat, **imshow_kwargs_)
+
+        ax.set_xticks(np.arange(len(unique_values)))
+        ax.set_yticks(np.arange(len(self.all_feature_names)))
+
+        ax.set_xticklabels(unique_values)
+        ax.set_yticklabels(self.all_feature_names)
+
+        plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
+
+        from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+        axins = inset_axes(
+            ax,
+            width=f"{1/len(unique_values)*100}%",  # width = 5% of parent_bbox width
+            height="50%",  # height : 50%
+            loc="lower left",
+            bbox_to_anchor=(1.05, 0.0, 1, 1),
+            bbox_transform=ax.transAxes,
+            borderpad=0,
+        )
+
+        cbar = ax.figure.colorbar(im, cax=axins, **cbar_kwargs_)
+        cbar.ax.set_ylabel("Presence ratio", rotation=-90, va="bottom")
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(self.project_root, f"presence_ratio_{category}.pdf"),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=None,
+            ylabel=None,
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -3614,6 +3713,38 @@ class Trainer:
             savefig_kwargs=savefig_kwargs,
         )
 
+    def _plot_action_category_unique_values(
+        self, df: pd.DataFrame, category: str
+    ) -> Tuple[pd.Series, np.ndarray]:
+        """
+        Get the category to classify data points and its unique values.
+
+        Parameters
+        ----------
+        df
+            The dataframe. The returned Series has the same indices.
+        category
+            The category to classify data points.
+
+        Returns
+        -------
+        pd.Series
+            The category
+        np.ndarray
+            Unique values.
+        """
+        df = self.datamodule.categories_inverse_transform(df)
+        # Same as the procedure in OrdinalEncoder.
+        dtype = get_imputed_dtype(df.dtypes[category])
+        category_data = (
+            fill_cat_nan(df[[category]], {category: dtype})[category]
+            if dtype == str
+            else df[category]
+        )
+
+        unique_values = np.sort(np.unique(category_data))
+        return category_data, unique_values
+
     def _plot_action_categorical_scatter(
         self,
         x,
@@ -3645,9 +3776,10 @@ class Trainer:
             Arguments for ``plt.scatter``
         """
         df = self.datamodule.categories_inverse_transform(df).reset_index(drop=True)
-        category_data = df[category]
-        category_data.fillna(object_unknown_value, inplace=True)
-        for idx, cat in enumerate(np.sort(np.unique(category_data))):
+        category_data, unique_values = self._plot_action_category_unique_values(
+            df=df, category=category
+        )
+        for idx, cat in enumerate(unique_values):
             colored_scatter_kwargs_ = scatter_kwargs.copy()
             colored_scatter_kwargs_.update(
                 {

@@ -752,7 +752,8 @@ def test_plots():
             select_by_value_kwargs={"selection": {"cat_1": [1, 2, 3]}},
         )
         trainer.plot_scatter(x_col="cont_1", y_col="cont_2", kde_color=True)
-        trainer.plot_scatter(x_col="cont_1", y_col="cont_2", category="cat_1")
+        trainer.plot_scatter(x_col="cont_1", y_col="cont_2", category="cat_0")
+        trainer.plot_scatter(x_col="cont_1", y_col="cont_2", category="cat_2")
 
         print(f"\n-- multiple scatter --\n")
         trainer.plot_on_one_axes(
@@ -818,6 +819,9 @@ def test_plots():
         print(f"\n-- fill rating --\n")
         trainer.plot_fill_rating()
         trainer.plot_fill_rating(category="cat_0")
+
+        print(f"\n-- categorical presence ratio --\n")
+        trainer.plot_categorical_presence_ratio(category="cat_0")
 
         print(f"\n-- PCA 2d --\n")
         trainer.plot_pca_2d_visual()
