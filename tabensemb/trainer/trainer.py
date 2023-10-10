@@ -1202,25 +1202,12 @@ class Trainer:
     def _plot_action_get_df(
         self, imputed: bool, scaled: bool, cat_transformed: bool
     ) -> pd.DataFrame:
-        if scaled:
-            df = (
-                self.datamodule.scaled_df
-                if imputed
-                else self.datamodule.data_transform(
-                    self.datamodule.categories_transform(
-                        self.datamodule.get_not_imputed_df()
-                    ),
-                    scaler_only=True,
-                )
-            )
-        else:
-            df = self.df if imputed else self.datamodule.get_not_imputed_df()
-        df = (
-            self.datamodule.categories_transform(df)
-            if cat_transformed
-            else self.datamodule.categories_inverse_transform(df)
+        """
+        A wrapper of :meth:`tabensemb.data.datamodule.DataModule.get_df`.
+        """
+        return self.datamodule.get_df(
+            imputed=imputed, scaled=scaled, cat_transformed=cat_transformed
         )
-        return df
 
     def plot_subplots(
         self,

@@ -1744,21 +1744,25 @@ class DataModule:
                 x = processor.var_slip(feature_name, x)
         return x
 
-    def describe(self, transformed=False) -> pd.DataFrame:
+    def describe(self, imputed: bool = False, scaled: bool = False) -> pd.DataFrame:
         """
         Describe the dataset using ``pd.DataFrame.describe``, skewness, gini index, mode values, etc.
 
         Parameters
         ----------
-        transformed
-            Whether to describe the scaled data.
+        imputed
+            Whether the imputed dataset is described.
+        scaled
+            Whether the scaled dataset is described.
 
         Returns
         -------
         pd.DataFrame
             The descriptions of the dataset.
         """
-        tabular = self.get_tabular_dataset(transformed=transformed)[0]
+        tabular = self.get_df(imputed=imputed, scaled=scaled, cat_transformed=True)[
+            self.all_feature_names + self.label_name
+        ]
         desc = tabular.describe()
 
         skew = tabular.skew()
@@ -1783,6 +1787,20 @@ class DataModule:
         kurtosis = self._get_kurtosis(tabular)
         kurtosis[self.cat_feature_names] = np.nan
         desc = pd.concat([desc, kurtosis], axis=0)
+
+        z_scores = {
+            key: len(
+                np.where(
+                    (tabular[key].values - tabular[key].mean()) / tabular[key].std() > 2
+                )[0]
+            )
+            / len(tabular[key][pd.notna(tabular[key])])
+            for key in tabular.columns
+        }
+        z_score_df = pd.DataFrame(
+            data=z_scores, index=["Percentage of points with Z-score beyond 2"]
+        )
+        desc = pd.concat([desc, z_score_df], axis=0)
 
         return desc
 
@@ -1834,7 +1852,7 @@ class DataModule:
             The kurtosis for each feature in the dataset.
         """
         return pd.DataFrame(
-            data=st.kurtosis(tabular.values, axis=0).reshape(1, -1),
+            data=st.kurtosis(tabular.values, axis=0, nan_policy="omit").reshape(1, -1),
             columns=tabular.columns,
             index=["Kurtosis"],
         )
@@ -2048,6 +2066,43 @@ class DataModule:
             [tmp_cont_df, tmp_cat_df], axis=1
         )
         return not_imputed_df
+
+    def get_df(
+        self, imputed: bool, scaled: bool, cat_transformed: bool
+    ) -> pd.DataFrame:
+        """
+        Get the entire dataframe with certain processing steps.
+
+        Parameters
+        ----------
+        imputed
+            Whether continuous and categorical features in the dataframe are imputed.
+        scaled
+            Whether continuous features in the dataframe are scaled.
+        cat_transformed
+            Whether categorical features in the dataframe are ordinal-encoded.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        if scaled:
+            df = (
+                self.scaled_df
+                if imputed
+                else self.data_transform(
+                    self.categories_transform(self.get_not_imputed_df()),
+                    scaler_only=True,
+                )
+            )
+        else:
+            df = self.df if imputed else self.get_not_imputed_df()
+        df = (
+            self.categories_transform(df)
+            if cat_transformed
+            else self.categories_inverse_transform(df)
+        )
+        return df
 
     def _get_indices(self, partition: str = "train") -> np.ndarray:
         """

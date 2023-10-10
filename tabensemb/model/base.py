@@ -27,6 +27,7 @@ import traceback
 import math
 import inspect
 import re
+from packaging import version
 
 
 class AbstractModel:
@@ -1760,7 +1761,10 @@ class TorchModel(AbstractModel):
             explainer = shap.DeepExplainer(self.model[model_name], background_data)
 
             with HiddenPrints():
-                shap_values = explainer.shap_values(test_data)
+                # TODO: in PytorchDeep, ``model_output_values.cpu()`` at
+                #  ``_check_additivity(self, model_output_values.cpu(), output_phis)``  is not valid because the output
+                #  has gradient.
+                shap_values = explainer.shap_values(test_data, check_additivity=False)
 
         attr = (
             np.concatenate(
