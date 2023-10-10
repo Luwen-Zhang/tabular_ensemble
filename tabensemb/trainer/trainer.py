@@ -3510,7 +3510,7 @@ class Trainer:
             ax.legend(**legend_kwargs_)
 
         return self._plot_action_after_plot(
-            fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
+            fig_name=os.path.join(self.project_root, f"fill_rating.pdf"),
             disable=given_ax,
             ax_or_fig=ax,
             xlabel="Fill rating",
