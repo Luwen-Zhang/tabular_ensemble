@@ -839,6 +839,7 @@ class AbstractModel:
             "train": (data.X_train, data.D_train),
             "val": (data.X_val, data.D_val),
             "test": (data.X_test, data.D_test),
+            "all": (data.df, data.derived_data),
         }
         return self._predict(
             d[partition][0], derived_data=d[partition][1], model_name=model_name
