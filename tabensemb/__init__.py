@@ -36,6 +36,9 @@ setting = dict(
     raise_inconsistent_inferred_task=False,
     # Set matplotlib.rc("text", usetex=True) if latex installation is found.
     matplotlib_usetex=False,
+    # The upper boundary of the returned objective value from a bayesian optimization iteration. Any objective value
+    # beyond this value will be clipped to it.
+    bayes_loss_limit=1000,
 )
 
 if setting["debug_mode"]:
