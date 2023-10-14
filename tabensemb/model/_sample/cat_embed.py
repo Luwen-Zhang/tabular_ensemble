@@ -55,10 +55,13 @@ class Embedding2d(nn.Module):
             self.run_cat = False
 
     def forward(self, x, derived_tensors):
-        x_cont = self.cont_embed_weight.unsqueeze(0) * self.cont_norm(x).unsqueeze(
-            2
-        ) + self.cont_embed_bias.unsqueeze(0)
-        x_cont = self.cont_dropout(x_cont)
+        if x.shape[-1] != 0:
+            x_cont = self.cont_embed_weight.unsqueeze(0) * self.cont_norm(x).unsqueeze(
+                2
+            ) + self.cont_embed_bias.unsqueeze(0)
+            x_cont = self.cont_dropout(x_cont)
+        else:
+            x_cont = x
         if self.run_cat:
             cat = derived_tensors["categorical"].long()
             x_cat_embeds = [
@@ -107,7 +110,7 @@ class Embedding1d(nn.Module):
         self.bn = nn.BatchNorm1d(n_inputs)
 
     def forward(self, x, derived_tensors):
-        x_res = self.bn(x)
+        x_res = self.bn(x) if x.shape[-1] != 0 else x
         if self.run_cat:
             cat = derived_tensors["categorical"].long()
             x_cat_embeds = [self.cat_embeds[i](cat[:, i]) for i in range(cat.size(1))]
@@ -171,7 +174,7 @@ class CategoryEmbeddingNN(AbstractNN):
             n_outputs=n_outputs,
             nonlinearity="relu",
         )
-        self.hidden_rep_dim = 32
+        self.hidden_rep_dim = 32 if self.n_inputs != 0 or run_cat else 0
         self.hidden_representation = None
         # Just for a unit test
         self.not_require_grad = nn.Parameter(torch.zeros((3, 3)), requires_grad=False)
@@ -182,7 +185,10 @@ class CategoryEmbeddingNN(AbstractNN):
         x_embed = self.embed(x, derived_tensors)
         if self.embed_extend_dim:
             x_embed = x_embed.flatten(start_dim=1)
-        output = self.linear(x_embed)
-        self.hidden_representation = output
-        output = self.head(output)
+        if x_embed.shape[-1] != 0:
+            output = self.linear(x_embed)
+            self.hidden_representation = output
+            output = self.head(output)
+        else:
+            output = x_embed
         return output
