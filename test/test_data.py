@@ -669,8 +669,8 @@ def test_illegal_cont_feature():
     # "cat_1" is not object
     config.merge(
         {
-            "feature_names_type": {"cont_0": 0, "cat_1": 1},
-            "categorical_feature_names": [],
+            "continuous_feature_names": ["cont_0"],
+            "categorical_feature_names": ["cat_1"],
         }
     )
     datamodule = DataModule(config=config)

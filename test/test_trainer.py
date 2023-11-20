@@ -135,7 +135,10 @@ def test_init_trainer_without_feature():
     trainer = Trainer(device="cpu")
     trainer.load_config(
         configfile,
-        manual_config={"feature_names_type": {}},
+        manual_config={
+            "categorical_feature_names": [],
+            "continuous_feature_names": [],
+        },
     )
     trainer.load_data()
 
@@ -146,6 +149,40 @@ def test_save_trainer():
 
 def test_train_without_bayes():
     pytest.test_trainer_trainer.train()
+
+
+def test_train_no_cont_feature():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(
+        configfile,
+        manual_config={
+            "continuous_feature_names": [],
+        },
+    )
+    trainer.load_data()
+    trainer.add_modelbases(
+        [CatEmbed(trainer, model_subset=["Category Embedding Extend dim"])]
+    )
+    trainer.train()
+
+
+def test_train_no_cat_feature():
+    configfile = "sample"
+    tabensemb.setting["debug_mode"] = True
+    trainer = Trainer(device="cpu")
+    trainer.load_config(
+        configfile,
+        manual_config={
+            "categorical_feature_names": [],
+        },
+    )
+    trainer.load_data()
+    trainer.add_modelbases(
+        [CatEmbed(trainer, model_subset=["Category Embedding Extend dim"])]
+    )
+    trainer.train()
 
 
 def test_train_binary():

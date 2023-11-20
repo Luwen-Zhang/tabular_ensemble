@@ -839,6 +839,7 @@ class AbstractModel:
             "train": (data.X_train, data.D_train),
             "val": (data.X_val, data.D_val),
             "test": (data.X_test, data.D_test),
+            "all": (data.df, data.derived_data),
         }
         return self._predict(
             d[partition][0], derived_data=d[partition][1], model_name=model_name
@@ -1070,13 +1071,15 @@ class AbstractModel:
                     # If a result from one bayes opt iteration is very large (over 10000) caused by instability of the
                     # model, it can not be fully reproduced during another execution and has error (though small, it
                     # disturbs bayes optimization).
-                    if res > 1000:
+                    limit = tabensemb.setting["bayes_loss_limit"]
+                    if res > limit:
                         print(
-                            f"The loss value ({res}) is greater than 1000 and 1000 will be returned. Consider "
-                            f"debugging such instability of the model, or check whether the loss value is normalized by"
-                            f"the number of samples."
+                            f"The loss value ({res}) is greater than {limit} and {limit} will be returned. Consider "
+                            f"debugging such instability of the model, or check whether the loss value is normalized by "
+                            f"the number of samples. The limitation bayes_loss_limit can be changed in the global "
+                            f"setting."
                         )
-                        return 1000
+                        return limit
                     # To guarantee reproducibility on different machines.
                     return round(res, 4)
 
