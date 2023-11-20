@@ -339,6 +339,67 @@ def test_get_leaderboard():
     best_model, best_metric = trainer.get_best_model()
 
 
+def test_set_optimizer_lr_scheduler():
+    configfile = "sample"
+    trainer = Trainer(device="cpu")
+    trainer.load_config(configfile, manual_config={"epoch": 5})
+    trainer.load_data()
+    trainer.add_modelbases(
+        [
+            PytorchTabular(trainer, model_subset=["Category Embedding"], program="pt"),
+            CatEmbed(trainer, model_subset=["Category Embedding"], program="ce"),
+            WideDeep(trainer, model_subset=["TabResnet"], program="wd"),
+            PytorchTabular(
+                trainer,
+                model_subset=["Category Embedding"],
+                optimizers={
+                    "Category Embedding": ("AdamW", {"lr": None, "weight_decay": None})
+                },
+                program="pt_opt",
+            ),
+            CatEmbed(
+                trainer,
+                model_subset=["Category Embedding"],
+                optimizers={
+                    "Category Embedding": ("AdamW", {"lr": None, "weight_decay": None})
+                },
+                program="ce_opt",
+            ),
+            WideDeep(
+                trainer,
+                model_subset=["TabResnet"],
+                optimizers={"TabResnet": ("AdamW", {"lr": None, "weight_decay": None})},
+                program="wd_opt",
+            ),
+            PytorchTabular(
+                trainer,
+                model_subset=["Category Embedding"],
+                lr_schedulers={
+                    "Category Embedding": ("StepLR", {"gamma": 0.1, "step_size": 1})
+                },
+                program="pt_lr",
+            ),
+            CatEmbed(
+                trainer,
+                model_subset=["Category Embedding"],
+                lr_schedulers={
+                    "Category Embedding": ("StepLR", {"gamma": 0.1, "step_size": 1})
+                },
+                program="ce_lr",
+            ),
+            WideDeep(
+                trainer,
+                model_subset=["TabResnet"],
+                lr_schedulers={"TabResnet": ("StepLR", {"gamma": 0.1, "step_size": 1})},
+                program="wd_lr",
+            ),
+        ]
+    )
+    trainer.train()
+    l = trainer.get_leaderboard()
+    assert len(l) == len(np.unique(l["Training RMSE"]))
+
+
 @pytest.mark.order(after="test_get_leaderboard")
 def test_load_trainer():
     trainer = pytest.test_trainer_trainer

@@ -77,11 +77,20 @@ class PytorchTabular(AbstractModel):
             load_best=True,
             accelerator="cpu" if self.device == "cpu" else "auto",
         )
+        (
+            opt_name,
+            opt_params,
+            lrs_name,
+            lrs_params,
+        ) = self._update_optimizer_lr_scheduler_params(model_name=model_name, **kwargs)
+        if "lr" in opt_params.keys():
+            # pytorch_tabular deals with the learning rate individually.
+            del opt_params["lr"]
         optimizer_config = OptimizerConfig(
-            optimizer="Adam",
-            optimizer_params={
-                "weight_decay": kwargs["weight_decay"],
-            },
+            optimizer=opt_name,
+            optimizer_params=opt_params,
+            lr_scheduler=lrs_name,
+            lr_scheduler_params=lrs_params,
         )
 
         model_configs = {
@@ -96,12 +105,15 @@ class PytorchTabular(AbstractModel):
         special_configs = {
             "NODE": {"embed_categorical": True},
         }
-        legal_kwargs = cp(kwargs)
-        legal_kwargs["learning_rate"] = kwargs["lr"]
-        del legal_kwargs["lr"]
-        del legal_kwargs["weight_decay"]
-        del legal_kwargs["batch_size"]
-        del legal_kwargs["original_batch_size"]
+        legal_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if key not in ["lr", "batch_size", "original_batch_size"]
+            and key not in opt_params.keys()
+            and key not in lrs_params.keys()
+        }
+        if "lr" in kwargs.keys():
+            legal_kwargs["learning_rate"] = kwargs["lr"]
         for key in legal_kwargs.keys():
             if type(legal_kwargs[key]) in [np.str_, np.int_]:
                 try:
