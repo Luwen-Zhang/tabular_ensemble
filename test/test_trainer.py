@@ -322,6 +322,9 @@ def test_get_leaderboard():
     l = trainer.get_leaderboard()
     pytest.leaderboard_init = l
 
+    l_pred = trainer.get_predict_leaderboard(trainer.df.loc[trainer.test_indices, :])
+    assert np.allclose(l_pred["RMSE"], l["Testing RMSE"])
+
     with pytest.warns(UserWarning):
         # No cv exists
         trainer.get_approx_cv_leaderboard(leaderboard=l, save=False)
