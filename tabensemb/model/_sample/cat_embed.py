@@ -69,7 +69,9 @@ class Embedding2d(nn.Module):
             ]
             x_cat = torch.cat(x_cat_embeds, 1)
             x_cat = self.cat_dropout(x_cat)
-            x_res = torch.cat([x_cont, x_cat], dim=1)
+            x_res = (
+                torch.cat([x_cont, x_cat], dim=1) if x_cont.shape[-1] != 0 else x_cat
+            )
         else:
             x_res = x_cont
         return x_res
