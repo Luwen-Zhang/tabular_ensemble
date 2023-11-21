@@ -7,6 +7,7 @@ Advanced Usage
 
     advanced_usage/customized_model_base
     advanced_usage/customized_model_base_advanced
+    advanced_usage/set_optimizers_lrschedulers
     advanced_usage/build_model_upon_others
     advanced_usage/new_data_splitters
     advanced_usage/new_data_derivers

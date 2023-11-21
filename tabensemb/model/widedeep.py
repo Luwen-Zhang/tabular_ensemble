@@ -242,11 +242,19 @@ class WideDeep(AbstractModel):
         cont_feature_names = self.trainer.cont_feature_names
         cat_feature_names = self.trainer.cat_feature_names
 
-        model_args = kwargs.copy()
-        del model_args["lr"]
-        del model_args["weight_decay"]
-        del model_args["batch_size"]
-        del model_args["original_batch_size"]
+        (
+            opt_name,
+            opt_params,
+            lrs_name,
+            lrs_params,
+        ) = self._update_optimizer_lr_scheduler_params(model_name=model_name, **kwargs)
+        model_args = {
+            key: value
+            for key, value in kwargs.items()
+            if key not in ["lr", "batch_size", "original_batch_size"]
+            and key not in opt_params.keys()
+            and key not in lrs_params.keys()
+        }
         args = dict(
             column_idx=self.tab_preprocessor.column_idx,
             continuous_cols=cont_feature_names,
@@ -286,12 +294,19 @@ class WideDeep(AbstractModel):
         else:
             model = WideDeep(deeptabular=tab_model)
 
+        optimizer = getattr(torch.optim, opt_name)(model.parameters(), **opt_params)
+        lr_scheduler = getattr(torch.optim.lr_scheduler, lrs_name)(
+            optimizer, **lrs_params
+        )
+
         wd_trainer = wd_Trainer(
             model,
             objective=loss,
             verbose=0,
             device="cpu" if self.trainer.device == "cpu" else "cuda",
             num_workers=0,
+            optimizers=optimizer,
+            lr_schedulers=lr_scheduler,
         )
         return wd_trainer
 
@@ -353,13 +368,6 @@ class WideDeep(AbstractModel):
         results from the callback differ from our final metrics.
         """
         from ._widedeep.widedeep_callback import WideDeepCallback, EarlyStopping
-
-        optimizer = torch.optim.Adam(
-            model.model.deeptabular.parameters(),
-            lr=kwargs["lr"] if not warm_start else kwargs["lr"] // 10,
-            weight_decay=kwargs["weight_decay"],
-        )
-        model.optimizer = model._set_optimizer({"deeptabular": optimizer})
 
         es_callback = EarlyStopping(
             patience=self.trainer.static_params["patience"],

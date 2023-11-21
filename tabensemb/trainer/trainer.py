@@ -901,6 +901,46 @@ class Trainer:
             save_trainer(self)
         return df_leaderboard
 
+    def get_predict_leaderboard(
+        self, df: pd.DataFrame, *args, **kwargs
+    ) -> pd.DataFrame:
+        """
+        Get prediction leaderboard of all models on an upcoming labeled dataset.
+
+        Parameters
+        ----------
+        df:
+            A new tabular dataset that has the same structure as ``self.trainer.datamodule.X_test``.
+        args
+            Arguments of :meth:`tabensemb.model.AbstractModel.predict`.
+        kwargs
+            Arguments of :meth:`tabensemb.model.AbstractModel.predict`.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        if len(self.modelbases) == 0:
+            raise Exception(
+                f"No modelbase available. Run trainer.add_modelbases() first."
+            )
+        kwargs["proba"] = True
+        programs_predictions = {}
+        for modelbase in self.modelbases:
+            print(f"{modelbase.program} metrics")
+            truth: np.ndarray = df[self.label_name].values
+            program_predictions = {}
+            for model_name in modelbase.get_model_names():
+                pred: np.ndarray = modelbase.predict(
+                    df, *args, model_name=model_name, **kwargs
+                )
+                program_predictions[model_name] = {"Testing": (pred, truth)}
+            programs_predictions[modelbase.program] = program_predictions
+        df_leaderboard = self._cal_leaderboard(
+            programs_predictions, test_data_only=True
+        )
+        return df_leaderboard
+
     def get_approx_cv_leaderboard(
         self, leaderboard: pd.DataFrame, save: bool = True
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:

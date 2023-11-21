@@ -80,6 +80,8 @@ class AbstractModel:
         model_subset: List[str] = None,
         exclude_models: List[str] = None,
         store_in_harddisk: bool = True,
+        optimizers: Dict[str, Tuple] = None,
+        lr_schedulers: Dict[str, Tuple] = None,
         **kwargs,
     ):
         """
@@ -98,6 +100,13 @@ class AbstractModel:
         store_in_harddisk:
             Whether to save models in the hard disk. If the global setting
             ``tabensemb.setting["low_memory"]`` is True, True is used.
+        optimizers
+            A dictionary of optimizer names (choose from those in ``torch.optim``) and their hyperparameters for each
+            model. Remember to change :meth:`_initial_values` and :meth:`_space` to optimize its hyperparameters.
+        lr_schedulers
+            A dictionary of lr scheduler names (choose from those in ``torch.optim.lr_scheduler``) and their
+            hyperparameters for each model. Remember to change :meth:`_initial_values` and :meth:`_space` to optimize
+            its hyperparameters.
         **kwargs:
             Ignored.
         """
@@ -116,6 +125,18 @@ class AbstractModel:
             True if tabensemb.setting["low_memory"] else store_in_harddisk
         )
         self.program = self._get_program_name() if program is None else program
+        self.optimizers = {
+            model_name: ("Adam", {"lr": None, "weight_decay": None})
+            for model_name in self.get_model_names()
+        }
+        self.optimizers.update(optimizers if optimizers is not None else {})
+        self.lr_schedulers = {
+            model_name: ("StepLR", {"gamma": 1, "step_size": 1})
+            # Actually doing nothing
+            for model_name in self.get_model_names()
+        }
+        self.lr_schedulers.update(lr_schedulers if lr_schedulers is not None else {})
+
         self.init_params = {}
         self.model_params = {}
         self.train_losses = {}
@@ -1272,6 +1293,44 @@ class AbstractModel:
                 print(f"Previous params loaded: {self.model_params[model_name]}")
             return self.model_params[model_name]
 
+    def _update_optimizer_lr_scheduler_params(
+        self, model_name, **kwargs
+    ) -> Tuple[str, Dict, str, Dict]:
+        """
+        Update parameters of the optimizer and the lr_scheduler according to the input hyperparameters when
+        initializing a model.
+
+        Parameters
+        ----------
+        model_name
+            The name of the model
+        kwargs
+            Parameters to train the model returned by :meth:`_get_params`. It contains all arguments in
+            :meth:`_initial_values`.
+
+        Returns
+        -------
+        str
+            The name of the optimizer in torch.optim
+        Dict
+            The parameters of the optimizer
+        str
+            The name of the lr scheduler in torch.optim.lr_scheduler
+        Dict
+            The parameters of the lr scheduler
+        """
+        opt_name, opt_params = self.optimizers.get(model_name)
+        opt_params = opt_params.copy()
+        opt_params.update(
+            {name: kwargs[name] for name in opt_params.keys() if name in kwargs.keys()}
+        )
+        lrs_name, lrs_params = self.lr_schedulers.get(model_name)
+        lrs_params = lrs_params.copy()
+        lrs_params.update(
+            {name: kwargs[name] for name in lrs_params.keys() if name in kwargs.keys()}
+        )
+        return opt_name, opt_params, lrs_name, lrs_params
+
     @property
     def _trained(self) -> bool:
         """
@@ -2109,6 +2168,13 @@ class TorchModel(AbstractModel):
         )
         pl_loss_callback = PytorchLightningLossCallback(verbose=True, total_epoch=epoch)
 
+        (
+            model.default_optimizer,
+            model.default_optimizer_params,
+            model.default_lr_scheduler,
+            model.default_lr_scheduler_params,
+        ) = self._update_optimizer_lr_scheduler_params(model_name=model_name, **kwargs)
+
         lightning_kwargs = update_defaults_by_kwargs(
             dict(
                 min_epochs=1,
@@ -2356,6 +2422,10 @@ class AbstractNN(pl.LightningModule):
         super(AbstractNN, self).__init__()
         self.default_loss_fn = self.get_loss_fn(datamodule.loss, datamodule.task)
         self.default_output_norm = self.get_output_norm(datamodule.task)
+        self.default_optimizer = None
+        self.default_optimizer_params = {}
+        self.default_lr_scheduler = None
+        self.default_lr_scheduler_params = {}
         self.cont_feature_names = cp(datamodule.cont_feature_names)
         self.cat_feature_names = cp(datamodule.cat_feature_names)
         self.n_cont = len(self.cont_feature_names)
@@ -2551,6 +2621,10 @@ class AbstractNN(pl.LightningModule):
             on_epoch=True,
             batch_size=y.shape[0],
         )
+
+        sch = self.lr_schedulers()
+        if self.trainer.is_last_batch:
+            sch.step()
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -2579,11 +2653,13 @@ class AbstractNN(pl.LightningModule):
         return yhat, y_out
 
     def configure_optimizers(self) -> Any:
-        return torch.optim.Adam(
-            self.parameters(),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
+        optimizer = getattr(torch.optim, self.default_optimizer)(
+            self.parameters(), **self.default_optimizer_params
         )
+        lrs = getattr(torch.optim.lr_scheduler, self.default_lr_scheduler)(
+            optimizer, **self.default_lr_scheduler_params
+        )
+        return {"optimizer": optimizer, "lr_scheduler": lrs}
 
     def test_epoch(
         self, test_loader: Data.DataLoader, **kwargs
