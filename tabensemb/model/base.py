@@ -70,6 +70,13 @@ class AbstractModel:
         Whether to save models in the hard disk.
     trainer
         A :class:`tabensemb.trainer.Trainer` instance.
+    optimizers
+        A dictionary of optimizer names (choose from those in ``torch.optim``) and their hyperparameters for each
+        model. Remember to change :meth:`_initial_values` and :meth:`_space` to optimize its hyperparameters.
+    lr_schedulers
+        A dictionary of lr scheduler names (choose from those in ``torch.optim.lr_scheduler``) and their
+        hyperparameters for each model. Remember to change :meth:`_initial_values` and :meth:`_space` to optimize
+        its hyperparameters.
     device
     """
 
@@ -127,13 +134,13 @@ class AbstractModel:
         self.program = self._get_program_name() if program is None else program
         self.optimizers = {
             model_name: ("Adam", {"lr": None, "weight_decay": None})
-            for model_name in self.get_model_names()
+            for model_name in self._get_model_names()
         }
         self.optimizers.update(optimizers if optimizers is not None else {})
         self.lr_schedulers = {
             model_name: ("StepLR", {"gamma": 1, "step_size": 1})
             # Actually doing nothing
-            for model_name in self.get_model_names()
+            for model_name in self._get_model_names()
         }
         self.lr_schedulers.update(lr_schedulers if lr_schedulers is not None else {})
 
@@ -2389,6 +2396,14 @@ class AbstractNN(pl.LightningModule):
         The number of continuous features
     n_cat
         The number of categorical features
+    default_optimizer
+        An optimizer name from ``torch.optim``.
+    default_optimizer_params
+        Parameters of :attr:`default_optimizer`
+    default_lr_scheduler
+        A lr scheduler name from ``torch.optim.lr_scheduler``
+    default_lr_scheduler_params
+        Parameters of :attr:`default_lr_scheduler`
     derived_feature_names
         The keys of derived unstacked features.
     derived_feature_dims
@@ -2623,7 +2638,7 @@ class AbstractNN(pl.LightningModule):
         )
 
         sch = self.lr_schedulers()
-        if self.trainer.is_last_batch:
+        if self.trainer.is_last_batch and sch is not None:
             sch.step()
         return loss
 
