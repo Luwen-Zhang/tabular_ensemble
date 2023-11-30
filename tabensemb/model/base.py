@@ -2939,7 +2939,7 @@ class AbstractNN(pl.LightningModule):
                 print(
                     f"The backbone should have an attribute called `hidden_representation` that records the "
                     f"final output of the hidden layer, and `hidden_rep_dim` that records the dim of "
-                    f"`hidden_representation`. Now the output of the backbone is used instead."
+                    f"`hidden_representation`. The output of the backbone and the input features are used instead."
                 )
             use_hidden_rep = False
         else:
