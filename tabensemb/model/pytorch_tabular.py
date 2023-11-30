@@ -1,3 +1,4 @@
+import warnings
 import torch
 from tabensemb.utils import *
 from tabensemb.model import AbstractModel
@@ -189,15 +190,21 @@ class PytorchTabular(AbstractModel):
             disable_std=not verbose,
             disable_logging=not verbose,
         ):
-            model.fit(
-                train=train_data,
-                validation=val_data,
-                max_epochs=epoch,
-                callbacks=[
-                    PytorchTabularVerboseLossCallback(),
-                    pl_loss_callback,
-                ],
-            )
+            with warnings.catch_warnings():
+                from pytorch_lightning.utilities.rank_zero import (
+                    LightningDeprecationWarning,
+                )
+
+                warnings.filterwarnings("ignore", category=LightningDeprecationWarning)
+                model.fit(
+                    train=train_data,
+                    validation=val_data,
+                    max_epochs=epoch,
+                    callbacks=[
+                        PytorchTabularVerboseLossCallback(),
+                        pl_loss_callback,
+                    ],
+                )
         self.train_losses[model_name] = pl_loss_callback.train_ls
         self.val_losses[model_name] = pl_loss_callback.val_ls
 
