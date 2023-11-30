@@ -1,3 +1,4 @@
+import warnings
 import torch
 from tabensemb.utils import *
 from tabensemb.model import AbstractModel
@@ -189,15 +190,21 @@ class PytorchTabular(AbstractModel):
             disable_std=not verbose,
             disable_logging=not verbose,
         ):
-            model.fit(
-                train=train_data,
-                validation=val_data,
-                max_epochs=epoch,
-                callbacks=[
-                    PytorchTabularVerboseLossCallback(),
-                    pl_loss_callback,
-                ],
-            )
+            with warnings.catch_warnings():
+                from pytorch_lightning.utilities.rank_zero import (
+                    LightningDeprecationWarning,
+                )
+
+                warnings.filterwarnings("ignore", category=LightningDeprecationWarning)
+                model.fit(
+                    train=train_data,
+                    validation=val_data,
+                    max_epochs=epoch,
+                    callbacks=[
+                        PytorchTabularVerboseLossCallback(),
+                        pl_loss_callback,
+                    ],
+                )
         self.train_losses[model_name] = pl_loss_callback.train_ls
         self.val_losses[model_name] = pl_loss_callback.val_ls
 
@@ -269,12 +276,10 @@ class PytorchTabular(AbstractModel):
             ]
             + self.trainer.SPACE,
             "NODE": [
-                Integer(low=2, high=6, prior="uniform", name="depth", dtype=int),  # 6
+                Integer(low=2, high=5, prior="uniform", name="depth", dtype=int),  # 6
                 Real(low=0, high=0.3, prior="uniform", name="embedding_dropout"),  # 0.0
                 Real(low=0, high=0.3, prior="uniform", name="input_dropout"),  # 0.0
-                Integer(
-                    low=128, high=512, prior="uniform", name="num_trees", dtype=int
-                ),
+                Integer(low=64, high=256, prior="uniform", name="num_trees", dtype=int),
             ]
             + self.trainer.SPACE,
             "TabNet": [
@@ -377,7 +382,7 @@ class PytorchTabular(AbstractModel):
                 "embedding_dropout": 0.1,
             },
             "NODE": {
-                "depth": 6,
+                "depth": 4,
                 "embedding_dropout": 0.0,
                 "input_dropout": 0.0,
                 "num_trees": 256,
