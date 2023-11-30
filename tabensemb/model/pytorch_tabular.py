@@ -279,9 +279,7 @@ class PytorchTabular(AbstractModel):
                 Integer(low=2, high=5, prior="uniform", name="depth", dtype=int),  # 6
                 Real(low=0, high=0.3, prior="uniform", name="embedding_dropout"),  # 0.0
                 Real(low=0, high=0.3, prior="uniform", name="input_dropout"),  # 0.0
-                Integer(
-                    low=64, high=256, prior="uniform", name="num_trees", dtype=int
-                ),
+                Integer(low=64, high=256, prior="uniform", name="num_trees", dtype=int),
             ]
             + self.trainer.SPACE,
             "TabNet": [
