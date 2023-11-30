@@ -276,11 +276,11 @@ class PytorchTabular(AbstractModel):
             ]
             + self.trainer.SPACE,
             "NODE": [
-                Integer(low=2, high=6, prior="uniform", name="depth", dtype=int),  # 6
+                Integer(low=2, high=5, prior="uniform", name="depth", dtype=int),  # 6
                 Real(low=0, high=0.3, prior="uniform", name="embedding_dropout"),  # 0.0
                 Real(low=0, high=0.3, prior="uniform", name="input_dropout"),  # 0.0
                 Integer(
-                    low=128, high=512, prior="uniform", name="num_trees", dtype=int
+                    low=64, high=256, prior="uniform", name="num_trees", dtype=int
                 ),
             ]
             + self.trainer.SPACE,
@@ -384,7 +384,7 @@ class PytorchTabular(AbstractModel):
                 "embedding_dropout": 0.1,
             },
             "NODE": {
-                "depth": 6,
+                "depth": 4,
                 "embedding_dropout": 0.0,
                 "input_dropout": 0.0,
                 "num_trees": 256,
