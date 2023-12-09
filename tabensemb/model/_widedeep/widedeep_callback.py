@@ -29,33 +29,12 @@ class WideDeepCallback(Callback):
 
 
 class EarlyStopping(ES):
-    # See this issue https://github.com/jrzaurin/pytorch-widedeep/issues/175
-    # Currently there is no difference between this class and ES, but this is retained for backward compatibility.
     def on_epoch_end(
         self, epoch: int, logs: Optional[Dict] = None, metric: Optional[float] = None
     ):
+        super(EarlyStopping, self).on_epoch_end(epoch=epoch, logs=logs, metric=metric)
         current = self.get_monitor_value(logs)
-        if current is None:
-            return
-
-        if self.monitor_op(current - self.min_delta, self.best):
-            self.best = current
-            self.wait = 0
-            self.best_epoch = epoch
-            if self.restore_best_weights:
-                self.state_dict = copy.deepcopy(self.model.state_dict())
-        else:
-            self.wait += 1
-            if self.wait >= self.patience:
-                self.stopped_epoch = epoch
-                self.trainer.early_stop = True
-
-    def on_train_end(self, logs: Optional[Dict] = None):
-        if self.stopped_epoch > 0 and self.verbose > 0:
-            print(
-                f"Best Epoch: {self.best_epoch + 1}. Best {self.monitor}: {self.best:.5f}"
-            )
-        if self.restore_best_weights and self.state_dict is not None:
-            if self.verbose > 0:
-                print("Restoring model weights from the end of the best epoch")
-            self.model.load_state_dict(self.state_dict)
+        # Detect loss anomaly
+        if current > 1e8:
+            self.stopped_epoch = epoch
+            self.trainer.early_stop = True
