@@ -177,7 +177,6 @@ class PytorchTabular(AbstractModel):
     ):
         tc = TqdmController()
         tc.disable_tqdm()
-        warnings.simplefilter(action="ignore", category=UserWarning)
         label_name = self.trainer.label_name
         train_data = X_train.copy()
         train_data[label_name] = y_train
@@ -196,6 +195,7 @@ class PytorchTabular(AbstractModel):
                 )
 
                 warnings.filterwarnings("ignore", category=LightningDeprecationWarning)
+                warnings.simplefilter(action="ignore", category=UserWarning)
                 model.fit(
                     train=train_data,
                     validation=val_data,
@@ -221,7 +221,6 @@ class PytorchTabular(AbstractModel):
             )
         if os.path.exists(os.path.join(self.root, "ckpts")):
             shutil.rmtree(os.path.join(self.root, "ckpts"))
-        warnings.simplefilter(action="default", category=UserWarning)
         tc.enable_tqdm()
 
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
