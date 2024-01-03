@@ -1890,7 +1890,7 @@ class TorchModel(AbstractModel):
         :meth:`_generate_dataset_from_tensors`
         """
         required_models = self._get_required_models(model_name)
-        if required_models is None:
+        if required_models is None or len(required_models) == 0:
             train_dataset, val_dataset, test_dataset = (
                 datamodule.train_dataset,
                 datamodule.val_dataset,
@@ -2576,6 +2576,7 @@ class AbstractNN(pl.LightningModule):
                     derived_tensors[name] = tensor
             if data_required_models is not None:
                 derived_tensors["data_required_models"] = data_required_models
+            self.hidden_representation = None
             res = self._forward(x, derived_tensors)
             if len(res.shape) == 1:
                 res = res.view(-1, 1)
