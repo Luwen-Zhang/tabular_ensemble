@@ -105,7 +105,6 @@ class AutoGluon(AbstractModel):
     ):
         tc = TqdmController()
         tc.disable_tqdm()
-        warnings.simplefilter(action="ignore")
 
         from autogluon.features.generators import PipelineFeatureGenerator
         from autogluon.features.generators.category import CategoryFeatureGenerator
@@ -139,23 +138,24 @@ class AutoGluon(AbstractModel):
         val_data = X_val.copy()
         val_data[label_name] = y_val
         with HiddenPrints(disable_std=not verbose, disable_logging=not verbose):
-            model.fit(
-                train_data,
-                tuning_data=val_data,
-                presets="best_quality" if not in_bayes_opt else "medium_quality",
-                hyperparameter_tune_kwargs=None if len(kwargs) > 0 else "auto",
-                use_bag_holdout=True,  # Enable if tuning_data is specified
-                verbosity=2 if verbose else 0,
-                feature_generator=feature_generator,
-                hyperparameters={self._name_mapping[model_name]: kwargs},
-                num_gpus=0 if self.device == "cpu" else "auto",
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                model.fit(
+                    train_data,
+                    tuning_data=val_data,
+                    presets="best_quality" if not in_bayes_opt else "medium_quality",
+                    hyperparameter_tune_kwargs=None if len(kwargs) > 0 else "auto",
+                    use_bag_holdout=True,  # Enable if tuning_data is specified
+                    verbosity=2 if verbose else 0,
+                    feature_generator=feature_generator,
+                    hyperparameters={self._name_mapping[model_name]: kwargs},
+                    num_gpus=0 if self.device == "cpu" else "auto",
+                )
         if not in_bayes_opt:
             model.persist_models(max_memory=None)
             if os.path.exists(os.path.join(self.root, model_name)):
                 shutil.rmtree(os.path.join(self.root, model_name))
         tc.enable_tqdm()
-        warnings.simplefilter(action="default")
 
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
         if self.task == "regression":

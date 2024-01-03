@@ -51,6 +51,9 @@ def check_grad_in_loss():
     return True
 
 
+_stream_filters = []
+
+
 class Stream:
     def __init__(self, stream, path=None):
         self._stdout = sys.stdout
@@ -59,6 +62,8 @@ class Stream:
         self.set_path(path)
 
     def write(self, message):
+        if any([x in message for x in _stream_filters]):
+            return None
         self.stream.write(message)
         if self.path is not None:
             with open(self.path, "ab") as log:
