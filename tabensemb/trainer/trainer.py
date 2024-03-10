@@ -3708,7 +3708,7 @@ class Trainer:
         clr = global_palette if clr is None else clr
         features = self.cont_feature_names if features is None else features
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
-        pca_kwargs_ = update_defaults_by_kwargs(dict(), pca_kwargs)
+        pca_kwargs_ = update_defaults_by_kwargs(dict(random_state=0), pca_kwargs)
         scatter_kwargs_ = update_defaults_by_kwargs(dict(color=clr[0]), scatter_kwargs)
         legend_kwargs_ = update_defaults_by_kwargs(dict(title=category), legend_kwargs)
         select_by_value_kwargs_ = update_defaults_by_kwargs(
