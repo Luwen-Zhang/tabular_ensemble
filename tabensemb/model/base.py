@@ -2205,7 +2205,6 @@ class TorchModel(AbstractModel):
         trainer = pl.Trainer(
             max_epochs=epoch,
             callbacks=[pl_loss_callback, es_callback, ckpt_callback],
-            auto_lr_find=False,
             enable_progress_bar=False,
             check_val_every_n_epoch=1,
             enable_checkpointing=True,
