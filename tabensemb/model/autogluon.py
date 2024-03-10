@@ -26,12 +26,16 @@ class AutoGluon(AbstractModel):
             predictor = MultilabelPredictor(
                 labels=self.trainer.label_name,
                 path=os.path.join(self.root, model_name),
-                problem_types=task
-                if not isinstance(task, str) or task is None
-                else [task] * len(self.trainer.label_name),
-                eval_metrics=loss
-                if not isinstance(loss, str) or loss is None
-                else [loss] * len(self.trainer.label_name),
+                problem_types=(
+                    task
+                    if not isinstance(task, str) or task is None
+                    else [task] * len(self.trainer.label_name)
+                ),
+                eval_metrics=(
+                    loss
+                    if not isinstance(loss, str) or loss is None
+                    else [loss] * len(self.trainer.label_name)
+                ),
                 learner_kwargs={"label_count_threshold": 1},
             )
         else:

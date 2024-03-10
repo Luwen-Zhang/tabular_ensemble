@@ -2535,9 +2535,9 @@ class Trainer:
             disable=given_ax,
             ax_or_fig=ax,
             xlabel=f"Correlation with {self.label_name[0]}" if is_horizontal else None,
-            ylabel=f"Correlation with {self.label_name[0]}"
-            if not is_horizontal
-            else None,
+            ylabel=(
+                f"Correlation with {self.label_name[0]}" if not is_horizontal else None
+            ),
             tight_layout=True,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -4183,12 +4183,18 @@ class Trainer:
         derived_data = self.datamodule.sort_derived_data(derived_data)
         if focus_feature in self.cont_feature_names:
             x_value = np.linspace(
-                np.nanpercentile(df[focus_feature].values, (100 - percentile) / 2)
-                if x_min is None
-                else x_min,
-                np.nanpercentile(df[focus_feature].values, 100 - (100 - percentile) / 2)
-                if x_max is None
-                else x_max,
+                (
+                    np.nanpercentile(df[focus_feature].values, (100 - percentile) / 2)
+                    if x_min is None
+                    else x_min
+                ),
+                (
+                    np.nanpercentile(
+                        df[focus_feature].values, 100 - (100 - percentile) / 2
+                    )
+                    if x_max is None
+                    else x_max
+                ),
                 grid_size,
             )
         elif focus_feature in self.cat_feature_names:
@@ -4230,9 +4236,11 @@ class Trainer:
                     bootstrap_model.predict(
                         df_perm,
                         model_name=model_name,
-                        derived_data=tmp_derived_data
-                        if focus_feature in self.derived_stacked_features
-                        else None,  # To avoid rederiving stacked data
+                        derived_data=(
+                            tmp_derived_data
+                            if focus_feature in self.derived_stacked_features
+                            else None
+                        ),  # To avoid rederiving stacked data
                     )
                 )
             if average:
@@ -4335,9 +4343,11 @@ class Trainer:
                         y_true, y_pred, metric, self.datamodule.task
                     )
                     df[
-                        tvt + " " + metric.upper()
-                        if not test_data_only
-                        else metric.upper()
+                        (
+                            tvt + " " + metric.upper()
+                            if not test_data_only
+                            else metric.upper()
+                        )
                     ] = metric_value
             df_metrics = pd.concat([df_metrics, df], axis=0, ignore_index=True)
 

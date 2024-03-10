@@ -1041,9 +1041,11 @@ class AbstractModel:
                             self._train_single_model(
                                 model,
                                 model_name=model_name,
-                                epoch=args["bayes_epoch"]
-                                if not tabensemb.setting["debug_mode"]
-                                else 1,
+                                epoch=(
+                                    args["bayes_epoch"]
+                                    if not tabensemb.setting["debug_mode"]
+                                    else 1
+                                ),
                                 X_train=data["X_train"],
                                 y_train=data["y_train"],
                                 X_val=data["X_val"],
@@ -1130,9 +1132,9 @@ class AbstractModel:
                         _bayes_objective,
                         space,
                         n_calls=bayes_calls,
-                        n_initial_points=10
-                        if not tabensemb.setting["debug_mode"]
-                        else 0,
+                        n_initial_points=(
+                            10 if not tabensemb.setting["debug_mode"] else 0
+                        ),
                         callback=callback.call,
                         random_state=0,
                         x0=[tmp_params[s.name] for s in space],
@@ -2562,9 +2564,11 @@ class AbstractNN(pl.LightningModule):
         torch.Tensor
             The output from :meth:`_forward`.
         """
-        with torch.no_grad() if tabensemb.setting[
-            "test_with_no_grad"
-        ] and not self.training else torch_with_grad():
+        with (
+            torch.no_grad()
+            if tabensemb.setting["test_with_no_grad"] and not self.training
+            else torch_with_grad()
+        ):
             x = tensors[0]
             additional_tensors = tensors[1:]
             if len(additional_tensors) > 0 and type(additional_tensors[0]) == dict:
@@ -2702,9 +2706,11 @@ class AbstractNN(pl.LightningModule):
         self.eval()
         pred = []
         truth = []
-        with torch.no_grad() if tabensemb.setting[
-            "test_with_no_grad"
-        ] else torch_with_grad():
+        with (
+            torch.no_grad()
+            if tabensemb.setting["test_with_no_grad"]
+            else torch_with_grad()
+        ):
             # print(test_dataset)
             avg_loss = 0
             for idx, batch in enumerate(test_loader):

@@ -258,9 +258,11 @@ class WideDeep(AbstractModel):
         args = dict(
             column_idx=self.tab_preprocessor.column_idx,
             continuous_cols=cont_feature_names,
-            cat_embed_input=self.tab_preprocessor.cat_embed_input
-            if len(cat_feature_names) != 0
-            else None,
+            cat_embed_input=(
+                self.tab_preprocessor.cat_embed_input
+                if len(cat_feature_names) != 0
+                else None
+            ),
             **model_args,
         )
 
@@ -321,17 +323,17 @@ class WideDeep(AbstractModel):
         if version.parse(pytorch_widedeep.__version__) < version.parse("1.2.3"):
             tab_preprocessor = TabPreprocessor(
                 continuous_cols=cont_feature_names,
-                cat_embed_cols=cat_feature_names
-                if len(cat_feature_names) != 0
-                else None,
+                cat_embed_cols=(
+                    cat_feature_names if len(cat_feature_names) != 0 else None
+                ),
             )
         else:
             # https://github.com/jrzaurin/pytorch-widedeep/commit/cc0d1ad59c447dabd29072a552194ece12173778#diff-2f6e79eedee796c7edeac4fffc29ef35ecbfb8c234ff63313509e412a8d3ed42L108
             tab_preprocessor = TabPreprocessor(
                 continuous_cols=cont_feature_names,
-                cat_embed_cols=cat_feature_names
-                if len(cat_feature_names) != 0
-                else None,
+                cat_embed_cols=(
+                    cat_feature_names if len(cat_feature_names) != 0 else None
+                ),
                 cols_to_scale=cont_feature_names,
             )
         with option_context("mode.chained_assignment", None):

@@ -861,9 +861,11 @@ class DataModule:
         """
         types = self.get_feature_types(features, allow_unknown=allow_unknown)
         return [
-            self.unique_feature_types_with_derived().index(x)
-            if x != "Unknown"
-            else len(self.unique_feature_types_with_derived())
+            (
+                self.unique_feature_types_with_derived().index(x)
+                if x != "Unknown"
+                else len(self.unique_feature_types_with_derived())
+            )
             for x in types
         ]
 

@@ -32,9 +32,11 @@ def merge_leaderboards(dfs: List[pd.DataFrame]):
     metrics = list(df.columns)[2:]
     first_metric = metrics[0].split(" ")[-1]
     df.sort_values(
-        by=f"Testing {first_metric}"
-        if f"Testing {first_metric}" in df.columns
-        else first_metric,
+        by=(
+            f"Testing {first_metric}"
+            if f"Testing {first_metric}" in df.columns
+            else first_metric
+        ),
         ascending=True,
         inplace=True,
     )
