@@ -122,14 +122,17 @@ else:
     def fix_collate_fn(batch):
         elem = batch[0]
         elem_type = type(elem)
-        if "pandas" in elem_type.__module__ and isinstance(elem, pd.DataFrame):
+        if isinstance(elem, pd.DataFrame):
             return pd.concat(batch)
-
-        elif "pandas" in elem_type.__module__ and isinstance(elem, pd.Series):
+        elif isinstance(elem, pd.Series):
             return pd.DataFrame(
                 columns=elem.index,
                 index=np.arange(len(batch)),
                 data=np.vstack([i.values for i in batch]),
             )
+        elif isinstance(elem, Data.Subset):
+            dataset = elem.dataset
+            indices = np.concatenate([elem.indices for elem in batch])
+            return Data.Subset(dataset, indices)
         else:  # Fall back to `default_collate`
             return default_collate(batch)
