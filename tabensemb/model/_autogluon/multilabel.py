@@ -192,4 +192,7 @@ class MultilabelPredictor:
 
     def persist_models(self, *args, **kwargs):
         for predictor in self.predictors.values():
-            predictor.persist_models(*args, **kwargs)
+            try:
+                predictor.persist_models(*args, **kwargs)
+            except:
+                predictor.persist(*args, **kwargs)

@@ -81,9 +81,9 @@ class UserConfig(dict):
                 parser.add_argument(
                     f"--{key}",
                     nargs="+",
-                    type=type(base_config[key][0])
-                    if len(base_config[key]) > 0
-                    else None,
+                    type=(
+                        type(base_config[key][0]) if len(base_config[key]) > 0 else None
+                    ),
                     required=False,
                 )
             elif type(base_config[key]) == bool:

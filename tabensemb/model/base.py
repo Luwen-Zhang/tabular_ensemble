@@ -1041,9 +1041,11 @@ class AbstractModel:
                             self._train_single_model(
                                 model,
                                 model_name=model_name,
-                                epoch=args["bayes_epoch"]
-                                if not tabensemb.setting["debug_mode"]
-                                else 1,
+                                epoch=(
+                                    args["bayes_epoch"]
+                                    if not tabensemb.setting["debug_mode"]
+                                    else 1
+                                ),
                                 X_train=data["X_train"],
                                 y_train=data["y_train"],
                                 X_val=data["X_val"],
@@ -1130,9 +1132,9 @@ class AbstractModel:
                         _bayes_objective,
                         space,
                         n_calls=bayes_calls,
-                        n_initial_points=10
-                        if not tabensemb.setting["debug_mode"]
-                        else 0,
+                        n_initial_points=(
+                            10 if not tabensemb.setting["debug_mode"] else 0
+                        ),
                         callback=callback.call,
                         random_state=0,
                         x0=[tmp_params[s.name] for s in space],
@@ -1843,7 +1845,7 @@ class TorchModel(AbstractModel):
             if type(shap_values) == list and len(shap_values) > 1
             else np.mean(np.abs(shap_values[0]), axis=0)
         )
-        return attr
+        return attr.flatten()
 
     def _train_data_preprocess(self, model_name):
         datamodule = self._prepare_custom_datamodule(model_name)
@@ -2187,16 +2189,13 @@ class TorchModel(AbstractModel):
                 min_epochs=1,
                 fast_dev_run=False,
                 max_time=None,
-                gpus=None,
                 accelerator="cpu" if self.device == "cpu" else "auto",
-                devices=None,
                 accumulate_grad_batches=1,
-                gradient_clip_val=0.0,
+                gradient_clip_val=None,
                 overfit_batches=0.0,
                 deterministic=False,
                 profiler=None,
                 logger=False,
-                track_grad_norm=-1,
                 precision=32,
             ),
             self.lightning_trainer_kwargs,
@@ -2205,7 +2204,6 @@ class TorchModel(AbstractModel):
         trainer = pl.Trainer(
             max_epochs=epoch,
             callbacks=[pl_loss_callback, es_callback, ckpt_callback],
-            auto_lr_find=False,
             enable_progress_bar=False,
             check_val_every_n_epoch=1,
             enable_checkpointing=True,
@@ -2563,9 +2561,11 @@ class AbstractNN(pl.LightningModule):
         torch.Tensor
             The output from :meth:`_forward`.
         """
-        with torch.no_grad() if tabensemb.setting[
-            "test_with_no_grad"
-        ] and not self.training else torch_with_grad():
+        with (
+            torch.no_grad()
+            if tabensemb.setting["test_with_no_grad"] and not self.training
+            else torch_with_grad()
+        ):
             x = tensors[0]
             additional_tensors = tensors[1:]
             if len(additional_tensors) > 0 and type(additional_tensors[0]) == dict:
@@ -2703,9 +2703,11 @@ class AbstractNN(pl.LightningModule):
         self.eval()
         pred = []
         truth = []
-        with torch.no_grad() if tabensemb.setting[
-            "test_with_no_grad"
-        ] else torch_with_grad():
+        with (
+            torch.no_grad()
+            if tabensemb.setting["test_with_no_grad"]
+            else torch_with_grad()
+        ):
             # print(test_dataset)
             avg_loss = 0
             for idx, batch in enumerate(test_loader):

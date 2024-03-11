@@ -26,7 +26,6 @@ from copy import deepcopy as cp
 from torch.autograd.grad_mode import _DecoratorContextManager
 from typing import Any
 import tabensemb
-from .collate import fix_collate_fn
 from typing import Dict
 from sklearn.metrics import *
 from io import StringIO
@@ -131,8 +130,6 @@ def set_torch(seed=0):
         # https://github.com/pytorch/pytorch/issues/43672
         dl.__init__ = partialmethod(dl.__init__, worker_init_fn=seed_worker)
 
-    torch.utils.data._utils.collate.default_collate = fix_collate_fn
-
 
 def metric_sklearn(y_true: np.ndarray, y_pred: np.ndarray, metric: str) -> float:
     """
@@ -201,7 +198,7 @@ def metric_sklearn(y_true: np.ndarray, y_pred: np.ndarray, metric: str) -> float
         "average_precision_score": average_precision_score,
         "precision_score": partial(precision_score, zero_division=0),
         "recall_score": partial(recall_score, zero_division=0),
-        "log_loss": partial(log_loss, eps=1e-5),
+        "log_loss": partial(log_loss),
         "balanced_accuracy_score": balanced_accuracy_score,
         "explained_variance_score": explained_variance_score,
         "brier_score_loss": brier_score_loss,

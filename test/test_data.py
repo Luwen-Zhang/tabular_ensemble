@@ -849,8 +849,7 @@ def test_abstract_imputer():
     pytest_configure_data()
     datamodule = pytest.min_datamodule
 
-    class NotImplementedImputer(AbstractImputer):
-        ...
+    class NotImplementedImputer(AbstractImputer): ...
 
     imputer = NotImplementedImputer()
     with pytest.raises(NotImplementedError):
@@ -860,8 +859,7 @@ def test_abstract_imputer():
 
     print("\n-- AbstractSklearnImputer--\n")
 
-    class NotImplementedImputer(AbstractSklearnImputer):
-        ...
+    class NotImplementedImputer(AbstractSklearnImputer): ...
 
     imputer = NotImplementedImputer()
     with pytest.raises(NotImplementedError):
@@ -872,8 +870,7 @@ def test_abstract_processor():
     pytest_configure_data()
     datamodule = pytest.min_datamodule
 
-    class NotImplementedProcessor(AbstractProcessor):
-        ...
+    class NotImplementedProcessor(AbstractProcessor): ...
 
     processor = NotImplementedProcessor()
     with pytest.raises(NotImplementedError):
@@ -886,8 +883,7 @@ def test_abstract_augmenter():
     pytest_configure_data()
     datamodule = pytest.min_datamodule
 
-    class NotImplementedAugmenter(AbstractAugmenter):
-        ...
+    class NotImplementedAugmenter(AbstractAugmenter): ...
 
     augmenter = NotImplementedAugmenter()
     with pytest.raises(NotImplementedError):
@@ -898,8 +894,7 @@ def test_abstract_selector():
     pytest_configure_data()
     datamodule = pytest.min_datamodule
 
-    class NotImplementedSelector(AbstractFeatureSelector):
-        ...
+    class NotImplementedSelector(AbstractFeatureSelector): ...
 
     selector = NotImplementedSelector()
     with pytest.raises(NotImplementedError):
@@ -910,8 +905,7 @@ def test_abstract_splitter():
     pytest_configure_data()
     datamodule = pytest.min_datamodule
 
-    class NotImplementedSplitter(AbstractSplitter):
-        ...
+    class NotImplementedSplitter(AbstractSplitter): ...
 
     splitter = NotImplementedSplitter()
     with pytest.raises(NotImplementedError):
@@ -945,8 +939,7 @@ def test_abstract_splitter():
 
     from tabensemb.data import dataderiver, dataimputer, datasplitter, dataprocessor
 
-    class IllegalSubclass:
-        ...
+    class IllegalSubclass: ...
 
     dataderiver.deriver_mapping["TEST_ILLEGAL"] = IllegalSubclass
     dataimputer.imputer_mapping["TEST_ILLEGAL"] = IllegalSubclass
