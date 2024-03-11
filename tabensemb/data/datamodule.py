@@ -1400,10 +1400,12 @@ class DataModule:
             inplace_training_index = np.intersect1d(
                 training.index, self.retained_indices
             )
-            df.loc[inplace_training_index, training.columns] = training.loc[
-                inplace_training_index, :
-            ].values
-            df.loc[testing.index, testing.columns] = testing.values
+            for col in training.columns:
+                df.loc[inplace_training_index, col] = training.loc[
+                    inplace_training_index, col
+                ].values.astype(df[col].dtype)
+            for col in testing.columns:
+                df.loc[testing.index, col] = testing[col].values.astype(df[col].dtype)
             df = df.loc[self.retained_indices, :].copy().reset_index(drop=True)
             if len(self.augmented_indices) > 0:
                 df = pd.concat(

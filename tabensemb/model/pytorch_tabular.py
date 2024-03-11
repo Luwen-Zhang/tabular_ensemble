@@ -12,6 +12,7 @@ from .base import AbstractWrapper
 from typing import Dict, Any
 from torch import nn
 import re
+import inspect
 
 
 class PytorchTabular(AbstractModel):
@@ -135,6 +136,7 @@ class PytorchTabular(AbstractModel):
                 optimizer_config=optimizer_config,
                 trainer_config=trainer_config,
             )
+            tabular_model.logger = False
         tabular_model.config["progress_bar_refresh_rate"] = 0
         ExperimentRunManager.__init__ = erm_original_init
         return tabular_model

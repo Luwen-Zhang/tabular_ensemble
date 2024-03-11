@@ -117,22 +117,25 @@ if version.parse(torch.__version__) < version.parse("2.0.0"):
         raise TypeError(default_collate_err_msg_format.format(elem_type))
 
 else:
-    from torch.utils.data._utils.collate import default_collate
+    from torch.utils.data._utils.collate import default_collate, default_collate_fn_map
 
-    def fix_collate_fn(batch):
-        elem = batch[0]
-        elem_type = type(elem)
-        if isinstance(elem, pd.DataFrame):
-            return pd.concat(batch)
-        elif isinstance(elem, pd.Series):
-            return pd.DataFrame(
-                columns=elem.index,
-                index=np.arange(len(batch)),
-                data=np.vstack([i.values for i in batch]),
-            )
-        elif isinstance(elem, Data.Subset):
-            dataset = elem.dataset
-            indices = np.concatenate([elem.indices for elem in batch])
-            return Data.Subset(dataset, indices)
-        else:  # Fall back to `default_collate`
-            return default_collate(batch)
+    fix_collate_fn = default_collate
+
+    def dataframe_collate(batch, *, collate_fn_map=None):
+        return pd.concat(batch)
+
+    def series_collate(batch, *, collate_fn_map=None):
+        return pd.DataFrame(
+            columns=batch[0].index,
+            index=np.arange(len(batch)),
+            data=np.vstack([i.values for i in batch]),
+        )
+
+    def subset_collate(batch, *, collate_fn_map=None):
+        dataset = batch[0].dataset
+        indices = np.concatenate([elem.indices for elem in batch])
+        return Data.Subset(dataset, indices)
+
+    default_collate_fn_map.update({pd.DataFrame: dataframe_collate})
+    default_collate_fn_map.update({pd.Series: series_collate})
+    default_collate_fn_map.update({Data.Subset: subset_collate})

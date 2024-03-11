@@ -160,7 +160,10 @@ class AutoGluon(AbstractModel):
                     num_gpus=0 if self.device == "cpu" else "auto",
                 )
         if not in_bayes_opt:
-            model.persist_models(max_memory=None)
+            try:
+                model.persist(max_memory=None)
+            except:
+                model.persist_models(max_memory=None)
             if os.path.exists(os.path.join(self.root, model_name)):
                 shutil.rmtree(os.path.join(self.root, model_name))
         tc.enable_tqdm()

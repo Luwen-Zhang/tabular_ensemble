@@ -1845,7 +1845,7 @@ class TorchModel(AbstractModel):
             if type(shap_values) == list and len(shap_values) > 1
             else np.mean(np.abs(shap_values[0]), axis=0)
         )
-        return attr
+        return attr.flatten()
 
     def _train_data_preprocess(self, model_name):
         datamodule = self._prepare_custom_datamodule(model_name)

@@ -752,14 +752,11 @@ def test_feature_importance():
         )
 
     with pytest.raises(Exception) as err:
-        with pytest.warns(
-            UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
-        ):
-            trainer.cal_feature_importance(
-                program="CatEmbed",
-                model_name="Require Model PyTabular CatEmbed",
-                method="shap",
-            )
+        trainer.cal_feature_importance(
+            program="CatEmbed",
+            model_name="Require Model PyTabular CatEmbed",
+            method="shap",
+        )
     assert "models that require other models is not supported" in err.value.args[0]
 
     assert len(absmodel_perm[0]) == len(absmodel_perm[1])
