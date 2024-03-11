@@ -26,7 +26,6 @@ from copy import deepcopy as cp
 from torch.autograd.grad_mode import _DecoratorContextManager
 from typing import Any
 import tabensemb
-from .collate import fix_collate_fn
 from typing import Dict
 from sklearn.metrics import *
 from io import StringIO
@@ -130,8 +129,6 @@ def set_torch(seed=0):
         # https://pytorch.org/docs/stable/notes/randomness.html
         # https://github.com/pytorch/pytorch/issues/43672
         dl.__init__ = partialmethod(dl.__init__, worker_init_fn=seed_worker)
-
-    torch.utils.data._utils.collate.default_collate = fix_collate_fn
 
 
 def metric_sklearn(y_true: np.ndarray, y_pred: np.ndarray, metric: str) -> float:

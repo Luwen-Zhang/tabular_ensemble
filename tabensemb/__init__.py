@@ -2,6 +2,10 @@ import os
 import numpy as np
 import warnings
 import sys
+import torch.utils.data as Data
+import pandas as pd
+from torch.utils.data._utils.collate import default_collate_fn_map
+
 
 np.int = int  # ``np.int`` is a deprecated alias for the builtin ``int``.
 
@@ -51,6 +55,7 @@ def check_grad_in_loss():
     return True
 
 
+### Stream control
 _stream_filters = []
 
 
@@ -95,3 +100,28 @@ stderr_stream = Stream("stderr")
 if not "pytest" in sys.modules:
     sys.stdout = stdout_stream
     sys.stderr = stderr_stream
+
+### Collate control
+
+
+def dataframe_collate(batch, *, collate_fn_map=None):
+    return pd.concat(batch)
+
+
+def series_collate(batch, *, collate_fn_map=None):
+    return pd.DataFrame(
+        columns=batch[0].index,
+        index=np.arange(len(batch)),
+        data=np.vstack([i.values for i in batch]),
+    )
+
+
+def subset_collate(batch, *, collate_fn_map=None):
+    dataset = batch[0].dataset
+    indices = np.concatenate([elem.indices for elem in batch])
+    return Data.Subset(dataset, indices)
+
+
+default_collate_fn_map.update({pd.DataFrame: dataframe_collate})
+default_collate_fn_map.update({pd.Series: series_collate})
+default_collate_fn_map.update({Data.Subset: subset_collate})
