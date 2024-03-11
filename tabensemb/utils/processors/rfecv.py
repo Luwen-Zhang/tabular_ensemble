@@ -49,6 +49,7 @@ from sklearn.utils.fixes import delayed
 from sklearn.base import is_classifier
 from sklearn.utils.metaestimators import _safe_split
 from sklearn.model_selection._validation import _score
+import inspect
 
 
 def _rfe_single_fit(rfe, estimator, feature_names, X, y, train, test, scorer):
@@ -63,6 +64,11 @@ def _rfe_single_fit(rfe, estimator, feature_names, X, y, train, test, scorer):
         rfe.get_X_wrap(X_test, features),
         y_test,
         scorer,
+        **(
+            dict(score_params=None)
+            if "score_params" in str(inspect.signature(_score))
+            else {}
+        ),
     )
     return rfe._fit(
         pd.DataFrame(X_train, columns=feature_names, index=np.arange(X_train.shape[0])),
