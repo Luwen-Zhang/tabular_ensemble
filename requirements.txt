@@ -20,5 +20,5 @@ miceforest>=5.6.3
 shap>=0.41.0
 einops>=0.6.0
 pytorch_lightning>=1.8.6
-traitlets<=5.9.0
+traitlets<=5.14.2
 
