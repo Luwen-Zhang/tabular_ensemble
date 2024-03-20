@@ -999,7 +999,7 @@ def test_plots():
             refit=False,
         )
         trainer.plot_partial_dependence_2way(
-            x_feature="cont_0", 
+            x_feature="cont_0",
             y_feature="cont_1",
             projection="3d",
             grid_size=3,
