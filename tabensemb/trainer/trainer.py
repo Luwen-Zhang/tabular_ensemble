@@ -2092,7 +2092,9 @@ class Trainer:
             ls=y_features,
             ls_kwarg_name="y_feature",
             meth_name="plot_partial_dependence_2way",
-            meth_fix_kwargs=dict(x_feature=x_feature, program=program, model_name=model_name, **kwargs),
+            meth_fix_kwargs=dict(
+                x_feature=x_feature, program=program, model_name=model_name, **kwargs
+            ),
             fontsize=fontsize,
             with_title=True,
             xlabel=r"Value of the fixed predictors",
@@ -2199,7 +2201,7 @@ class Trainer:
             ax.imshow(np.rot90(Z), **imshow_kwargs_)
             ax.set_xticks(np.arange(len(X)))
             ax.set_yticks(np.arange(len(Y)))
-            ax.set_xticklabels([round(x,2) for x in X[:, 0]])
+            ax.set_xticklabels([round(x, 2) for x in X[:, 0]])
             ax.set_yticklabels([round(x, 2) for x in Y[0, ::-1]])
         else:
             ax.xaxis.pane.fill = False
