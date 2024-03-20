@@ -998,6 +998,35 @@ def test_plots():
             log_trans=False,
             refit=False,
         )
+        trainer.plot_partial_dependence_2way(
+            x_feature="cont_0", 
+            y_feature="cont_1",
+            projection="3d",
+            grid_size=3,
+            percentile=95,
+            refit=False,
+            resample=False,
+            n_bootstrap=1,
+            program="WideDeep",
+            model_name="TabMlp",
+            derived_data=trainer.derived_data,
+            df=trainer.df,
+        )
+        trainer.plot_partial_dependence_2way_all(
+            x_feature="cont_0",
+            y_features=["cont_1", "cont_2"],
+            projection=None,
+            grid_size=3,
+            tqdm_active=False,
+            percentile=95,
+            refit=False,
+            resample=False,
+            n_bootstrap=1,
+            program="WideDeep",
+            model_name="TabMlp",
+            derived_data=trainer.derived_data,
+            df=trainer.df,
+        )
 
         print(f"\n-- loss --\n")
         trainer.plot_loss(
