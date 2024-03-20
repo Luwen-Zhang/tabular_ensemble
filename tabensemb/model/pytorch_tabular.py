@@ -226,6 +226,9 @@ class PytorchTabular(AbstractModel):
         tc.enable_tqdm()
 
     def _pred_single_model(self, model, X_test, verbose, **kwargs):
+        from ._pytorch_tabular.mute_track import mute_track
+
+        mute_track()
         targets = model.config.target
         with HiddenPrints():
             # Two annoying warnings that cannot be suppressed:
