@@ -1145,6 +1145,7 @@ class Trainer:
         meth_name: str,
         ls: List[str],
         ls_kwarg_name: Union[str, None],
+        tqdm_active: bool = False,
         with_title: bool = False,
         titles: List[str] = None,
         fontsize: float = 12,
@@ -1166,6 +1167,8 @@ class Trainer:
             The argument name of the components in ``ls`` when the component is passed to ``meth_name`` one by one. If
             is None, the components in ``ls`` should be dictionaries and will be unpacked and passed to the method
             ``meth_name``.
+        tqdm_active
+            Whether to use a tqdm progress bar.
         meth_name
             The method to plot on a subplot. It has an argument named ``ax`` which indicates the subplot.
         with_title
@@ -1192,6 +1195,12 @@ class Trainer:
         matplotlib.figure.Figure
             The figure that has plotted subplots.
         """
+        from tqdm.auto import tqdm
+
+        def _iterator(iterator, *args, **kwargs):
+            for item in iterator:
+                yield item
+
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         get_figsize_kwargs_ = update_defaults_by_kwargs(
             dict(max_col=4, width_per_item=3, height_per_item=3, max_width=14),
@@ -1201,7 +1210,8 @@ class Trainer:
 
         fig = plt.figure(figsize=figsize, **figure_kwargs_)
         plt.rcParams["font.size"] = fontsize
-        for idx, name in enumerate(ls):
+        tqdm = tqdm if tqdm_active else _iterator
+        for idx, name in tqdm(enumerate(ls), total=len(ls)):
             ax = plt.subplot(height, width, idx + 1)
             if with_title:
                 ax.set_title(
@@ -1265,6 +1275,7 @@ class Trainer:
         meth_fix_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
+        tqdm_active: bool = False,
     ):
         """
         Iterate over a list to plot subplots in a single figure.
@@ -1300,6 +1311,8 @@ class Trainer:
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
+        tqdm_active
+            Whether to use a tqdm progress bar.
 
         Returns
         -------
@@ -1319,6 +1332,7 @@ class Trainer:
             twin_ylabel=twin_ylabel,
             get_figsize_kwargs=get_figsize_kwargs,
             figure_kwargs=figure_kwargs,
+            tqdm_active=tqdm_active,
         )
 
         return self._plot_action_after_plot(
@@ -1338,6 +1352,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
+        tqdm_active: bool = False,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
         """
@@ -1358,6 +1373,8 @@ class Trainer:
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
+        tqdm_active
+            Whether to use a tqdm progress bar.
         kwargs
             Arguments for :meth:`plot_truth_pred`
 
@@ -1387,6 +1404,7 @@ class Trainer:
             figure_kwargs=figure_kwargs,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs_,
+            tqdm_active=tqdm_active,
         )
 
     def plot_truth_pred(
@@ -1721,6 +1739,7 @@ class Trainer:
         get_figsize_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
+        tqdm_active: bool = False,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
         """
@@ -1743,6 +1762,8 @@ class Trainer:
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
+        tqdm_active
+            Whether to use a tqdm progress bar.
         kwargs
             Arguments for :meth:`plot_partial_dependence`.
 
@@ -1773,6 +1794,7 @@ class Trainer:
             figure_kwargs=figure_kwargs,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs_,
+            tqdm_active=tqdm_active,
         )
 
     def plot_partial_dependence(
@@ -1861,7 +1883,7 @@ class Trainer:
             grid_size=grid_size,
             verbose=verbose,
             rederive=True,
-            percentile=80,
+            percentile=90,
             CI=CI,
             average=True,
         )
@@ -2002,6 +2024,299 @@ class Trainer:
 
         return x_values_list, mean_pdp_list, ci_left_list, ci_right_list
 
+    def plot_partial_dependence_2way_all(
+        self,
+        program: str,
+        model_name: str,
+        x_feature: str,
+        y_features: List[str] = None,
+        fontsize=12,
+        figure_kwargs: Dict = None,
+        get_figsize_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+        tqdm_active: bool = False,
+        **kwargs,
+    ) -> Union[None, matplotlib.figure.Figure]:
+        """
+        Calculate and plot 2-way partial dependence plots with bootstrapping. One continuous feature is fixed for x-axis.
+        The rest of the continuous features are on y-axis, respectively.
+
+        Parameters
+        ----------
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base.
+        x_feature
+            The continuous feature fixed for x-axis.
+        y_features
+            Continuous features on y-axis respectively. If None, all other continuous features are used.
+        fontsize
+            ``plt.rcParams["font.size"]``
+        figure_kwargs
+            Arguments for ``plt.figure``.
+        get_figsize_kwargs
+            Arguments for :func:`tabensemb.utils.utils.get_figsize`.
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
+            instance.
+        tqdm_active
+            Whether to use a tqdm progress bar.
+        kwargs
+            Arguments for :meth:`plot_partial_dependence_2way`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The figure if ``save_show_close`` is False.
+        """
+        y_features = (
+            y_features
+            if y_features is not None
+            else [x for x in self.cont_feature_names if x != x_feature]
+        )
+        savefig_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                fname=os.path.join(
+                    self.project_root,
+                    f"partial_dependence_2way_{program}_{model_name}_{x_feature}.pdf",
+                )
+            ),
+            savefig_kwargs,
+        )
+
+        return self.plot_subplots(
+            ls=y_features,
+            ls_kwarg_name="y_feature",
+            meth_name="plot_partial_dependence_2way",
+            meth_fix_kwargs=dict(
+                x_feature=x_feature, program=program, model_name=model_name, **kwargs
+            ),
+            fontsize=fontsize,
+            with_title=True,
+            xlabel=r"Value of the fixed predictors",
+            ylabel="Value of other predictors",
+            get_figsize_kwargs=get_figsize_kwargs,
+            figure_kwargs=figure_kwargs,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs_,
+            tqdm_active=tqdm_active,
+        )
+
+    def plot_partial_dependence_2way(
+        self,
+        x_feature: str,
+        y_feature: str,
+        program: str,
+        model_name: str,
+        df: pd.DataFrame,
+        derived_data: Dict[str, np.ndarray],
+        ax: matplotlib.axes.Axes = None,
+        projection: str = "3d",
+        grid_size: int = 10,
+        percentile: Union[int, float] = 100,
+        figure_kwargs: Dict = None,
+        imshow_kwargs: Dict = None,
+        surf_kwargs: Dict = None,
+        savefig_kwargs: Dict = None,
+        save_show_close: bool = True,
+        **kwargs,
+    ):
+        """
+        Calculate and plot a 2-way partial dependence plot with bootstrapping for a pair of features.
+
+        Parameters
+        ----------
+        x_feature
+            A continuous feature.
+        y_feature
+            A continuous feature.
+        program
+            The selected model base.
+        model_name
+            The selected model in the model base.
+        ax
+            ``matplotlib.axes.Axes``
+        projection
+            None or "3d". Will use ``matplotlib.pyplot.imshow`` for None and ``matplotlib.pyplot.plot_surface`` for "3d".
+        grid_size
+            The number of sequential values.
+        percentile
+            The percentile of the feature used to generate sequential values.
+        df
+            The tabular dataset.
+        derived_data
+            The derived data calculated using :meth:`derive_unstacked`.
+        kwargs
+            Other arguments for :meth:`cal_partial_dependence_2way`.
+        figure_kwargs
+            Arguments for ``plt.savefig``
+        savefig_kwargs
+            Arguments for ``plt.savefig``
+        imshow_kwargs
+            Arguments for ``plt.imshow``
+        surf_kwargs
+            Arguments for ``plt.plot_surface``
+        save_show_close
+            Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+        kwargs
+            Arguments for :meth:`cal_partial_dependence_2way`.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        from matplotlib import cm
+
+        figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
+        imshow_kwargs_ = update_defaults_by_kwargs(dict(), imshow_kwargs)
+        surf_kwargs_ = update_defaults_by_kwargs(
+            dict(cmap=cm.coolwarm, linewidth=0, antialiased=False), surf_kwargs
+        )
+
+        given_ax = ax is not None
+        if not given_ax:
+            fig = plt.figure(**figure_kwargs_)
+            ax = plt.subplot(111, projection=projection)
+        plt.sca(ax)
+
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+
+        X, Y, Z = self.cal_partial_dependence_2way(
+            x_feature=x_feature,
+            y_feature=y_feature,
+            grid_size=grid_size,
+            percentile=percentile,
+            program=program,
+            model_name=model_name,
+            derived_data=derived_data,
+            df=df,
+            **kwargs,
+        )
+
+        if projection != "3d":
+            ax.imshow(np.rot90(Z), **imshow_kwargs_)
+            ax.set_xticks(np.arange(len(X)))
+            ax.set_yticks(np.arange(len(Y)))
+            ax.set_xticklabels([round(x, 2) for x in X[:, 0]])
+            ax.set_yticklabels([round(x, 2) for x in Y[0, ::-1]])
+        else:
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+            ax.xaxis.pane.set_edgecolor("w")
+            ax.yaxis.pane.set_edgecolor("w")
+            ax.zaxis.pane.set_edgecolor("w")
+            surf = ax.plot_surface(X, Y, Z, **surf_kwargs_)
+
+        return self._plot_action_after_plot(
+            fig_name=os.path.join(
+                self.project_root,
+                f"partial_dependence_2way_{program}_{model_name}_{x_feature}_{y_feature}.pdf",
+            ),
+            disable=given_ax,
+            ax_or_fig=ax,
+            xlabel=x_feature
+            + r" (${}\%$-${}\%$ percentile)".format(100 - percentile, percentile),
+            ylabel=y_feature
+            + r" (${}\%$-${}\%$ percentile)".format(100 - percentile, percentile),
+            tight_layout=False,
+            save_show_close=save_show_close,
+            savefig_kwargs=savefig_kwargs,
+        )
+
+    def cal_partial_dependence_2way(
+        self,
+        x_feature: str,
+        y_feature: str,
+        grid_size: int = 10,
+        percentile: Union[int, float] = 100,
+        x_min: Union[int, float] = None,
+        x_max: Union[int, float] = None,
+        y_min: Union[int, float] = None,
+        y_max: Union[int, float] = None,
+        df: pd.DataFrame = None,
+        **kwargs,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Calculate 2-way partial dependency. See the source code of :meth:`plot_partial_dependence_2way` for its usage.
+
+        Parameters
+        ----------
+        x_feature
+            A continuous feature.
+        y_feature
+            A continuous feature.
+        grid_size
+            The number of sequential values.
+        percentile
+            The percentile of the feature used to generate sequential values.
+        x_min
+            The lower limit of the generated sequential values of the first feature.
+            It will override the left percentile.
+        x_max
+            The upper limit of the generated sequential values of the first feature.
+            It will override the right percentile.
+        y_min
+            The lower limit of the generated sequential values of the second feature.
+            It will override the left percentile.
+        y_max
+            The upper limit of the generated sequential values of the second feature.
+            It will override the right percentile.
+        df
+            The tabular dataset.
+        kwargs
+            Other arguments for :meth:`_bootstrap_fit`. The above `grid_size`, `percentile`, `y_min`, `y_max` are
+            passed to it for the second feature.
+
+        Returns
+        -------
+        list
+            The grid of the first feature
+        list
+            The grid of the second feature
+        list
+            pdp values of each first-feature value and each second-feature value in grids.
+        """
+        y_values_list = []
+        mean_pdp_list = []
+        df = df if df is not None else self.df
+        df = df.copy()
+        x_values_list = list(
+            self._generate_grid(
+                feature=x_feature,
+                grid_size=grid_size,
+                percentile=percentile,
+                x_min=x_min,
+                x_max=x_max,
+                df=df,
+            )
+        )
+
+        for x_val in x_values_list:
+            df[x_feature] = x_val
+            x_value, model_predictions, _, _ = self._bootstrap_fit(
+                focus_feature=y_feature,
+                df=df,
+                grid_size=grid_size,
+                percentile=percentile,
+                x_min=y_min,
+                x_max=y_max,
+                **kwargs,
+            )
+
+            y_values_list.append(x_value)
+            mean_pdp_list.append(model_predictions)
+
+        return (
+            np.repeat(np.array(x_values_list).reshape(1, -1), grid_size, axis=0).T,
+            np.array(y_values_list),
+            np.array(mean_pdp_list),
+        )
+
     def plot_partial_err_all(
         self,
         program: str,
@@ -2011,6 +2326,7 @@ class Trainer:
         get_figsize_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
+        tqdm_active: bool = False,
         **kwargs,
     ) -> Union[None, matplotlib.figure.Figure]:
         """
@@ -2034,6 +2350,8 @@ class Trainer:
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
+        tqdm_active
+            Whether to use a tqdm progress bar.
         kwargs
             Arguments for :meth:`plot_partial_err`
 
@@ -2064,6 +2382,7 @@ class Trainer:
             figure_kwargs=figure_kwargs,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs_,
+            tqdm_active=tqdm_active,
         )
 
     def plot_partial_err(
@@ -2701,6 +3020,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
+        tqdm_active: bool = False,
         **kwargs,
     ) -> matplotlib.figure.Figure:
         """
@@ -2721,6 +3041,8 @@ class Trainer:
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
+        tqdm_active
+            Whether to use a tqdm progress bar.
         **kwargs
             Arguments for :meth:`plot_hist`.
 
@@ -2751,6 +3073,7 @@ class Trainer:
             figure_kwargs=figure_kwargs,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs_,
+            tqdm_active=tqdm_active,
         )
 
     def plot_hist(
@@ -3230,6 +3553,7 @@ class Trainer:
         figure_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
+        tqdm_active: bool = False,
         **kwargs,
     ) -> matplotlib.figure.Figure:
         """
@@ -3250,6 +3574,8 @@ class Trainer:
         save_show_close
             Whether to save, show (in the notebook), and close the figure, or return the ``matplotlib.figure.Figure``
             instance.
+        tqdm_active
+            Whether to use a tqdm progress bar.
         **kwargs
             Arguments for :meth:`plot_kde`.
 
@@ -3280,6 +3606,7 @@ class Trainer:
             figure_kwargs=figure_kwargs,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs_,
+            tqdm_active=tqdm_active,
         )
 
     def plot_kde(
@@ -4181,27 +4508,20 @@ class Trainer:
 
         modelbase = self.get_modelbase(program)
         derived_data = self.datamodule.sort_derived_data(derived_data)
+        df = df.reset_index(drop=True)
         if focus_feature in self.cont_feature_names:
-            x_value = np.linspace(
-                (
-                    np.nanpercentile(df[focus_feature].values, (100 - percentile) / 2)
-                    if x_min is None
-                    else x_min
-                ),
-                (
-                    np.nanpercentile(
-                        df[focus_feature].values, 100 - (100 - percentile) / 2
-                    )
-                    if x_max is None
-                    else x_max
-                ),
-                grid_size,
+            x_value = self._generate_grid(
+                feature=focus_feature,
+                grid_size=grid_size,
+                percentile=percentile,
+                x_min=x_min,
+                x_max=x_max,
+                df=df,
             )
         elif focus_feature in self.cat_feature_names:
             x_value = np.unique(df[focus_feature].values)
         else:
             raise Exception(f"{focus_feature} not available.")
-        df = df.reset_index(drop=True)
         expected_value_bootstrap_replications = []
         for i_bootstrap in range(n_bootstrap):
             if resample:
@@ -4269,6 +4589,52 @@ class Trainer:
             mean_pred.append(np.mean(y_pred))
 
         return x_value, np.array(mean_pred), np.array(ci_left), np.array(ci_right)
+
+    def _generate_grid(
+        self,
+        feature: str,
+        grid_size: int,
+        percentile: Union[int, float] = 100,
+        x_min: Union[int, float] = None,
+        x_max: Union[int, float] = None,
+        df: pd.DataFrame = None,
+    ) -> np.ndarray:
+        """
+        Generate a sequential (linspace) grid for a feature in the tabular dataset.
+
+        Parameters
+        ----------
+        feature
+            The focused feature.
+        grid_size
+            The number of sequential values.
+        percentile
+            The percentile of the feature used to generate sequential values.
+        x_min
+            The lower limit of the generated sequential values. It will override the left percentile.
+        x_max
+            The upper limit of the generated sequential values. It will override the right percentile.
+        df
+            The tabular dataset.
+
+        Returns
+        -------
+        np.ndarray
+        """
+        df = df if df is not None else self.df
+        return np.linspace(
+            (
+                np.nanpercentile(df[feature].values, (100 - percentile) / 2)
+                if x_min is None
+                else x_min
+            ),
+            (
+                np.nanpercentile(df[feature].values, 100 - (100 - percentile) / 2)
+                if x_max is None
+                else x_max
+            ),
+            grid_size,
+        )
 
     def load_state(self, trainer: "Trainer"):
         """
