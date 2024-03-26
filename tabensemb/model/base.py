@@ -638,6 +638,8 @@ class AbstractModel:
                         f"Using batch_size={_new_batch_size} instead."
                     )
                     new_batch_size = _new_batch_size
+            if new_batch_size < limit_batch_size:
+                new_batch_size = limit_batch_size
             if 0 < n_train % new_batch_size < limit_batch_size:
                 _new_batch_size = int(math.ceil(n_train / (n_train // new_batch_size)))
                 warnings.warn(
