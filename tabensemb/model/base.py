@@ -1014,7 +1014,7 @@ class AbstractModel:
         ):
             if verbose:
                 print(f"Training {model_name}")
-            data = self._train_data_preprocess(model_name)
+            data = self._train_data_preprocess(model_name, warm_start=warm_start)
             tmp_params = self._get_params(model_name, verbose=verbose)
             space = self._space(model_name=model_name)
 
@@ -1468,7 +1468,9 @@ class AbstractModel:
         """
         raise NotImplementedError
 
-    def _train_data_preprocess(self, model_name) -> Union[DataModule, dict]:
+    def _train_data_preprocess(
+        self, model_name, warm_start=False
+    ) -> Union[DataModule, dict]:
         """
         Processing the data from ``self.trainer.datamodule`` for training.
 
@@ -1476,6 +1478,8 @@ class AbstractModel:
         ----------
         model_name:
             The name of a selected model.
+        warm_start
+            Finetune models based on previous trained models.
 
         Returns
         -------
@@ -1853,8 +1857,8 @@ class TorchModel(AbstractModel):
         )
         return attr.flatten()
 
-    def _train_data_preprocess(self, model_name):
-        datamodule = self._prepare_custom_datamodule(model_name)
+    def _train_data_preprocess(self, model_name, warm_start=False):
+        datamodule = self._prepare_custom_datamodule(model_name, warm_start=warm_start)
         datamodule.update_dataset()
         train_dataset, val_dataset, test_dataset = self._generate_dataset(
             datamodule, model_name
@@ -1868,7 +1872,9 @@ class TorchModel(AbstractModel):
             "y_test": datamodule.y_test,
         }
 
-    def _prepare_custom_datamodule(self, model_name: str) -> DataModule:
+    def _prepare_custom_datamodule(
+        self, model_name: str, warm_start=False
+    ) -> DataModule:
         """
         Change this method if a customized preprocessing stage is needed. See :class:`tabensemb.model.CatEmbed` for example.
 
@@ -2277,7 +2283,7 @@ class TorchModel(AbstractModel):
         if self.model is not None and model_name in self.model.keys():
             model = self.model[model_name]
         else:
-            self._prepare_custom_datamodule(model_name)
+            self._prepare_custom_datamodule(model_name, warm_start=True)
             model = self.new_model(
                 model_name, verbose=False, **self._get_params(model_name, verbose=False)
             )

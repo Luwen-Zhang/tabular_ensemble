@@ -312,7 +312,7 @@ class WideDeep(AbstractModel):
         )
         return wd_trainer
 
-    def _train_data_preprocess(self, model_name):
+    def _train_data_preprocess(self, model_name, warm_start=False):
         import pytorch_widedeep
         from pytorch_widedeep.preprocessing import TabPreprocessor
         from pandas._config import option_context
@@ -320,27 +320,33 @@ class WideDeep(AbstractModel):
         data = self.trainer.datamodule
         cont_feature_names = self.trainer.cont_feature_names
         cat_feature_names = self.trainer.cat_feature_names
-        if version.parse(pytorch_widedeep.__version__) < version.parse("1.2.3"):
-            tab_preprocessor = TabPreprocessor(
-                continuous_cols=cont_feature_names,
-                cat_embed_cols=(
-                    cat_feature_names if len(cat_feature_names) != 0 else None
-                ),
-            )
+        if not warm_start:
+            if version.parse(pytorch_widedeep.__version__) < version.parse("1.2.3"):
+                tab_preprocessor = TabPreprocessor(
+                    continuous_cols=cont_feature_names,
+                    cat_embed_cols=(
+                        cat_feature_names if len(cat_feature_names) != 0 else None
+                    ),
+                )
+            else:
+                # https://github.com/jrzaurin/pytorch-widedeep/commit/cc0d1ad59c447dabd29072a552194ece12173778#diff-2f6e79eedee796c7edeac4fffc29ef35ecbfb8c234ff63313509e412a8d3ed42L108
+                tab_preprocessor = TabPreprocessor(
+                    continuous_cols=cont_feature_names,
+                    cat_embed_cols=(
+                        cat_feature_names if len(cat_feature_names) != 0 else None
+                    ),
+                    cols_to_scale=cont_feature_names,
+                )
+            with option_context("mode.chained_assignment", None):
+                X_tab_train = tab_preprocessor.fit_transform(data.X_train)
+                X_tab_val = tab_preprocessor.transform(data.X_val)
+                X_tab_test = tab_preprocessor.transform(data.X_test)
+            self.tab_preprocessor = tab_preprocessor
         else:
-            # https://github.com/jrzaurin/pytorch-widedeep/commit/cc0d1ad59c447dabd29072a552194ece12173778#diff-2f6e79eedee796c7edeac4fffc29ef35ecbfb8c234ff63313509e412a8d3ed42L108
-            tab_preprocessor = TabPreprocessor(
-                continuous_cols=cont_feature_names,
-                cat_embed_cols=(
-                    cat_feature_names if len(cat_feature_names) != 0 else None
-                ),
-                cols_to_scale=cont_feature_names,
-            )
-        with option_context("mode.chained_assignment", None):
-            X_tab_train = tab_preprocessor.fit_transform(data.X_train)
-            X_tab_val = tab_preprocessor.transform(data.X_val)
-            X_tab_test = tab_preprocessor.transform(data.X_test)
-        self.tab_preprocessor = tab_preprocessor
+            with option_context("mode.chained_assignment", None):
+                X_tab_train = self.tab_preprocessor.transform(data.X_train)
+                X_tab_val = self.tab_preprocessor.transform(data.X_val)
+                X_tab_test = self.tab_preprocessor.transform(data.X_test)
         return {
             "X_train": X_tab_train,
             "y_train": data.y_train.flatten(),
