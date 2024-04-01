@@ -87,6 +87,7 @@ class CatEmbed(TorchModel):
             datamodule.set_data_processors(
                 [("CategoricalOrdinalEncoder", {}), ("StandardScaler", {})]
             )
+            warm_start = False
         else:
             datamodule = self.datamodule
         datamodule.set_data(
@@ -98,6 +99,7 @@ class CatEmbed(TorchModel):
             val_indices=base.val_indices,
             test_indices=base.test_indices,
             verbose=False,
+            warm_start=warm_start,
         )
         tmp_derived_data = base.derived_data.copy()
         tmp_derived_data.update(datamodule.derived_data)
