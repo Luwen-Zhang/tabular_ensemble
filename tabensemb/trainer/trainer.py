@@ -160,7 +160,8 @@ class Trainer:
     def detach_modelbase(self, program: str, verbose: bool = True) -> "Trainer":
         """
         Detach the selected model base to a separate :class:`Trainer` and save it to another directory. It is much cheaper than
-        :meth:`copy` if only one model base is needed.
+        :meth:`copy` if only one model base is needed. If any external model is required, please use :meth:``detach_model``
+        to detach a single model.
 
         Parameters
         ----------
@@ -193,7 +194,8 @@ class Trainer:
         self, program: str, model_name: str, verbose: bool = True
     ) -> "Trainer":
         """
-        Detach the selected model of the selected model base to a separate :class:`Trainer` and save it to another directory.
+        Detach the selected model of the selected model base to a separate :class:`Trainer` and save it to another
+        directory. If external models are required, they are also detached into the separated Trainer.
 
         Parameters
         ----------
@@ -209,13 +211,36 @@ class Trainer:
         Trainer
             A :class:`Trainer` with the selected model in its model base.
         """
-        tmp_trainer = self.detach_modelbase(program=program, verbose=False)
-        tmp_modelbase = tmp_trainer.get_modelbase(program=program)
-        detached_model = tmp_modelbase.detach_model(
-            model_name=model_name, program=f"{program}_{model_name}"
+        required_models_names = self.get_modelbase(program=program).required_models(
+            model_name
         )
+        if required_models_names is not None and any(
+            [x.startswith("EXTERN") for x in required_models_names]
+        ):
+            tmp_trainer = self.copy()
+            tmp_modelbase = tmp_trainer.get_modelbase(program=program)
+            detached_model = tmp_modelbase.detach_model(
+                model_name=model_name, program=f"{program}_{model_name}"
+            )
+            required_models = tmp_modelbase._get_required_models(model_name)
+            required_modelbases = (
+                [
+                    model
+                    for x, model in required_models.items()
+                    if x.startswith("EXTERN")
+                ]
+                if required_models is not None
+                else []
+            )
+        else:
+            tmp_trainer = self.detach_modelbase(program=program, verbose=False)
+            tmp_modelbase = tmp_trainer.get_modelbase(program=program)
+            detached_model = tmp_modelbase.detach_model(
+                model_name=model_name, program=f"{program}_{model_name}"
+            )
+            required_modelbases = []
         tmp_trainer.clear_modelbase()
-        tmp_trainer.add_modelbases([detached_model])
+        tmp_trainer.add_modelbases([detached_model] + required_modelbases)
         shutil.rmtree(tmp_modelbase.root)
         save_trainer(tmp_trainer, verbose=verbose)
         return tmp_trainer

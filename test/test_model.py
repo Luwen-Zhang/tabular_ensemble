@@ -180,6 +180,41 @@ def test_wrap():
         models[-1].get_full_name_from_required_model(None)
     assert "The required model should be" in err.value.args[0]
 
+    # Detached model that require external models
+    model_detach = models[-1].detach_model(model_name="Require Model Self CatEmbed")
+    trainer_self_detach = trainer.detach_model(
+        program="CatEmbed", model_name="Require Model Self CatEmbed"
+    )
+    trainer_detach = trainer.detach_model(
+        program="CatEmbed", model_name="Require Model ExtCatEmbed CatEmbed"
+    )
+    assert tabensemb.utils.auto_metric_sklearn(
+        trainer.datamodule.y_test,
+        model_detach.predict(
+            trainer.datamodule.X_test, model_name="Require Model Self CatEmbed"
+        ),
+        metric="rmse",
+        task="regression",
+    ) == _get_metric_from_leaderboard(l, "Require Model Self CatEmbed")
+    assert tabensemb.utils.auto_metric_sklearn(
+        trainer.datamodule.y_test,
+        trainer_self_detach.get_modelbase(
+            "CatEmbed_Require Model Self CatEmbed"
+        ).predict(trainer.datamodule.X_test, model_name="Require Model Self CatEmbed"),
+        metric="rmse",
+        task="regression",
+    ) == _get_metric_from_leaderboard(l, "Require Model Self CatEmbed")
+    assert tabensemb.utils.auto_metric_sklearn(
+        trainer.datamodule.y_test,
+        trainer_detach.get_modelbase(
+            "CatEmbed_Require Model ExtCatEmbed CatEmbed"
+        ).predict(
+            trainer.datamodule.X_test, model_name="Require Model ExtCatEmbed CatEmbed"
+        ),
+        metric="rmse",
+        task="regression",
+    ) == _get_metric_from_leaderboard(l, "Require Model ExtCatEmbed CatEmbed")
+
 
 def test_abstract_wrap():
     pytest_configure_trainer()

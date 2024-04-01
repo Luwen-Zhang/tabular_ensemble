@@ -398,6 +398,8 @@ class AbstractModel:
     def detach_model(self, model_name: str, program: str = None) -> "AbstractModel":
         """
         Detach the chosen model to a separate model base with the same linked :class:`~tabensemb.trainer.Trainer`.
+        If any model inside the model base is required, required models are detached as well. if any external model is
+        required, the model should be detached through Trainer.detach_model.
 
         Parameters
         ----------
@@ -418,16 +420,23 @@ class AbstractModel:
         tmp_model = cp(self)
         tmp_model.trainer = self.trainer
         tmp_model.program = program
-        tmp_model.model_subset = [model_name]
+        required_models = self.required_models(model_name)
+        required_models = [
+            x
+            for x in (required_models if required_models is not None else [])
+            if not x.startswith("EXTERN")
+        ]
+        tmp_model.model_subset = [model_name] + required_models
         if tmp_model.store_in_harddisk and program != self.program:
             tmp_model._mkdir()
             tmp_model.model = ModelDict(path=tmp_model.root)
         else:
             tmp_model.store_in_harddisk = False
             tmp_model.model = {}
-        tmp_model.model[model_name] = cp(self.model[model_name])
-        if model_name in self.model_params.keys():
-            tmp_model.model_params[model_name] = cp(self.model_params[model_name])
+        for name in tmp_model.model_subset:
+            tmp_model.model[name] = cp(self.model[name])
+            if name in self.model_params.keys():
+                tmp_model.model_params[name] = cp(self.model_params[name])
         return tmp_model
 
     def set_path(self, path: Union[os.PathLike, str]):
@@ -698,8 +707,8 @@ class AbstractModel:
                         else:
                             raise Exception(
                                 f"Model base {program} is required for model {model_name}, but does not exist. It is "
-                                f"mainly caused by model detaching and is currently not supported for models that "
-                                f"requires other models."
+                                f"mainly caused by model detaching with Trainer.detach_modelbase. Please use "
+                                f"Trainer.detach_model instead."
                             )
                     try:
                         detached_model = modelbase.detach_model(
