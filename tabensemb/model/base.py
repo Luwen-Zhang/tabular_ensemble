@@ -641,7 +641,11 @@ class AbstractModel:
             if new_batch_size < limit_batch_size:
                 new_batch_size = limit_batch_size
             if 0 < n_train % new_batch_size < limit_batch_size:
-                _new_batch_size = int(math.ceil(n_train / (n_train // new_batch_size)))
+                _new_batch_size = (
+                    int(math.ceil(n_train / (n_train // new_batch_size)))
+                    if n_train >= limit_batch_size
+                    else n_train
+                )
                 warnings.warn(
                     f"Using batch_size={new_batch_size} and len(training set)={n_train}, which will make the mini batch "
                     f"smaller than limit_batch_size={limit_batch_size}. Using batch_size={_new_batch_size} instead."
