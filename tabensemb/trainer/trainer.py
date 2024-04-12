@@ -1436,10 +1436,14 @@ class Trainer:
         self,
         program: str,
         model_name: str,
+        kde_color: bool = False,
+        train_val_test: str = "all",
         log_trans: bool = True,
+        central_line: bool = True,
         upper_lim=9,
         ax=None,
         clr: Iterable = None,
+        select_by_value_kwargs: Dict = None,
         figure_kwargs: Dict = None,
         scatter_kwargs: Dict = None,
         legend_kwargs: Dict = None,
@@ -1455,14 +1459,22 @@ class Trainer:
             The selected model base.
         model_name
             The selected model in the model base
+        kde_color
+            Whether the scatters are colored by their KDE density. Ignored if ``train_val_test`` is "all".
+        train_val_test
+            Which subset to be plotted. Choose from "Training", "Validation", "Testing", and "all".
         log_trans
             Whether the label data is in log scale.
+        central_line
+            Whether to plot a 45-degree diagonal line.
         upper_lim
             The upper limit of x/y-axis.
         ax
             ``matplotlib.axes.Axes``
         clr
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
+        select_by_value_kwargs
+            Arguments for :meth:`tabensemb.data.datamodule.DataModule.select_by_value`.
         figure_kwargs
             Arguments for ``plt.figure()``
         scatter_kwargs
@@ -1485,49 +1497,83 @@ class Trainer:
             legend_kwargs,
         )
 
-        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
+        if select_by_value_kwargs is not None:
+            select_by_value_kwargs_ = update_defaults_by_kwargs(
+                dict(), select_by_value_kwargs
+            )
+            df = self._plot_action_get_df(
+                imputed=True, scaled=False, cat_transformed=True
+            )
+            indices = self.datamodule.select_by_value(**select_by_value_kwargs_)
+            df = df.loc[indices, :].reset_index(drop=True)
+            derived_data = self.datamodule.get_derived_data_slice(
+                derived_data=self.derived_data, indices=indices
+            )
+            train_val_test = "User"
+            prediction = {
+                "User": (
+                    self.get_modelbase(program)._predict(
+                        df=df, model_name=model_name, derived_data=derived_data
+                    ),
+                    df[self.label_name].values,
+                )
+            }
+        else:
+            prediction = self.get_modelbase(program)._predict_model(
+                model_name=model_name,
+                test_data_only=False if train_val_test != "Testing" else True,
+            )
 
-        prediction = self.get_modelbase(program)._predict_model(
-            model_name=model_name, test_data_only=False
-        )
+        ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
 
         def plot_one(name, color, marker):
             pred_y, y = prediction[name]
             r2 = metric_sklearn(y, pred_y, "r2")
             loss = metric_sklearn(y, pred_y, "mse")
             print(f"{name} MSE Loss: {loss:.4f}, R2: {r2:.4f}")
+            final_y = 10**y if log_trans else y
+            final_y_pred = 10**pred_y if log_trans else pred_y
+            if kde_color:
+                xy = np.hstack([final_y, final_y_pred]).T
+                z = st.gaussian_kde(xy)(xy)
+                scatter_kwargs_ = update_defaults_by_kwargs(
+                    scatter_kwargs, dict(c=z, color=None)
+                )
+            else:
+                scatter_kwargs_ = update_defaults_by_kwargs(
+                    dict(color=color), scatter_kwargs
+                )
             scatter_kwargs_ = update_defaults_by_kwargs(
                 dict(
                     s=20,
-                    color=color,
                     marker=marker,
                     label=f"{name} dataset ($R^2$={r2:.3f})",
                     linewidth=0.4,
                     edgecolors="k",
                 ),
-                scatter_kwargs,
+                scatter_kwargs_,
             )
-            ax.scatter(
-                10**y if log_trans else y,
-                10**pred_y if log_trans else pred_y,
-                **scatter_kwargs_,
-            )
+            ax.scatter(final_y, final_y_pred, **scatter_kwargs_)
 
-        plot_one("Training", clr[0], "o")
-        plot_one("Validation", clr[2], "o")
-        plot_one("Testing", clr[1], "o")
+        if train_val_test == "all":
+            plot_one("Training", clr[0], "o")
+            plot_one("Validation", clr[1], "o")
+            plot_one("Testing", clr[2], "o")
+        else:
+            plot_one(train_val_test, clr[0], "o")
 
         if log_trans:
             ax.set_xscale("log")
             ax.set_yscale("log")
 
-            ax.plot(
-                np.linspace(0, 10**upper_lim, 100),
-                np.linspace(0, 10**upper_lim, 100),
-                "--",
-                c="grey",
-                alpha=0.2,
-            )
+            if central_line:
+                ax.plot(
+                    np.linspace(0, 10**upper_lim, 100),
+                    np.linspace(0, 10**upper_lim, 100),
+                    "--",
+                    c="grey",
+                    alpha=0.2,
+                )
             locmin = matplotlib.ticker.LogLocator(
                 base=10.0, subs=[0.1 * x for x in range(10)], numticks=20
             )
@@ -1549,13 +1595,14 @@ class Trainer:
             l = np.min([lx, ly])
             r = np.max([rx, ry])
 
-            ax.plot(
-                np.linspace(l, r, 100),
-                np.linspace(l, r, 100),
-                "--",
-                c="grey",
-                alpha=0.2,
-            )
+            if central_line:
+                ax.plot(
+                    np.linspace(l, r, 100),
+                    np.linspace(l, r, 100),
+                    "--",
+                    c="grey",
+                    alpha=0.2,
+                )
 
             ax.set_xlim(left=l, right=r)
             ax.set_ylim(bottom=l, top=r)
@@ -2738,7 +2785,13 @@ class Trainer:
         ax.set_xticklabels(cont_feature_names, fontsize=fontsize)
         ax.set_yticklabels(cont_feature_names, fontsize=fontsize)
 
-        plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
+        plt.setp(
+            ax.get_xticklabels(),
+            rotation=90,
+            va="center",
+            ha="right",
+            rotation_mode="anchor",
+        )
 
         norm_corr = corr - (np.nanmax(corr) + np.nanmin(corr)) / 2
         norm_corr /= np.nanmax(norm_corr)
@@ -3271,6 +3324,13 @@ class Trainer:
                             np.max(counts) + 0.2 * count_range,
                         ]
                     )
+                plt.setp(
+                    ax.get_xticklabels(),
+                    rotation=90,
+                    va="center",
+                    ha="right",
+                    rotation_mode="anchor",
+                )
             if category is not None and legend:
                 ax.legend(**legend_kwargs_)
         else:
@@ -3812,8 +3872,8 @@ class Trainer:
             fig_name=os.path.join(self.project_root, f"presence_ratio.pdf"),
             disable=given_ax,
             ax_or_fig=ax,
-            xlabel="Data presence ratio" if is_horizontal else "",
-            ylabel="Data presence ratio" if not is_horizontal else "",
+            xlabel="Presence ratio" if is_horizontal else "",
+            ylabel="Presence ratio" if not is_horizontal else "",
             tight_layout=False,
             save_show_close=save_show_close,
             savefig_kwargs=savefig_kwargs,
@@ -3920,6 +3980,8 @@ class Trainer:
         figure_kwargs: Dict = None,
         imshow_kwargs: Dict = None,
         cbar_kwargs: Dict = None,
+        cbar_ax_linewidth: float = 1,
+        cbar_ax_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
     ) -> matplotlib.axes.Axes:
@@ -3938,6 +4000,10 @@ class Trainer:
             Arguments for ``plt.imshow``.
         cbar_kwargs
             Arguments for ``plt.colorbar``.
+        cbar_ax_linewidth
+            Line width of bounding box of cbar.
+        cbar_ax_kwargs
+            Arguments for ``mpl_toolkits.axes_grid1.inset_locator.inset_axes``
         savefig_kwargs
             Arguments for ``plt.savefig``
         save_show_close
@@ -3982,22 +4048,34 @@ class Trainer:
         ax.set_xticklabels(unique_values)
         ax.set_yticklabels(self.all_feature_names)
 
-        plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
+        plt.setp(
+            ax.get_xticklabels(),
+            rotation=45,
+            ha="right",
+            va="center",
+            rotation_mode="anchor",
+        )
 
         from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-        axins = inset_axes(
-            ax,
-            width=f"{1/len(unique_values)*100}%",  # width = 5% of parent_bbox width
-            height="50%",  # height : 50%
-            loc="lower left",
-            bbox_to_anchor=(1.05, 0.0, 1, 1),
-            bbox_transform=ax.transAxes,
-            borderpad=0,
+        cbar_ax_kwargs_ = update_defaults_by_kwargs(
+            dict(
+                width=f"{1/len(unique_values)*100}%",
+                height="20%",
+                loc="lower left",
+                bbox_to_anchor=(1.05, 0.0, 1, 1),
+                bbox_transform=ax.transAxes,
+                borderpad=0,
+            ),
+            cbar_ax_kwargs,
         )
+        axins = inset_axes(ax, **cbar_ax_kwargs_)
 
         cbar = ax.figure.colorbar(im, cax=axins, **cbar_kwargs_)
         cbar.ax.set_ylabel("Presence ratio", rotation=-90, va="bottom")
+        [i.set_linewidth(cbar_ax_linewidth) for i in cbar.ax.spines.values()]
+        cbar.ax.xaxis.set_tick_params(width=cbar_ax_linewidth)
+        cbar.ax.yaxis.set_tick_params(width=cbar_ax_linewidth)
 
         return self._plot_action_after_plot(
             fig_name=os.path.join(self.project_root, f"presence_ratio_{category}.pdf"),
@@ -4385,15 +4463,17 @@ class Trainer:
         return legend
 
     def _plot_action_init_ax(
-        self, ax=None, figure_kwargs: Dict = None
+        self, ax=None, figure_kwargs: Dict = None, return_fig: bool = False
     ) -> Tuple[matplotlib.axes.Axes, bool]:
         figure_kwargs_ = update_defaults_by_kwargs(dict(), figure_kwargs)
         given_ax = ax is not None
         if not given_ax:
             fig = plt.figure(**figure_kwargs_)
-            ax = plt.subplot(111)
-        plt.sca(ax)
-        return ax, given_ax
+            if not return_fig:
+                ax = plt.subplot(111)
+        if isinstance(ax, matplotlib.axes.Axes):
+            plt.sca(ax)
+        return (ax, given_ax) if not return_fig else (fig, given_ax)
 
     def _plot_action_after_plot(
         self,
@@ -4448,6 +4528,7 @@ class Trainer:
                 )
                 if tight_layout:
                     plt.tight_layout()
+                os.makedirs(os.path.dirname(savefig_kwargs_["fname"]), exist_ok=True)
                 plt.savefig(**savefig_kwargs_)
                 if is_notebook():
                     plt.show()
@@ -4460,10 +4541,9 @@ class Trainer:
         df: pd.DataFrame,
         derived_data: Dict[str, np.ndarray],
         focus_feature: str,
+        model_name: str,
         n_bootstrap: int = 1,
         grid_size: int = 30,
-        verbose: bool = True,
-        rederive: bool = True,
         refit: bool = True,
         resample: bool = True,
         percentile: float = 100,
@@ -4471,7 +4551,7 @@ class Trainer:
         x_max: float = None,
         CI: float = 0.95,
         average: bool = True,
-        model_name: str = "ThisWork",
+        inspect_attr_kwargs: Dict = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Make bootstrap resampling, fit the selected model on the resampled data, and assign sequential values to the
@@ -4484,6 +4564,8 @@ class Trainer:
         ----------
         program
             The selected model base.
+        model_name
+            The selected model in the model base.
         df
             The tabular dataset.
         derived_data
@@ -4494,11 +4576,6 @@ class Trainer:
             The number of bootstrapping, fitting, and assigning runs.
         grid_size
             The number of sequential values.
-        verbose
-            Ignored.
-        rederive
-            Ignored. If the focus_feature is a derived stacked feature, derivation will not be performed on the
-            bootstrap dataset. Otherwise, stacked/unstacked features will be re-derived.
         refit
             Whether to fit the model on the bootstrap dataset (with warm_start=True).
         resample
@@ -4515,8 +4592,6 @@ class Trainer:
             If True, CI will be calculated on results ``(grid_size, n_bootstrap)``where predictions for all samples are
             averaged for each bootstrap run.
             If False, CI will be calculated on results ``(grid_size, n_bootstrap*len(df))``.
-        model_name
-            The selected model in the model base.
 
         Returns
         -------
@@ -4548,6 +4623,7 @@ class Trainer:
         else:
             raise Exception(f"{focus_feature} not available.")
         expected_value_bootstrap_replications = []
+        inspects = []
         for i_bootstrap in range(n_bootstrap):
             if resample:
                 df_bootstrap = skresample(df)
@@ -4573,21 +4649,26 @@ class Trainer:
                         verbose=False,
                         warm_start=True,
                     )
+            i_inspect = []
             bootstrap_model_predictions = []
             for value in x_value:
                 df_perm = df_bootstrap.copy()
                 df_perm[focus_feature] = value
-                bootstrap_model_predictions.append(
-                    bootstrap_model.predict(
-                        df_perm,
-                        model_name=model_name,
-                        derived_data=(
-                            tmp_derived_data
-                            if focus_feature in self.derived_stacked_features
-                            else None
-                        ),  # To avoid rederiving stacked data
-                    )
+                inspect_attr_kwargs_ = update_defaults_by_kwargs(
+                    dict(attributes=[]), inspect_attr_kwargs
                 )
+                inspect = bootstrap_model.inspect_attr(
+                    model_name=model_name,
+                    df=df_perm,
+                    derived_data=(
+                        tmp_derived_data
+                        if focus_feature in self.derived_stacked_features
+                        else None
+                    ),
+                    **inspect_attr_kwargs_,
+                )
+                bootstrap_model_predictions.append(inspect["USER_INPUT"]["prediction"])
+                i_inspect.append((value, inspect["USER_INPUT"]))
             if average:
                 expected_value_bootstrap_replications.append(
                     np.mean(np.hstack(bootstrap_model_predictions), axis=0)
@@ -4596,6 +4677,7 @@ class Trainer:
                 expected_value_bootstrap_replications.append(
                     np.hstack(bootstrap_model_predictions)
                 )
+            inspects.append(i_inspect)
 
         expected_value_bootstrap_replications = np.vstack(
             expected_value_bootstrap_replications
@@ -4613,7 +4695,17 @@ class Trainer:
             ci_right.append(ci_int[1])
             mean_pred.append(np.mean(y_pred))
 
-        return x_value, np.array(mean_pred), np.array(ci_left), np.array(ci_right)
+        return (
+            (x_value, np.array(mean_pred), np.array(ci_left), np.array(ci_right))
+            if inspect_attr_kwargs is None
+            else (
+                x_value,
+                np.array(mean_pred),
+                np.array(ci_left),
+                np.array(ci_right),
+                inspects,
+            )
+        )
 
     def _generate_grid(
         self,

@@ -942,9 +942,19 @@ def test_plots():
 
         print(f"\n-- Truth pred --\n")
         trainer.plot_truth_pred_all(program="CatEmbed", log_trans=True)
-        trainer.plot_truth_pred_all(program="CatEmbed", log_trans=False)
         trainer.plot_truth_pred(
-            program="CatEmbed", model_name="Category Embedding", log_trans=True
+            program="CatEmbed",
+            model_name="Category Embedding",
+            log_trans=True,
+            kde_color=True,
+            train_val_test="Testing",
+        )
+        trainer.plot_truth_pred(
+            program="CatEmbed",
+            model_name="Category Embedding",
+            log_trans=False,
+            kde_color=False,
+            select_by_value_kwargs=dict(partition="test"),
         )
 
         print(f"\n-- Feature box --\n")

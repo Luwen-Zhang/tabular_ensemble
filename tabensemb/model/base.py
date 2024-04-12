@@ -1965,7 +1965,8 @@ class TorchModel(AbstractModel):
         else:
             raise Exception(
                 f"The required model should be a nn.Module, an AbstractWrapper, or an AbstractModel, but got"
-                f"{type(required_model)} instead."
+                f"{type(required_model)} instead. If you are using jupyter notebook and its autoreload plugin,"
+                f"the reloaded class is different from the original one, although their names are the same."
             )
         return full_name
 
