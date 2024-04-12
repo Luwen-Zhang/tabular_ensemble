@@ -41,26 +41,33 @@ plt.rcParams["figure.autolayout"] = True
 global_sns_palette = sns.color_palette("deep")
 
 global_palette = [
-    "#00B2CA",
-    "#FEB95F",
-    "#FF3E41",
-    "#3B3561",
-    "#679436",
-    "#BF9ACA",
-    "#1F487E",
-    "#2B59C3",
-    "#6E0E0A",
-    "#395E66",
-    "#726DA8",
-    "#5438DC",
-    "#791E94",
-    "#CEF7A0",
-    "#044B7F",
-    "#157F1F",
-    "#8B1E3F",
-    "#A63D40",
-    "#D57A66",
-    "#79A9D1",
+    "#ea232c",
+    "#314190",
+    "#2caf91",
+    "#e49633",
+    "#166135",
+    "#50b9aa",
+    "#0d5a9b",
+    "#fcb760",
+    "#6a77ac",
+    "#322051",
+    "#c24135",
+    "#aa602d",
+    "#eea86f",
+    "#c56f9c",
+    "#cd552e",
+    "#ebde4e",
+    "#96235d",
+    "#f8b68a",
+    "#c0e3df",
+    "#000000",
+    "#662b3d",
+    "#eb3882",
+    "#1a8e7c",
+    "#a89351",
+    "#a6cf79",
+    "#f6d761",
+    "#50abde",
 ]
 
 global_marker = ["o", "v", "^", "<", ">", "s", "p", "P", "*", "h", "H", "D", "d"]
@@ -865,6 +872,32 @@ def add_postfix(path):
         s = os.path.join(*root_split) + ext
         root, ext = os.path.splitext(s)
     return s
+
+
+def safe_mkdir(path: os.PathLike):
+    """
+    Make a previously not existing directory safely resolving conflicts. When multiple tasks are executed
+    simultaneously, this is extremely useful even when ``os.path.exist`` is used.
+
+    Parameters
+    ----------
+    path
+        The intended path
+
+    Returns
+    -------
+    str
+        The actual made path
+    """
+    while True:
+        try:
+            os.mkdir(path)
+            break
+        except FileExistsError:
+            path = add_postfix(path)
+        except Exception as e:
+            raise e
+    return path
 
 
 class torch_with_grad(_DecoratorContextManager):

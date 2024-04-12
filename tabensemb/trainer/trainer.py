@@ -182,7 +182,7 @@ class Trainer:
         modelbase = cp(self.get_modelbase(program=program))
         tmp_trainer = modelbase.trainer
         tmp_trainer.clear_modelbase()
-        new_path = add_postfix(self.project_root)
+        new_path = safe_mkdir(add_postfix(self.project_root))
         tmp_trainer.set_path(new_path, verbose=False)
         modelbase.set_path(os.path.join(new_path, modelbase.program))
         tmp_trainer.add_modelbases([modelbase])
@@ -260,7 +260,7 @@ class Trainer:
         :meth:`detach_modelbase`, :meth:`detach_model`, :meth:`tabensemb.model.AbstractModel.detach_model`
         """
         tmp_trainer = cp(self)
-        new_path = add_postfix(self.project_root)
+        new_path = safe_mkdir(add_postfix(self.project_root))
         tmp_trainer.set_path(new_path, verbose=True)
         for modelbase in tmp_trainer.modelbases:
             modelbase.set_path(os.path.join(new_path, modelbase.program))
@@ -567,7 +567,7 @@ class Trainer:
         if not os.path.exists(os.path.join(default_path, subfolder)):
             os.makedirs(os.path.join(default_path, subfolder), exist_ok=True)
         self.set_path(
-            add_postfix(os.path.join(default_path, subfolder, folder_name)),
+            safe_mkdir(os.path.join(default_path, subfolder, folder_name)),
             verbose=verbose,
         )
 
