@@ -1953,8 +1953,6 @@ class Trainer:
             n_bootstrap=n_bootstrap,
             refit=refit,
             grid_size=grid_size,
-            verbose=verbose,
-            rederive=True,
             percentile=90,
             CI=CI,
             average=True,
@@ -2082,8 +2080,7 @@ class Trainer:
         for feature_idx, feature_name in enumerate(
             self.all_feature_names if feature_subset is None else feature_subset
         ):
-            if kwargs["verbose"]:
-                print("Calculate PDP: ", feature_name)
+            print("Calculate PDP: ", feature_name)
 
             x_value, model_predictions, ci_left, ci_right = self._bootstrap_fit(
                 focus_feature=feature_name, **kwargs

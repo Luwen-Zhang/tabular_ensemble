@@ -945,14 +945,14 @@ def test_plots():
         trainer.plot_truth_pred(
             program="CatEmbed",
             model_name="Category Embedding",
-            log_trans=True,
+            log_trans=False,
             kde_color=True,
-            train_val_test="Testing",
+            train_val_test="Training",
         )
         trainer.plot_truth_pred(
             program="CatEmbed",
             model_name="Category Embedding",
-            log_trans=False,
+            log_trans=True,
             kde_color=False,
             select_by_value_kwargs=dict(partition="test"),
         )

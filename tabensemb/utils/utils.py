@@ -43,8 +43,6 @@ global_sns_palette = sns.color_palette("deep")
 global_palette = [
     "#ea232c",
     "#314190",
-    "#2caf91",
-    "#e49633",
     "#166135",
     "#50b9aa",
     "#0d5a9b",
@@ -58,6 +56,7 @@ global_palette = [
     "#cd552e",
     "#ebde4e",
     "#96235d",
+    "#2caf91",
     "#f8b68a",
     "#c0e3df",
     "#000000",
