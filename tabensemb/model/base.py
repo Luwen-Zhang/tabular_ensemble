@@ -398,6 +398,8 @@ class AbstractModel:
     def detach_model(self, model_name: str, program: str = None) -> "AbstractModel":
         """
         Detach the chosen model to a separate model base with the same linked :class:`~tabensemb.trainer.Trainer`.
+        If any model inside the model base is required, required models are detached as well. if any external model is
+        required, the model should be detached through Trainer.detach_model.
 
         Parameters
         ----------
@@ -418,16 +420,23 @@ class AbstractModel:
         tmp_model = cp(self)
         tmp_model.trainer = self.trainer
         tmp_model.program = program
-        tmp_model.model_subset = [model_name]
+        required_models = self.required_models(model_name)
+        required_models = [
+            x
+            for x in (required_models if required_models is not None else [])
+            if not x.startswith("EXTERN")
+        ]
+        tmp_model.model_subset = [model_name] + required_models
         if tmp_model.store_in_harddisk and program != self.program:
             tmp_model._mkdir()
             tmp_model.model = ModelDict(path=tmp_model.root)
         else:
             tmp_model.store_in_harddisk = False
             tmp_model.model = {}
-        tmp_model.model[model_name] = cp(self.model[model_name])
-        if model_name in self.model_params.keys():
-            tmp_model.model_params[model_name] = cp(self.model_params[model_name])
+        for name in tmp_model.model_subset:
+            tmp_model.model[name] = cp(self.model[name])
+            if name in self.model_params.keys():
+                tmp_model.model_params[name] = cp(self.model_params[name])
         return tmp_model
 
     def set_path(self, path: Union[os.PathLike, str]):
@@ -641,7 +650,11 @@ class AbstractModel:
             if new_batch_size < limit_batch_size:
                 new_batch_size = limit_batch_size
             if 0 < n_train % new_batch_size < limit_batch_size:
-                _new_batch_size = int(math.ceil(n_train / (n_train // new_batch_size)))
+                _new_batch_size = (
+                    int(math.ceil(n_train / (n_train // new_batch_size)))
+                    if n_train >= limit_batch_size
+                    else n_train
+                )
                 warnings.warn(
                     f"Using batch_size={new_batch_size} and len(training set)={n_train}, which will make the mini batch "
                     f"smaller than limit_batch_size={limit_batch_size}. Using batch_size={_new_batch_size} instead."
@@ -694,8 +707,8 @@ class AbstractModel:
                         else:
                             raise Exception(
                                 f"Model base {program} is required for model {model_name}, but does not exist. It is "
-                                f"mainly caused by model detaching and is currently not supported for models that "
-                                f"requires other models."
+                                f"mainly caused by model detaching with Trainer.detach_modelbase. Please use "
+                                f"Trainer.detach_model instead."
                             )
                     try:
                         detached_model = modelbase.detach_model(
@@ -1010,7 +1023,7 @@ class AbstractModel:
         ):
             if verbose:
                 print(f"Training {model_name}")
-            data = self._train_data_preprocess(model_name)
+            data = self._train_data_preprocess(model_name, warm_start=warm_start)
             tmp_params = self._get_params(model_name, verbose=verbose)
             space = self._space(model_name=model_name)
 
@@ -1464,7 +1477,9 @@ class AbstractModel:
         """
         raise NotImplementedError
 
-    def _train_data_preprocess(self, model_name) -> Union[DataModule, dict]:
+    def _train_data_preprocess(
+        self, model_name, warm_start=False
+    ) -> Union[DataModule, dict]:
         """
         Processing the data from ``self.trainer.datamodule`` for training.
 
@@ -1472,6 +1487,8 @@ class AbstractModel:
         ----------
         model_name:
             The name of a selected model.
+        warm_start
+            Finetune models based on previous trained models.
 
         Returns
         -------
@@ -1849,8 +1866,8 @@ class TorchModel(AbstractModel):
         )
         return attr.flatten()
 
-    def _train_data_preprocess(self, model_name):
-        datamodule = self._prepare_custom_datamodule(model_name)
+    def _train_data_preprocess(self, model_name, warm_start=False):
+        datamodule = self._prepare_custom_datamodule(model_name, warm_start=warm_start)
         datamodule.update_dataset()
         train_dataset, val_dataset, test_dataset = self._generate_dataset(
             datamodule, model_name
@@ -1864,7 +1881,9 @@ class TorchModel(AbstractModel):
             "y_test": datamodule.y_test,
         }
 
-    def _prepare_custom_datamodule(self, model_name: str) -> DataModule:
+    def _prepare_custom_datamodule(
+        self, model_name: str, warm_start=False
+    ) -> DataModule:
         """
         Change this method if a customized preprocessing stage is needed. See :class:`tabensemb.model.CatEmbed` for example.
 
@@ -1946,7 +1965,8 @@ class TorchModel(AbstractModel):
         else:
             raise Exception(
                 f"The required model should be a nn.Module, an AbstractWrapper, or an AbstractModel, but got"
-                f"{type(required_model)} instead."
+                f"{type(required_model)} instead. If you are using jupyter notebook and its autoreload plugin,"
+                f"the reloaded class is different from the original one, although their names are the same."
             )
         return full_name
 
@@ -2273,7 +2293,7 @@ class TorchModel(AbstractModel):
         if self.model is not None and model_name in self.model.keys():
             model = self.model[model_name]
         else:
-            self._prepare_custom_datamodule(model_name)
+            self._prepare_custom_datamodule(model_name, warm_start=True)
             model = self.new_model(
                 model_name, verbose=False, **self._get_params(model_name, verbose=False)
             )
