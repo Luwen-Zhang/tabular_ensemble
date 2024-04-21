@@ -1698,6 +1698,8 @@ class Trainer:
         program: str,
         model_name: str,
         method: str = "permutation",
+        importance: np.ndarray = None,
+        feature_names: List[str] = None,
         clr: Iterable = None,
         ax=None,
         figure_kwargs: Dict = None,
@@ -1705,6 +1707,7 @@ class Trainer:
         legend_kwargs: Dict = None,
         savefig_kwargs: Dict = None,
         save_show_close: bool = True,
+        **kwargs,
     ) -> matplotlib.axes.Axes:
         """
         Plot feature importance of a model using :meth:`cal_feature_importance`.
@@ -1717,6 +1720,11 @@ class Trainer:
             The selected model in the model base.
         method
             The method to calculate feature importance. "permutation" or "shap".
+        importance
+            Passing feature importance values directly instead of calling
+            :meth:`tabensemb.model.AbstractModel.cal_feature_importance` internally in this method.
+        feature_names
+            Names of features assigned to each `importance` value.
         clr
             A seaborn color palette or an Iterable of colors. For example seaborn.color_palette("deep").
         ax
@@ -1731,13 +1739,19 @@ class Trainer:
             Arguments for ``plt.savefig``
         save_show_close
             Whether to save, show (in the notebook), and close the figure if ``ax`` is not given.
+        kwargs
+            Other arguments of :meth:`tabensemb.model.AbstractModel.cal_feature_importance`
 
         Returns
         -------
         matplotlib.axes.Axes
         """
-        attr, names = self.cal_feature_importance(
-            program=program, model_name=model_name, method=method
+        attr, names = (
+            self.cal_feature_importance(
+                program=program, model_name=model_name, method=method, **kwargs
+            )
+            if (importance is None and feature_names is None)
+            else (importance, feature_names)
         )
 
         bar_kwargs_ = update_defaults_by_kwargs(
