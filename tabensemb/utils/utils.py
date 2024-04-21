@@ -41,12 +41,9 @@ plt.rcParams["figure.autolayout"] = True
 global_sns_palette = sns.color_palette("deep")
 
 global_palette = [
-    "#ea232c",
-    "#314190",
     "#166135",
     "#50b9aa",
     "#0d5a9b",
-    "#fcb760",
     "#6a77ac",
     "#322051",
     "#c24135",
