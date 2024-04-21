@@ -487,7 +487,7 @@ class AbstractModel:
         return self._new_model(model_name=model_name, verbose=verbose, **kwargs)
 
     def cal_feature_importance(
-        self, model_name, method, **kwargs
+        self, model_name, method, indices: Iterable = None, **kwargs
     ) -> Tuple[np.ndarray, List[str]]:
         """
         Calculate feature importance using a specified model.
@@ -498,8 +498,10 @@ class AbstractModel:
             The selected model in the model base.
         method
             The method to calculate importance. "permutation" or "shap".
+        indices
+            The indices of data points where feature importance values are evaluated
         kwargs
-            Ignored.
+            Arguments for :meth:`cal_shap`.
 
         Returns
         -------
@@ -513,17 +515,21 @@ class AbstractModel:
         label_name = self.trainer.label_name
         if method == "permutation":
             attr = np.zeros((len(all_feature_names),))
-            test_data = datamodule.X_test
+            indices = datamodule.test_indices if indices is None else indices
+            eval_data = datamodule.df.loc[indices, :]
+            eval_derived_data = datamodule.get_derived_data_slice(
+                datamodule.derived_data, indices=indices
+            )
             base_pred = self.predict(
-                test_data,
-                derived_data=datamodule.D_test,
+                eval_data,
+                derived_data=eval_derived_data,
                 model_name=model_name,
             )
             base_metric = metric_sklearn(
-                test_data[label_name].values, base_pred, metric="rmse"
+                eval_data[label_name].values, base_pred, metric="mse"
             )
             for idx, feature in enumerate(all_feature_names):
-                df = test_data.copy()
+                df = eval_data.copy()
                 shuffled = df[feature].values
                 np.random.shuffle(shuffled)
                 df[feature] = shuffled
@@ -533,29 +539,53 @@ class AbstractModel:
                     model_name=model_name,
                 )
                 attr[idx] = np.abs(
-                    metric_sklearn(df[label_name].values, perm_pred, metric="rmse")
+                    metric_sklearn(df[label_name].values, perm_pred, metric="mse")
                     - base_metric
                 )
             attr /= np.sum(attr)
         elif method == "shap":
-            attr = self.cal_shap(model_name=model_name)
+            attr = AbstractModel.cal_shap(
+                self, model_name=model_name, indices=indices, **kwargs
+            )
         else:
             raise NotImplementedError
         importance_names = cp(all_feature_names)
         return attr, importance_names
 
-    def cal_shap(self, model_name: str, **kwargs) -> np.ndarray:
+    def cal_shap(
+        self,
+        model_name: str,
+        return_importance: bool = True,
+        n_background: int = 10,
+        explainer: str = "KernelExplainer",
+        init_kwargs: Dict = None,
+        call_kwargs: Dict = None,
+        indices: Iterable = None,
+        **kwargs,
+    ) -> np.ndarray:
         """
-        Calculate SHAP values using a specified model. ``shap.KernelExplainer`` is called, and ``shap.kmeans`` is
-        called to summarize the training data to 10 samples as the background data and 10 random samples in the testing
-        set are explained, which will bias the results.
+        Calculate SHAP values using a specified model. ``shap.kmeans`` is called to summarize the training data as the
+        background data.
 
         Parameters
         ----------
         model_name
             The selected model in the model base.
+        return_importance
+            True to return mean absolute SHAP values. False to return ``shap.Explainer``, ``shap.Explanation``,
+             and results of :meth:``shap.Explainer.shap_values``
+        n_background
+            Number of background data passed to ``shap.Explainer`` as ``data``.
+        indices
+            The indices of data points where shap values are evaluated
+        explainer
+            The name of an explainer available at shap.
+        init_kwargs
+            Arguments of ``explainer.__init__``
+        call_kwargs
+            Arguments of ``explainer.__call__`
         kwargs
-            Ignored for the compatibility of TorchModel.
+            Ignored.
 
         Returns
         -------
@@ -567,10 +597,11 @@ class AbstractModel:
         trainer_df = self.trainer.df
         train_indices = self.trainer.train_indices
         test_indices = self.trainer.test_indices
+        indices = test_indices if indices is None else indices
         all_feature_names = self.trainer.all_feature_names
         datamodule = self.trainer.datamodule
         background_data = shap.kmeans(
-            trainer_df.loc[train_indices, all_feature_names], 10
+            trainer_df.loc[train_indices, all_feature_names], n_background
         )
         warnings.filterwarnings(
             "ignore",
@@ -586,9 +617,38 @@ class AbstractModel:
                 ignore_absence=True,
             ).flatten()
 
-        test_indices = np.random.choice(test_indices, size=10, replace=False)
-        test_data = trainer_df.loc[test_indices, all_feature_names].copy()
-        shap_values = shap.KernelExplainer(func, background_data).shap_values(test_data)
+        func = partial(
+            _predict_with_ndarray,
+            all_feature_names=all_feature_names,
+            modelbase=self,
+            model_name=model_name,
+            datamodule=datamodule,
+        )
+        # test_indices = np.random.choice(test_indices, size=10, replace=False)
+        test_data = trainer_df.loc[indices, all_feature_names].copy()
+        explainer_cls = getattr(shap, explainer)
+        args = str(inspect.signature(explainer_cls.__init__))
+        init_kwargs_ = update_defaults_by_kwargs(
+            (
+                {"data": background_data}
+                if "data" in args
+                else (
+                    {
+                        "masker": shap.maskers.Independent(
+                            trainer_df.loc[train_indices, all_feature_names]
+                        )
+                    }
+                    if "masker" in args
+                    else dict()
+                )
+            ),
+            init_kwargs,
+        )
+        print(f"Initializing {explainer} with {init_kwargs_}")
+        call_kwargs_ = update_defaults_by_kwargs(dict(), call_kwargs)
+        explainer_ = explainer_cls(func, **init_kwargs_)
+        explanation = explainer_(test_data, **call_kwargs_)
+        shap_values = explanation.values
         attr = (
             np.concatenate(
                 [np.mean(np.abs(shap_values[0]), axis=0)]
@@ -597,7 +657,7 @@ class AbstractModel:
             if type(shap_values) == list and len(shap_values) > 1
             else np.mean(np.abs(shap_values), axis=0)
         )
-        return attr
+        return attr if return_importance else (explainer_, explanation, shap_values)
 
     def _check_params(self, model_name, **kwargs):
         """
@@ -1704,7 +1764,14 @@ class TorchModel(AbstractModel):
         super(TorchModel, self).__init__(*args, **kwargs)
         self.lightning_trainer_kwargs = lightning_trainer_kwargs
 
-    def cal_feature_importance(self, model_name, method, call_general_method=False):
+    def cal_feature_importance(
+        self,
+        model_name,
+        method,
+        call_general_method=False,
+        indices: Iterable = None,
+        **kwargs,
+    ):
         """
         Calculate feature importance using a specified model. ``captum`` or ``shap`` is called.
 
@@ -1718,6 +1785,11 @@ class TorchModel(AbstractModel):
             Call the general feature importance calculation :meth:`AbstractModel.cal_feature_importance` instead of the
             optimized procedure for deep learning models. This is useful when calculating the feature importance of
             models that require other models.
+        indices
+            The indices of data points where feature importance values are evaluated
+        kwargs
+            Arguments for :meth:`tabensemb.model.AbstractModel.cal_feature_importance` or
+            :meth:`tabensemb.model.AbstractModel.cal_shap`
 
         Returns
         -------
@@ -1727,18 +1799,20 @@ class TorchModel(AbstractModel):
             Corresponding feature names. All features including derived unstacked features will be included.
         """
         if call_general_method:
-            return super(TorchModel, self).cal_feature_importance(model_name, method)
+            return super(TorchModel, self).cal_feature_importance(
+                model_name, method, indices=indices, **kwargs
+            )
 
         label_data = self.trainer.label_data
-        test_indices = self.trainer.test_indices
-        test_label = label_data.loc[test_indices, :].values
+        indices = self.trainer.test_indices if indices is None else indices
+        label = label_data.loc[indices, :].values
         trainer_datamodule = self.trainer.datamodule
 
         # This is decomposed from _data_preprocess (The first part)
         tensors, df, derived_data, custom_datamodule = self._prepare_tensors(
-            trainer_datamodule.df.loc[test_indices, :],
+            trainer_datamodule.df.loc[indices, :],
             trainer_datamodule.get_derived_data_slice(
-                trainer_datamodule.derived_data, test_indices
+                trainer_datamodule.derived_data, indices
             ),
             model_name,
         )
@@ -1767,14 +1841,14 @@ class TorchModel(AbstractModel):
                     X_test=dataset,
                     verbose=False,
                 )
-                loss = float(metric_sklearn(test_label, prediction, "mse"))
+                loss = float(metric_sklearn(label, prediction, "mse"))
                 return loss
 
             feature_perm = FeaturePermutation(forward_func)
             attr = [x.cpu().numpy().flatten() for x in feature_perm.attribute((X, *D))]
             attr = np.abs(np.concatenate(attr))
         elif method == "shap":
-            attr = self.cal_shap(model_name=model_name)
+            attr = self.cal_shap(model_name=model_name, indices=indices, **kwargs)
         else:
             raise NotImplementedError
         dims = [x.shape for x in derived_data.values()]
@@ -1787,10 +1861,19 @@ class TorchModel(AbstractModel):
             )
         return attr, importance_names
 
-    def cal_shap(self, model_name: str, call_general_method=False) -> np.ndarray:
+    def cal_shap(
+        self,
+        model_name: str,
+        call_general_method: bool = False,
+        return_importance: bool = True,
+        n_background: int = 100,
+        init_kwargs: Dict = None,
+        shap_values_kwargs: Dict = None,
+        indices: Iterable = None,
+        **kwargs,
+    ) -> np.ndarray:
         """
-        Calculate SHAP values using a specified model. If the model base is a :class:`TorchModel`, the
-        ``shap.DeepExplainer`` is used.
+        Calculate SHAP values using a specified model. The ``shap.DeepExplainer`` is used.
 
         Parameters
         ----------
@@ -1800,6 +1883,19 @@ class TorchModel(AbstractModel):
             Call the general shap calculation :meth:`AbstractModel.cal_shap` instead of the
             optimized procedure for deep learning models. This is useful when calculating the feature importance of
             models that require other models.
+        return_importance
+            True to return mean absolute SHAP values. False to return ``shap.DeepExplainer``, ``shap.Explanation``, and
+            results of :meth:``shap.DeepExplainer.shap_values``
+        n_background
+            Number of randomly sampled background (training) data passed to ``shap.DeepExplainer``.
+        init_kwargs
+            Arguments of ``shap.DeepExplainer.__init__``
+        shap_values_kwargs
+            Arguments of ``shap.DeepExplainer.shap_values``
+        indices
+            The indices of data points where shap values are evaluated
+        kwargs
+            Ignored.
 
         Returns
         -------
@@ -1816,6 +1912,7 @@ class TorchModel(AbstractModel):
 
         train_indices = self.trainer.train_indices
         test_indices = self.trainer.test_indices
+        indices = test_indices if indices is None else indices
         datamodule = self.trainer.datamodule
         if "categorical" in datamodule.derived_data.keys():
             warnings.warn(
@@ -1826,7 +1923,7 @@ class TorchModel(AbstractModel):
 
         bk_indices = np.random.choice(
             train_indices,
-            size=min([100, len(train_indices)]),
+            size=min([n_background, len(train_indices)]),
             replace=False,
         )
         tensors, _, _, _ = self._prepare_tensors(
@@ -1839,8 +1936,8 @@ class TorchModel(AbstractModel):
         background_data = [X_train_bk, *D_train_bk]
 
         tensors, _, _, _ = self._prepare_tensors(
-            datamodule.df.loc[test_indices, :],
-            datamodule.get_derived_data_slice(datamodule.derived_data, test_indices),
+            datamodule.df.loc[indices, :],
+            datamodule.get_derived_data_slice(datamodule.derived_data, indices),
             model_name,
         )
         X_test = tensors[0]
@@ -1848,13 +1945,18 @@ class TorchModel(AbstractModel):
         test_data = [X_test, *D_test]
 
         with global_setting({"test_with_no_grad": False}):
-            explainer = shap.DeepExplainer(self.model[model_name], background_data)
-
+            init_kwargs_ = update_defaults_by_kwargs(dict(), init_kwargs)
+            explainer_ = shap.DeepExplainer(
+                self.model[model_name], background_data, **init_kwargs_
+            )
+            # TODO: in PytorchDeep, ``model_output_values.cpu()`` at
+            #  ``_check_additivity(self, model_output_values.cpu(), output_phis)``  is not valid because the output
+            #  has gradient.
+            shap_values_kwargs_ = update_defaults_by_kwargs(
+                dict(check_additivity=False), shap_values_kwargs
+            )
             with HiddenPrints():
-                # TODO: in PytorchDeep, ``model_output_values.cpu()`` at
-                #  ``_check_additivity(self, model_output_values.cpu(), output_phis)``  is not valid because the output
-                #  has gradient.
-                shap_values = explainer.shap_values(test_data, check_additivity=False)
+                shap_values = explainer_.shap_values(test_data, **shap_values_kwargs_)
 
         attr = (
             np.concatenate(
@@ -1864,7 +1966,7 @@ class TorchModel(AbstractModel):
             if type(shap_values) == list and len(shap_values) > 1
             else np.mean(np.abs(shap_values[0]), axis=0)
         )
-        return attr.flatten()
+        return attr.flatten() if return_importance else (explainer_, shap_values)
 
     def _train_data_preprocess(self, model_name, warm_start=False):
         datamodule = self._prepare_custom_datamodule(model_name, warm_start=warm_start)
@@ -2127,7 +2229,7 @@ class TorchModel(AbstractModel):
         for label in self.trainer.label_name:
             if label not in df.columns:
                 # Just to create a placeholder for datamodule.generate_tensors.
-                df[label] = np.zeros_like(self.trainer.df[label].values)[: len(df)]
+                df[label] = np.zeros(len(df), dtype=self.trainer.df[label].values.dtype)
         tensors, df, derived_data, _ = self._prepare_tensors(
             df, derived_data, model_name
         )
@@ -3364,3 +3466,13 @@ class DictMixDataset(DictDataset):
 
         ls_dataset = ListDataset(ls_data)
         super(DictMixDataset, self).__init__(ls_dataset=ls_dataset, keys=keys)
+
+
+def _predict_with_ndarray(data, all_feature_names, modelbase, model_name, datamodule):
+    df = pd.DataFrame(columns=all_feature_names, data=data)
+    return modelbase.predict(
+        df,
+        model_name=model_name,
+        derived_data=datamodule.derive_unstacked(df, categorical_only=True),
+        ignore_absence=True,
+    ).flatten()

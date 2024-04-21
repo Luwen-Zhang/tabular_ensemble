@@ -258,10 +258,7 @@ def test_rfe():
     )
     trainer.add_modelbases([base_model, rfe])
 
-    with pytest.warns(
-        UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
-    ):
-        trainer.train()
+    trainer.train()
     l = trainer.get_leaderboard()
 
     assert l.loc[0, "Testing RMSE"] != l.loc[1, "Testing RMSE"]

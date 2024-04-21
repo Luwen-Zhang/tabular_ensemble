@@ -727,28 +727,42 @@ def test_feature_importance():
     trainer.train()
 
     absmodel_perm = trainer.cal_feature_importance(
-        program="PytorchTabular", model_name="Category Embedding", method="permutation"
+        program="PytorchTabular",
+        model_name="Category Embedding",
+        method="permutation",
+        indices=np.arange(10),
     )
     absmodel_shap = trainer.cal_feature_importance(
-        program="PytorchTabular", model_name="Category Embedding", method="shap"
+        program="PytorchTabular",
+        model_name="Category Embedding",
+        method="shap",
+        indices=np.arange(10),
     )
 
     torchmodel_perm = trainer.cal_feature_importance(
-        program="CatEmbed", model_name="Category Embedding", method="permutation"
+        program="CatEmbed",
+        model_name="Category Embedding",
+        method="permutation",
+        indices=np.arange(10),
     )
     np.random.seed(0)
     with pytest.warns(
         UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
     ):
         torchmodel_shap = trainer.cal_feature_importance(
-            program="CatEmbed", model_name="Category Embedding", method="shap"
+            program="CatEmbed",
+            model_name="Category Embedding",
+            method="shap",
+            indices=np.arange(10),
         )
     np.random.seed(0)
     with pytest.warns(
         UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
     ):
         torchmodel_shap_direct = trainer.cal_shap(
-            program="CatEmbed", model_name="Category Embedding"
+            program="CatEmbed",
+            model_name="Category Embedding",
+            indices=np.arange(10),
         )
 
     with pytest.raises(Exception) as err:
@@ -756,6 +770,7 @@ def test_feature_importance():
             program="CatEmbed",
             model_name="Require Model PyTabular CatEmbed",
             method="shap",
+            indices=np.arange(10),
         )
     assert "models that require other models is not supported" in err.value.args[0]
 
@@ -975,12 +990,19 @@ def test_plots():
         )
 
         print(f"\n-- Importance --\n")
-        trainer.plot_feature_importance(program="WideDeep", model_name="TabMlp")
+        trainer.plot_feature_importance(
+            program="WideDeep",
+            model_name="TabMlp",
+            indices=np.arange(10),
+        )
         with pytest.warns(
             UserWarning, match=r"shap.DeepExplainer cannot handle categorical features"
         ):
             trainer.plot_feature_importance(
-                program="CatEmbed", model_name="Category Embedding", method="shap"
+                program="CatEmbed",
+                model_name="Category Embedding",
+                method="shap",
+                indices=np.arange(10),
             )
 
         print(f"\n-- PDP --\n")
