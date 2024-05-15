@@ -3988,6 +3988,7 @@ class Trainer:
         self,
         category: str = None,
         ax=None,
+        orient="h",
         figure_kwargs: Dict = None,
         imshow_kwargs: Dict = None,
         cbar_kwargs: Dict = None,
@@ -4051,13 +4052,19 @@ class Trainer:
             mat[:, idx] = presence_ratio[self.all_feature_names]
 
         ax, given_ax = self._plot_action_init_ax(ax, figure_kwargs_)
-        im = ax.imshow(mat, **imshow_kwargs_)
+        im = ax.imshow(mat if orient == "h" else mat.T, **imshow_kwargs_)
 
-        ax.set_xticks(np.arange(len(unique_values)))
-        ax.set_yticks(np.arange(len(self.all_feature_names)))
+        (ax.set_xticks if orient == "h" else ax.set_yticks)(
+            np.arange(len(unique_values))
+        )
+        (ax.set_yticks if orient == "h" else ax.set_xticks)(
+            np.arange(len(self.all_feature_names))
+        )
 
-        ax.set_xticklabels(unique_values)
-        ax.set_yticklabels(self.all_feature_names)
+        (ax.set_xticklabels if orient == "h" else ax.set_yticklabels)(unique_values)
+        (ax.set_yticklabels if orient == "h" else ax.set_xticklabels)(
+            self.all_feature_names
+        )
 
         plt.setp(
             ax.get_xticklabels(),

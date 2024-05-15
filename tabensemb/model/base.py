@@ -1223,6 +1223,7 @@ class AbstractModel:
                 skopt.dump(
                     result,
                     add_postfix(os.path.join(self.root, f"{model_name}_skopt.pt")),
+                    store_objective=False,
                 )
                 tmp_params = self._get_params(
                     model_name=model_name, verbose=verbose
@@ -3476,3 +3477,7 @@ def _predict_with_ndarray(data, all_feature_names, modelbase, model_name, datamo
         derived_data=datamodule.derive_unstacked(df, categorical_only=True),
         ignore_absence=True,
     ).flatten()
+
+
+def _bayes_objective(x):
+    pass
