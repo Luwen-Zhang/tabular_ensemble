@@ -58,6 +58,7 @@ The package stands on the shoulder of the giants:
 1. `tabular_ensemble` can be installed using pypi by running the following command:
 
 ```shell
+pip install tabensemb
 ```
 
 2. Place your `.csv` or `.xlsx` file in a `data` subfolder (e.g., `data/sample.csv`), and generate a configuration file in a `configs` subfolder (e.g., `configs/sample.py`), containing the following content
@@ -70,10 +71,11 @@ cfg = {
 }
 ```
 
-3. Run the experiment using the configuration and the data using `run_sample.sh` that contains
+3. Run the experiment using the configuration and the data using
 ```python
 python main.py --base sample --epoch 10
 ```
+where `--base` refers to the configuration file, and additional arguments (such as `--epoch` here) refer to those in `config/default.py`.
 
 See the documentation pages for details.
 
@@ -82,5 +84,5 @@ See the documentation pages for details.
 If you use this repository, please cite us as:
 
 ```text
-XXXXXXXXX
+(Will be updated after released on arXiv or published)
 ```
