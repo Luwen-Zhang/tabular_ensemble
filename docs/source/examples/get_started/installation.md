@@ -2,7 +2,17 @@
 
 ## Ubuntu
 
-Before installing `tabular-ensemble`, `PyTorch` should be installed first following its [documentation](https://pytorch.org/get-started/locally/).
+Before installing `tabular-ensemble`, `torch>=1.12.0` should be installed first following its [documentation](https://pytorch.org/get-started/locally/).
+
+### From PyPI
+
+```shell
+pip install tabensemb
+```
+
+Use `pip install tabensemb[test]` instead if you want to run unit tests.
+
+### From source
 
 Clone the repository from GitHub
 
@@ -17,10 +27,13 @@ Then install the package
 pip install -e .
 ```
 
-To test the functionality of the package
+Use `pip install -e .[test]` instead if you want to run unit tests.
+
+### Unit test
+
+To run unit tests:
 
 ```shell
-pip install -e .[test]
 cd test
 pytest .
 ```
