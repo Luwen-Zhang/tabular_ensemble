@@ -14,7 +14,7 @@ sys.path.append(os.path.abspath("_ext"))
 
 project = "Tabular Ensemble"
 copyright = "2023, Tabular Ensemble developers"
-author = "Tabular Ensemble developers"
+author = "Xueling Luo"
 release = "0.1"
 
 # -- General configuration ---------------------------------------------------

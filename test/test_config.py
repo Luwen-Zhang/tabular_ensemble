@@ -110,6 +110,7 @@ def test_from_uci():
                 "Iris",
                 datafile_name="iris",
                 max_retries=10,
+                timeout=10,
             )
         df = pd.read_csv(
             os.path.join(
