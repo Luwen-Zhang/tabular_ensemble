@@ -6,6 +6,7 @@ Get Started
     :maxdepth: 2
 
     get_started/installation
+    get_started/quick_start
     get_started/run_sample
     get_started/new_dataset
     get_started/inference

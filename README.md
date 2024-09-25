@@ -58,6 +58,8 @@ The package stands on the shoulder of the giants:
 
 ## Installation/Usage
 
+A full documentation is available [here](https://tabular-ensemble.readthedocs.io/en/latest/index.html). For a quick start:
+
 1. `tabular_ensemble` can be installed using pypi by running the following command:
 
 ```shell
@@ -89,7 +91,7 @@ python main.py --base sample --epoch 10
 ```
 where `--base` refers to the configuration file, and additional arguments (such as `--epoch` here) refer to those in `config/default.py`.
 
-See the documentation pages for details.
+See the [documentation pages](https://tabular-ensemble.readthedocs.io/en/latest/index.html) for details.
 
 ## Citation
 
