@@ -3,6 +3,7 @@
 [![codecov](https://codecov.io/gh/LuoXueling/tabular_ensemble/graph/badge.svg?token=APnN7LFtv9)](https://codecov.io/gh/LuoXueling/tabular_ensemble)
 [![Test](https://github.com/LuoXueling/tabular_ensemble/actions/workflows/python-package.yml/badge.svg)](https://github.com/LuoXueling/tabular_ensemble/actions/workflows/python-package.yml)
 [![](https://img.shields.io/badge/Python-3.8%20%7C%203.9%20%7C%203.10-blue)](https://github.com/LuoXueling/tabular_ensemble)
+[![Documentation Status](https://readthedocs.org/projects/tabular-ensemble/badge/?version=latest)](https://tabular-ensemble.readthedocs.io/en/latest/?badge=latest)
 
 A framework to evaluate various models for tabular regression and classification tasks. The package integrates 25 machine learning (including deep learning) models for tabular prediction 
 tasks from the following well-established model bases:
@@ -58,10 +59,19 @@ The package stands on the shoulder of the giants:
 1. `tabular_ensemble` can be installed using pypi by running the following command:
 
 ```shell
-pip install tabensemb
+pip install tabensemb[torch]
 ```
 
-2. Place your `.csv` or `.xlsx` file in a `data` subfolder (e.g., `data/sample.csv`), and generate a configuration file in a `configs` subfolder (e.g., `configs/sample.py`), containing the following content
+Please use `pip install tabensemb` instead if you already have `torch>=1.12.0` installed. Use `pip install tabensemb[test]` if you want to run unit tests. 
+
+2. (Optional) Run unit tests after installed `tabensemb[test]`:
+
+```shell
+cd test
+pytest .
+```
+
+3. Place your `.csv` or `.xlsx` file in a `data` subfolder (e.g., `data/sample.csv`), and generate a configuration file in a `configs` subfolder (e.g., `configs/sample.py`), containing the following content
 ```python
 cfg = {
     "database": "sample",
@@ -71,7 +81,7 @@ cfg = {
 }
 ```
 
-3. Run the experiment using the configuration and the data using
+4. Run the experiment using the configuration and the data using
 ```python
 python main.py --base sample --epoch 10
 ```
