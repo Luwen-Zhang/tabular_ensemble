@@ -19,6 +19,8 @@ You are able to implement your own models, data processing pipelines, and datase
 well-tested framework for consistent comparisons with baseline models, which is even easier when your own model is 
 based on `pytorch`. 
 
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/0fe47266-ae58-4e6b-bcf6-1108ebd762bc">
+
 Supported features for all model bases:
 
 * Data processing
