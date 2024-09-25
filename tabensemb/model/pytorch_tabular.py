@@ -10,6 +10,7 @@ import pytorch_lightning as pl
 from .base import PytorchLightningLossCallback
 from .base import AbstractWrapper
 from typing import Dict, Any
+from packaging import version
 from torch import nn
 import re
 import inspect
@@ -26,6 +27,7 @@ class PytorchTabular(AbstractModel):
         mute_track()
 
         from functools import partialmethod
+        import pytorch_tabular
         from pytorch_tabular.config import ExperimentRunManager
 
         erm_original_init = ExperimentRunManager.__init__
@@ -105,7 +107,11 @@ class PytorchTabular(AbstractModel):
             "GATE": GatedAdditiveTreeEnsembleConfig,
         }
         special_configs = {
-            "NODE": {"embed_categorical": True},
+            "NODE": (
+                {"embed_categorical": True}
+                if version.parse(pytorch_tabular.__version__) < version.parse("1.1.0")
+                else {}
+            ),
         }
         legal_kwargs = {
             key: value
