@@ -184,7 +184,7 @@ class UserConfig(dict):
         column_names: List[str] = None,
         save_zip: bool = False,
         max_retries=3,
-        timeout=5,
+        timeout=20,
         sep=",",
     ) -> Union["UserConfig", None]:
         """
