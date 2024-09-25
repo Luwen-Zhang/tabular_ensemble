@@ -12,7 +12,7 @@ req_all = requirements("requirements.txt")
 
 setup(
     name="tabensemb",
-    version="0.1",
+    version="0.2",
     author="xueling luo",
     description="A framework to ensemble model bases and evaluate various models for tabular predictions.",
     long_description=open("README.md").read(),

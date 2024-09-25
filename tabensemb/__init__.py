@@ -13,7 +13,7 @@ __root__ = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 __all__ = ["data", "model", "trainer", "config", "utils"]
 
-__version__ = "0.1"
+__version__ = "0.2"
 
 setting = dict(
     # The random seed for numpy and pytorch (including cuda).
