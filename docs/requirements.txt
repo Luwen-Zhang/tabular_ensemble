@@ -1,0 +1,9 @@
+sphinx
+sphinx_rtd_theme
+nbsphinx
+pandoc
+myst-parser
+sphinx_copybutton
+sphinx_paramlinks
+numpydoc
+pydata_sphinx_theme
