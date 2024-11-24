@@ -11,5 +11,4 @@ tabensemb.utils
     :toctree: generated/
 
     utils
-    collate.fix_collate_fn
     ranking
