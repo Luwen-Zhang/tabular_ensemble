@@ -1,7 +1,7 @@
-autogluon.tabular[all]>=0.8.2,<1.0.0
-autogluon.common>=0.8.2,<1.0.0
-autogluon.core>=0.8.2,<1.0.0
-autogluon.features>=0.8.2,<1.0.0
+autogluon.tabular[all]>=0.8.2,<0.8.3
+autogluon.common>=0.8.2,<0.8.3
+autogluon.core>=0.8.2,<0.8.3
+autogluon.features>=0.8.2,<0.8.3
 captum>=0.6.0
 gensim>=4.3.0,<4.3.3
 matplotlib>=3.8.2
