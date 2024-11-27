@@ -68,6 +68,12 @@ pip install tabensemb[torch]
 
 Please use `pip install tabensemb` instead if you already have `torch>=1.12.0` installed. Use `pip install tabensemb[test]` if you want to run unit tests. 
 
+To install from source,
+
+```shell
+pip install -e .[torch]
+```
+
 2. (Optional) Run unit tests after installed `tabensemb[test]`:
 
 ```shell

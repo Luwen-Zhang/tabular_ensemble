@@ -318,7 +318,9 @@ class OrdinalEncoder:
                     f"inverse-transformed."
                 )
 
-            transformed_values = np.ones_like(values).astype(self.dtypes[feature])
+            transformed_values = np.ones_like(values).astype(
+                self.dtypes[feature] if self.dtypes[feature] != str else "U256"
+            )
             for i in range(len(transformed_values)):
                 transformed_values[i] = unknown_val
             for val in unique_values:
@@ -327,5 +329,7 @@ class OrdinalEncoder:
                     if val in unknown_values
                     else self.mapping[feature][int(val)]
                 )
-            df[feature] = transformed_values.astype(self.dtypes[feature])
+            df[feature] = transformed_values.astype(
+                self.dtypes[feature] if self.dtypes[feature] != str else "U256"
+            )
         return df
