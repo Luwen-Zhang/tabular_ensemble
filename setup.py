@@ -40,7 +40,7 @@ setup(
             "sphinx_copybutton==0.5.2",
             "sphinx_paramlinks==0.6.0",
             "numpydoc==1.5.0",
-            "pydata_sphinx_theme==0.13.3",
+            "pydata_sphinx_theme==0.16.1",
         ],
         "notebook": ["jupyter", "notebook<7.0.0"],
     },
