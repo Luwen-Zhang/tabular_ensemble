@@ -15,7 +15,7 @@ sys.path.append(os.path.abspath("_ext"))
 
 project = "Tabular Ensemble"
 copyright = "2023, Tabular Ensemble developers"
-author = "Xueling Luo"
+author = "Luwen-Zhang's Group at SJTU"
 release = "0.2"
 
 # -- General configuration ---------------------------------------------------
@@ -111,14 +111,14 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/LuoXueling/tabular_ensemble",
+            "url": "https://github.com/Luwen-Zhang/tabular_ensemble",
             "icon": "fa-brands fa-github",
         },
     ],
 }
 
 html_context = {
-    "github_user": "LuoXueling",
+    "github_user": "Luwen-Zhang",
     "github_repo": "tabular_ensemble",
     "github_version": "main/docs/source",
 }

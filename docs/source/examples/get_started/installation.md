@@ -17,7 +17,7 @@ Use `pip install tabensemb[test]` instead if you want to run unit tests.
 Clone the repository from GitHub
 
 ```shell
-git clone https://github.com/LuoXueling/tabular_ensemble.git
+git clone https://github.com/Luwen-Zhang/tabular_ensemble.git
 cd tabular_ensemble
 ```
 
