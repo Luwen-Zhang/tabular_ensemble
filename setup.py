@@ -13,12 +13,12 @@ req_all = requirements("requirements.txt")
 setup(
     name="tabensemb",
     version="0.2",
-    author="xueling luo",
+    author="Luwen-Zhang's Group at SJTU",
     description="A framework to ensemble model bases and evaluate various models for tabular predictions.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     packages=find_packages(),
-    url="https://github.com/LuoXueling/tabular_ensemble",
+    url="https://github.com/Luwen-Zhang/tabular_ensemble",
     python_requires=">=3.8.0",
     install_requires=req_all,
     extras_require={
