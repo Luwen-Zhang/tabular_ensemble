@@ -34,7 +34,7 @@ setup(
         "doc": [
             "sphinx==7.2.5",
             "sphinx_rtd_theme==1.3.0",
-            "nbsphinx==0.9.3",
+            "nbsphinx==0.9.6",
             "pandoc==2.3",
             "myst-parser==2.0.0",
             "sphinx_copybutton==0.5.2",
