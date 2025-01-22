@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath("_ext"))
 project = "Tabular Ensemble"
 copyright = "2023, Tabular Ensemble developers"
 author = "Luwen-Zhang's Group at SJTU"
-release = "0.2"
+release = "0.3"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
