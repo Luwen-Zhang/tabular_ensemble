@@ -2,7 +2,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![codecov](https://codecov.io/gh/Luwen-Zhang/tabular_ensemble/graph/badge.svg?token=APnN7LFtv9)](https://codecov.io/gh/Luwen-Zhang/tabular_ensemble)
 [![Test](https://github.com/Luwen-Zhang/tabular_ensemble/actions/workflows/python-package.yml/badge.svg)](https://github.com/Luwen-Zhang/tabular_ensemble/actions/workflows/python-package.yml)
-[![](https://img.shields.io/badge/Python-3.8%20%7C%203.9%20%7C%203.10-blue)](https://github.com/Luwen-Zhang/tabular_ensemble)
+[![](https://img.shields.io/badge/Python-3.10-blue)](https://github.com/Luwen-Zhang/tabular_ensemble)
 [![Documentation Status](https://readthedocs.org/projects/tabular-ensemble/badge/?version=latest)](https://tabular-ensemble.readthedocs.io/en/latest/?badge=latest)
 
 A framework to evaluate various models for tabular regression and classification tasks. The package integrates 25 machine learning (including deep learning) models for tabular prediction 
